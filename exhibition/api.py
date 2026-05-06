@@ -243,6 +243,7 @@ class ExhibitorInfoSerializer(I18nAwareModelSerializer):
             event=event,
             name={event.locale or settings.LANGUAGE_CODE: sponsor_group_name},
             level=sponsor_group_level,
+            show_on_front_page=True,
         )
 
     def _apply_business_rules(
