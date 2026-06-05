@@ -140,7 +140,7 @@ class ExhibitorInfoForm(I18nModelForm):
         }
 
     def __init__(self, *args, **kwargs):
-        event = kwargs.pop("event", None)
+        event = kwargs.get("event")
         instance = kwargs.get("instance")
         super().__init__(*args, **kwargs)
         self.event = event or getattr(instance, "event", None)
@@ -330,7 +330,7 @@ class SponsorGroupForm(I18nModelForm):
         }
 
     def __init__(self, *args, **kwargs):
-        event = kwargs.pop("event", None)
+        event = kwargs.get("event")
         super().__init__(*args, **kwargs)
         self.event = event or getattr(self.instance, "event", None)
 

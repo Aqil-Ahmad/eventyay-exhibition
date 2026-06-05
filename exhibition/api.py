@@ -385,12 +385,12 @@ class LeadCreateView(views.APIView):
         # Authenticate the exhibitor
         try:
             exhibitor = ExhibitorInfo.objects.get(key=key)
-            settings = ExhibitorSettings.objects.get(event=exhibitor.event)
-        except (ExhibitorInfo.DoesNotExist, ExhibitorSettings.DoesNotExist):
+        except ExhibitorInfo.DoesNotExist:
             return Response(
                 {"success": False, "error": "Invalid exhibitor key"},
                 status=status.HTTP_401_UNAUTHORIZED,
             )
+        settings = ExhibitorSettings.objects.get_or_create(event=exhibitor.event)[0]
 
         # Get attendee details
         try:
