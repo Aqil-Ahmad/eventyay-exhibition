@@ -1,8 +1,7 @@
-{% extends "pretixcontrol/event/base.html" %}
+{% extends "exhibitors/base.html" %}
 {% load i18n %}
-{% block title %}{% trans "Exhibitors/Sponsors" %}{% endblock %}
-{% block content %}
-    <h1>{% trans "Exhibitors/Sponsors" %}</h1>
+{% block title %}{{ request.event.name }} - {% trans "Exhibitors & Sponsors" %}{% endblock %}
+{% block exhibitors_content %}
     {% if exhibitors|length == 0 %}
         <div class="empty-collection">
             <p>
@@ -13,14 +12,14 @@
 
             {% if "can_change_event_settings" in request.eventpermset %}
                 <a href="{% url "plugins:exhibition:add" organizer=request.event.organizer.slug event=request.event.slug %}"
-                        class="btn btn-primary btn-lg"><i class="fa fa-plus"></i> {% trans "Add an Exhibitor/Sponsor" %}
+                        class="btn btn-primary btn-lg"><i class="fa fa-plus"></i> {% trans "Add an Exhibitor or Sponsor" %}
                 </a>
             {% endif %}
         </div>
     {% else %}
         <p>
             {% if "can_change_event_settings" in request.eventpermset %}
-                <a href="{% url "plugins:exhibition:add" organizer=request.event.organizer.slug event=request.event.slug %}" class="btn btn-default"><i class="fa fa-plus"></i> {% trans "Add an Exhibitor/Sponsor" %}
+                <a href="{% url "plugins:exhibition:add" organizer=request.event.organizer.slug event=request.event.slug %}" class="btn btn-default"><i class="fa fa-plus"></i> {% trans "Add an Exhibitor or Sponsor" %}
                 </a>
             {% endif %}
         </p>

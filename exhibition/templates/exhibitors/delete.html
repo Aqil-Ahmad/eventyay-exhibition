@@ -1,10 +1,12 @@
-{% extends "pretixcontrol/event/base.html" %}
+{% extends "exhibitors/base.html" %}
 {% load i18n %} 
-{% block content %}
-<h1>{% trans "Delete Exhibitor" %}</h1>
+{% block exhibitors_header %}
+<h1>{% trans "Delete Exhibitor or Sponsor" %}</h1>
+{% endblock %}
 
+{% block exhibitors_content %}
 <p>
-  {% trans "Are you sure you want to delete this exhibitor? This action cannot be undone." %}
+  {% trans "Are you sure you want to delete this exhibitor or sponsor? This action cannot be undone." %}
 </p>
 
 <form action="" method="post">

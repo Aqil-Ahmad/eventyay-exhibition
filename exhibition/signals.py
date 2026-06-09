@@ -2,10 +2,10 @@ from django.db.models import Prefetch
 from django.dispatch import receiver
 from django.template.loader import get_template
 from django.templatetags.static import static
-from django.urls import resolve, reverse
+from django.urls import reverse
 from django.utils.html import format_html
 from django.utils.translation import gettext_lazy as _
-from eventyay.control.signals import nav_event, nav_event_settings
+from eventyay.control.signals import event_dashboard_components
 from eventyay.presale.signals import (
     front_page_after_content,
     header_nav_tabs,
@@ -16,47 +16,26 @@ from .models import ExhibitorInfo, SponsorGroup
 from .utils import add_external_image_csp_sources, public_exhibitors_queryset
 
 
-@receiver(nav_event, dispatch_uid="exhibitors_nav")
-def control_nav_import(sender, request=None, **kwargs):
-    url = resolve(request.path_info)
-    return [
-        {
-            "label": _("Exhibitors/Sponsors"),
-            "url": reverse(
-                "plugins:exhibition:info",
-                kwargs={
-                    "event": request.event.slug,
-                    "organizer": request.event.organizer.slug,
-                },
-            ),
-            "active": url.namespace == "plugins:exhibition"
-            and url.url_name != "settings",
-            "icon": "map-pin",
-        }
-    ]
-
-
-@receiver(nav_event_settings, dispatch_uid="exhibitors_nav")
-def navbar_info(sender, request, **kwargs):
-    url = resolve(request.path_info)
-    if not request.user.has_event_permission(
-        request.organizer, request.event, "can_change_event_settings", request=request
-    ):
-        return []
-    return [
-        {
-            "label": _("Exhibitors/Sponsors"),
-            "url": reverse(
-                "plugins:exhibition:settings",
-                kwargs={
-                    "event": request.event.slug,
-                    "organizer": request.organizer.slug,
-                },
-            ),
-            "active": url.namespace == "plugins:exhibition"
-            and url.url_name == "settings",
-        }
-    ]
+@receiver(event_dashboard_components, dispatch_uid="exhibition_dashboard_component")
+def exhibition_dashboard_component(sender, request=None, **kwargs):
+    url = reverse(
+        "plugins:exhibition:info",
+        kwargs={
+            "organizer": sender.organizer.slug,
+            "event": sender.slug,
+        },
+    )
+    return format_html(
+        '<div class="panel panel-default widget-container widget-small no-padding last-column">'
+        '<div class="panel-heading"><h3 class="panel-title">{}</h3></div>'
+        '<div class="panel-body"><p>{}</p><p>{} <a href="{}">{}</a></p></div>'
+        '</div>',
+        str(_("Exhibitors & Sponsors")),
+        str(_("Manage exhibitors and sponsors, maintain booth details, and create partner profiles for the event.")),
+        str(_("Go to")),
+        url,
+        str(_("Exhibitors & Sponsors Dashboard")),
+    )
 
 
 @receiver(front_page_after_content, dispatch_uid="exhibition_front_page_supporters")

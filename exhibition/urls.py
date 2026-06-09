@@ -1,5 +1,6 @@
 from django.urls import path
 from eventyay.api.urls import event_router
+from eventyay.common.urls import OrganizerSlugConverter  # noqa: F401
 
 from .api import (
     ExhibitorAuthView,
@@ -34,42 +35,52 @@ urlpatterns = [
         name="public_detail",
     ),
     path(
-        "control/event/<str:organizer>/<str:event>/settings/exhibitors",
-        SettingsView.as_view(),
+        "exhibitors/event/<orgslug:organizer>/<slug:event>/settings",
+        SettingsView.as_view(active_tab="exhibitors"),
         name="settings",
     ),
     path(
-        "control/event/<str:organizer>/<str:event>/settings/exhibitors/groups/<int:pk>/toggle-front-page",
+        "exhibitors/event/<orgslug:organizer>/<slug:event>/settings/exhibitors",
+        SettingsView.as_view(active_tab="exhibitors"),
+        name="settings.exhibitors",
+    ),
+    path(
+        "exhibitors/event/<orgslug:organizer>/<slug:event>/settings/sponsors",
+        SettingsView.as_view(active_tab="sponsors"),
+        name="settings.sponsors",
+    ),
+    path(
+        "exhibitors/event/<orgslug:organizer>/<slug:event>/settings/sponsors/groups/<int:pk>/toggle-front-page",
         SponsorGroupFrontPageToggleView.as_view(),
         name="toggle_front_page",
     ),
     path(
-        "control/event/<str:organizer>/<str:event>/settings/exhibitors/groups/reorder",
+        "exhibitors/event/<orgslug:organizer>/<slug:event>/settings/sponsors/groups/reorder",
         SponsorGroupReorderView.as_view(),
         name="reorder_groups",
     ),
     path(
-        "control/event/<str:organizer>/<str:event>/exhibitors",
+        "exhibitors/event/<orgslug:organizer>/<slug:event>",
         ExhibitorListView.as_view(),
         name="info",
     ),
     path(
-        "control/event/<str:organizer>/<str:event>/exhibitors/add",
+        "exhibitors/event/<orgslug:organizer>/<slug:event>/add",
         ExhibitorCreateView.as_view(),
         name="add",
     ),
     path(
-        "control/event/<str:organizer>/<str:event>/exhibitors/edit/<int:pk>",
+        "exhibitors/event/<orgslug:organizer>/<slug:event>/edit/<int:pk>",
         ExhibitorEditView.as_view(),
         name="edit",
     ),
     path(
-        "control/event/<str:organizer>/<str:event>/exhibitors/delete/<int:pk>",
+        "exhibitors/event/<orgslug:organizer>/<slug:event>/delete/<int:pk>",
         ExhibitorDeleteView.as_view(),
         name="delete",
     ),
     path(
-        "control/event/<str:organizer>/<str:event>/exhibitors/copy_key/<int:pk>",
+        "exhibitors/event/<orgslug:organizer>/<slug:event>/copy_key/<int:pk>",
         ExhibitorCopyKeyView.as_view(),
         name="copy_key",
     ),

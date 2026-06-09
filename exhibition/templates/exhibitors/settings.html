@@ -1,16 +1,31 @@
-{% extends "pretixcontrol/event/base.html" %}
+{% extends "exhibitors/base.html" %}
 {% load i18n %}
 {% load static %}
 {% load bootstrap3 %}
-{% block title %}{% trans "Exhibitor/Sponsor Settings" %}{% endblock %}
+{% block title %}
+    {% if active_tab == "sponsors" %}
+        {% trans "Sponsor Settings" %}
+    {% else %}
+        {% trans "Exhibitor Settings" %}
+    {% endif %}
+{% endblock %}
 {% block custom_header %}
     {{ block.super }}
     <link rel="stylesheet" href="{% static 'pretixcontrol/css/order-form-toggles.css' %}">
     <link rel="stylesheet" href="{% static 'exhibition/css/exhibitors-settings.css' %}">
 {% endblock %}
 
-{% block content %}
-<div class="container-fluid">
+{% block exhibitors_header %}
+    <h1>
+        {% if active_tab == "sponsors" %}
+            {% trans "Sponsor Settings" %}
+        {% else %}
+            {% trans "Exhibitor Settings" %}
+        {% endif %}
+    </h1>
+{% endblock %}
+
+{% block exhibitors_content %}
     {% trans "Your exhibitor access code" as default_subject %}
     {% blocktrans trimmed asvar default_body %}Hello,
 Your exhibitor ticketing account for {event} has been created.
@@ -19,19 +34,7 @@ You can access data associated to your account here:
 Using the following access code: {exhibitor_access_code}
 Best regards, Your {event} team{% endblocktrans %}
 
-    <h1>{% trans "Exhibitor/Sponsor Settings" %}</h1>
-
-    <ul class="nav nav-tabs" role="tablist">
-        <li {% if active_tab == "exhibitors" %}class="active"{% endif %}>
-            <a href="?tab=exhibitors">{% trans "Exhibitors" %}</a>
-        </li>
-        <li {% if active_tab == "sponsors" %}class="active"{% endif %}>
-            <a href="?tab=sponsors">{% trans "Sponsors" %}</a>
-        </li>
-    </ul>
-
-    <div class="tab-content">
-        <div class="tab-pane {% if active_tab == "exhibitors" %}active{% endif %}">
+    {% if active_tab == "exhibitors" %}
             <form action="" method="post" class="form-horizontal">
                 {% csrf_token %}
                 <input type="hidden" name="action" value="save_exhibitor_settings">
@@ -107,9 +110,7 @@ Best regards, Your {event} team{% endblocktrans %}
                     </div>
                 </div>
             </form>
-        </div>
-
-        <div class="tab-pane {% if active_tab == "sponsors" %}active{% endif %}">
+    {% else %}
             <fieldset>
                 <legend>{% trans "Group List" %}</legend>
                 <p>
@@ -221,8 +222,6 @@ Best regards, Your {event} team{% endblocktrans %}
                     <p>{% trans "You do not have any sponsor groups yet." %}</p>
                 {% endif %}
             </fieldset>
-        </div>
-    </div>
-</div>
+    {% endif %}
 <script type="text/javascript" src="{% static 'exhibition/js/exhibitors-settings.js' %}"></script>
 {% endblock %}

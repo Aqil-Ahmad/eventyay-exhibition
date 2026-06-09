@@ -39,17 +39,32 @@ class SettingsView(EventPermissionRequiredMixin, ListView):
     template_name = "exhibitors/settings.html"
     context_object_name = "exhibitors"
     permission = "can_change_settings"
+    active_tab = "exhibitors"
 
     def get_queryset(self):
         return ExhibitorInfo.objects.filter(event=self.request.event)
 
     def get_active_tab(self):
         tab = (
-            self.request.GET.get("tab") or self.request.POST.get("tab") or "exhibitors"
+            self.request.GET.get("tab") or self.request.POST.get("tab") or self.active_tab
         )
         if tab not in {"exhibitors", "sponsors"}:
             return "exhibitors"
         return tab
+
+    def get_settings_url(self, tab):
+        route_name = (
+            "plugins:exhibition:settings.sponsors"
+            if tab == "sponsors"
+            else "plugins:exhibition:settings.exhibitors"
+        )
+        return reverse(
+            route_name,
+            kwargs={
+                "organizer": self.request.event.organizer.slug,
+                "event": self.request.event.slug,
+            },
+        )
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
@@ -100,7 +115,7 @@ class SettingsView(EventPermissionRequiredMixin, ListView):
             )
             settings.save()
             messages.success(self.request, _("Settings have been saved."))
-            return redirect(f"{request.path}?tab=exhibitors")
+            return redirect(self.get_settings_url("exhibitors"))
 
         if action == "add_group":
             form = SponsorGroupForm(
@@ -113,7 +128,7 @@ class SettingsView(EventPermissionRequiredMixin, ListView):
                 group.event = request.event
                 group.save()
                 messages.success(self.request, _("Sponsor group added."))
-                return redirect(f"{request.path}?tab=sponsors")
+                return redirect(self.get_settings_url("sponsors"))
 
             return self.render_to_response(
                 self.get_context_data(
@@ -135,7 +150,7 @@ class SettingsView(EventPermissionRequiredMixin, ListView):
             if form.is_valid():
                 form.save()
                 messages.success(self.request, _("Sponsor group updated."))
-                return redirect(f"{request.path}?tab=sponsors")
+                return redirect(self.get_settings_url("sponsors"))
 
             return self.render_to_response(
                 self.get_context_data(
@@ -158,10 +173,10 @@ class SettingsView(EventPermissionRequiredMixin, ListView):
             else:
                 group.delete()
                 messages.success(self.request, _("Sponsor group deleted."))
-            return redirect(f"{request.path}?tab=sponsors")
+            return redirect(self.get_settings_url("sponsors"))
 
         messages.error(self.request, _("Unknown action."))
-        return redirect(f"{request.path}?tab={active_tab}")
+        return redirect(self.get_settings_url(active_tab))
 
 
 class ExhibitorListView(EventPermissionRequiredMixin, ListView):
