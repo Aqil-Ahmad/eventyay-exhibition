@@ -2,14 +2,29 @@ from django import forms
 from django.core.files.storage import default_storage
 from django.core.files.uploadedfile import UploadedFile
 from django.db import transaction
+from django.db.models import Max
 from django.forms import inlineformset_factory
 from django.utils.translation import gettext_lazy as _
 from eventyay.base.forms import I18nModelForm
+from eventyay.common.forms.mixins import (
+    EventLocalizedModelChoiceField,
+    EventLocalizedModelMultipleChoiceField,
+)
+from eventyay.common.forms.widgets import HtmlDateTimeInput
 from eventyay.common.urls import normalize_url_scheme
+from eventyay.common.utils.language import localize_event_text
 
 from .models import (
+    ExhibitionAnswer,
+    ExhibitionProposal,
+    ExhibitionProposalExtraLink,
+    ExhibitionProposalSocialLink,
+    ExhibitionQuestion,
+    ExhibitionQuestionOption,
+    ExhibitionQuestionVariant,
     ExhibitorExtraLink,
     ExhibitorInfo,
+    ExhibitorSettings,
     ExhibitorSocialLink,
     SponsorGroup,
     get_next_sponsor_group_level,
@@ -346,6 +361,575 @@ class SponsorGroupForm(I18nModelForm):
         return get_next_sponsor_group_level(self.event)
 
 
+class CallSettingsForm(I18nModelForm):
+    class Meta:
+        model = ExhibitorSettings
+        localized_fields = "__all__"
+        fields = [
+            "call_enabled",
+            "call_headline",
+            "call_text",
+            "call_deadline",
+            "call_hide_after_deadline",
+        ]
+        labels = {
+            "call_enabled": _("Accept exhibitor and sponsor proposals"),
+            "call_hide_after_deadline": _("Hide call page after the deadline"),
+        }
+        widgets = {
+            "call_deadline": HtmlDateTimeInput,
+        }
+
+
+class ExhibitionQuestionFieldsMixin:
+    def inject_exhibition_questions(self, *, event, proposal=None, readonly=False):
+        answers_by_question = {}
+        if proposal and proposal.pk:
+            for answer in proposal.answers.prefetch_related("options"):
+                answers_by_question[answer.question_id] = answer
+
+        questions = (
+            ExhibitionQuestion.objects.filter(event=event, active=True)
+            .prefetch_related("options")
+            .order_by("position", "pk")
+        )
+        for question in questions:
+            answer = answers_by_question.get(question.pk)
+            field = self.get_exhibition_question_field(
+                question=question,
+                answer=answer,
+                readonly=readonly,
+            )
+            field.question = question
+            field.answer = answer
+            self.fields[f"question_{question.pk}"] = field
+
+    def get_exhibition_question_field(self, *, question, answer, readonly):
+        label = localize_event_text(question.question)
+        help_text = localize_event_text(question.help_text) or ""
+        initial = answer.answer if answer else ""
+
+        if question.variant == ExhibitionQuestionVariant.BOOLEAN:
+            return forms.BooleanField(
+                disabled=readonly,
+                help_text=help_text,
+                initial=initial == "True",
+                label=label,
+                required=question.required,
+            )
+        if question.variant == ExhibitionQuestionVariant.TEXT:
+            return forms.CharField(
+                disabled=readonly,
+                help_text=help_text,
+                initial=initial,
+                label=label,
+                required=question.required,
+                widget=forms.Textarea(attrs={"rows": 4}),
+            )
+        if question.variant == ExhibitionQuestionVariant.URL:
+            return forms.URLField(
+                disabled=readonly,
+                help_text=help_text,
+                initial=initial,
+                label=label,
+                required=question.required,
+            )
+
+        choices = question.options.all()
+        if question.variant == ExhibitionQuestionVariant.CHOICES:
+            return EventLocalizedModelChoiceField(
+                disabled=readonly,
+                empty_label=None if question.required else _("— No selection —"),
+                help_text=help_text,
+                initial=answer.options.first() if answer else None,
+                label=label,
+                queryset=choices,
+                required=question.required,
+                widget=forms.RadioSelect,
+            )
+        if question.variant == ExhibitionQuestionVariant.SELECT:
+            return EventLocalizedModelChoiceField(
+                disabled=readonly,
+                empty_label=None if question.required else _("— No selection —"),
+                help_text=help_text,
+                initial=answer.options.first() if answer else None,
+                label=label,
+                queryset=choices,
+                required=question.required,
+            )
+        if question.variant == ExhibitionQuestionVariant.MULTIPLE:
+            return EventLocalizedModelMultipleChoiceField(
+                disabled=readonly,
+                help_text=help_text,
+                initial=list(answer.options.all()) if answer else [],
+                label=label,
+                queryset=choices,
+                required=question.required,
+                widget=forms.CheckboxSelectMultiple,
+            )
+
+        return forms.CharField(
+            disabled=readonly,
+            help_text=help_text,
+            initial=initial,
+            label=label,
+            required=question.required,
+        )
+
+    def save_exhibition_questions(self, proposal):
+        for key, value in self.cleaned_data.items():
+            if not key.startswith("question_"):
+                continue
+            field = self.fields[key]
+            question = field.question
+            answer = field.answer
+            empty = value in ("", None, False) or (
+                hasattr(value, "__len__") and not isinstance(value, str) and len(value) == 0
+            )
+
+            if empty:
+                if answer:
+                    answer.delete()
+                continue
+
+            if not answer:
+                answer = ExhibitionAnswer(proposal=proposal, question=question)
+
+            if isinstance(field, forms.ModelMultipleChoiceField):
+                selected_options = list(value)
+                answer.answer = ", ".join(str(option) for option in selected_options)
+                answer.save()
+                answer.options.set(selected_options)
+            elif isinstance(field, forms.ModelChoiceField):
+                answer.answer = str(value.answer) if value else ""
+                answer.save()
+                answer.options.set([value] if value else [])
+            elif isinstance(field, forms.BooleanField):
+                answer.answer = "True" if value else "False"
+                answer.save()
+                answer.options.clear()
+            else:
+                answer.answer = value
+                answer.save()
+                answer.options.clear()
+
+
+class ExhibitionProposalForm(ExhibitionQuestionFieldsMixin, I18nModelForm):
+    applying_for = forms.ChoiceField(
+        choices=(
+            ("exhibitor", _("Exhibitor")),
+            ("sponsor", _("Sponsor")),
+            ("both", _("Exhibitor and sponsor")),
+        ),
+        initial="exhibitor",
+        label=_("Application type"),
+        widget=forms.RadioSelect,
+    )
+    slides_url = forms.URLField(
+        required=False,
+        label=_("Slides URL"),
+        help_text=_("Use an external PDF URL instead of uploading a slides file."),
+    )
+    logo_url = forms.URLField(
+        required=False,
+        label=_("Partner Logo URL"),
+        help_text=_("Use an external image URL instead of uploading a logo file."),
+    )
+    header_image_url = forms.URLField(
+        required=False,
+        label=_("Partner Header Image URL"),
+        help_text=_(
+            "Use an external image URL instead of uploading a header image file."
+        ),
+    )
+
+    file_url_fields = {
+        "slides": "slides_url",
+        "logo": "logo_url",
+        "header_image": "header_image_url",
+    }
+    setting_field_map = {
+        "applying_for": ("applying_for",),
+        "name": ("name",),
+        "description": ("description",),
+        "email": ("email",),
+        "url": ("url",),
+        "contact_url": ("contact_url",),
+        "video_url": ("video_url",),
+        "slides": ("slides", "slides_url"),
+        "logo": ("logo", "logo_url"),
+        "header_image": ("header_image", "header_image_url"),
+        "booth_name": ("booth_name",),
+        "notes": ("notes",),
+    }
+
+    class Meta:
+        model = ExhibitionProposal
+        localized_fields = "__all__"
+        fields = [
+            "name",
+            "description",
+            "email",
+            "contact_url",
+            "video_url",
+            "slides",
+            "slides_url",
+            "logo",
+            "logo_url",
+            "header_image",
+            "header_image_url",
+            "url",
+            "booth_name",
+            "notes",
+        ]
+        labels = {
+            "name": _("Partner Name"),
+            "description": _("Partner Description"),
+            "email": _("Contact email"),
+            "contact_url": _("Contact URL"),
+            "video_url": _("Video URL"),
+            "slides": _("Slides"),
+            "logo": _("Partner Logo"),
+            "header_image": _("Partner Header Image"),
+            "url": _("Partner URL"),
+            "booth_name": _("Preferred booth name"),
+            "notes": _("Message to the organizers"),
+        }
+        widgets = {
+            "notes": forms.Textarea(attrs={"rows": 4}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        event = kwargs.get("event")
+        self.read_only = kwargs.pop("read_only", False)
+        instance = kwargs.get("instance")
+        super().__init__(*args, **kwargs)
+        self.event = event or getattr(instance, "event", None)
+        self.exhibition_settings = None
+        self.active_proposal_fields = {}
+        self.required_proposal_fields = {}
+        if self.event:
+            self.exhibition_settings = ExhibitorSettings.objects.get_or_create(
+                event=self.event
+            )[0]
+            proposal_field_settings = (
+                self.exhibition_settings.normalized_proposal_field_settings
+            )
+            self.active_proposal_fields = {
+                key: value["active"] for key, value in proposal_field_settings.items()
+            }
+            self.required_proposal_fields = {
+                key: value["required"] for key, value in proposal_field_settings.items()
+            }
+        self.fields["applying_for"].initial = self.get_applying_for_initial(instance)
+        for field_name in ("logo", "header_image"):
+            if field_name in self.fields:
+                self.fields[field_name].widget.attrs.setdefault("accept", "image/*")
+        if "slides" in self.fields:
+            self.fields["slides"].widget.attrs.setdefault("accept", ".pdf,application/pdf")
+        description_field = self.fields.get("description")
+        if description_field:
+            widget = description_field.widget
+            if isinstance(widget, forms.MultiWidget):
+                for sub_widget in widget.widgets:
+                    sub_widget.attrs.setdefault("rows", 4)
+            else:
+                widget.attrs.setdefault("rows", 4)
+        if self.event:
+            self.apply_proposal_field_settings()
+            self.inject_exhibition_questions(
+                event=self.event,
+                proposal=instance,
+                readonly=self.read_only,
+            )
+        if self.read_only:
+            for field in self.fields.values():
+                field.disabled = True
+
+    @staticmethod
+    def get_applying_for_initial(instance):
+        if not instance:
+            return "exhibitor"
+        if instance.is_exhibitor and instance.is_sponsor:
+            return "both"
+        if instance.is_sponsor:
+            return "sponsor"
+        return "exhibitor"
+
+    def apply_proposal_field_settings(self):
+        file_field_keys = set(self.file_url_fields)
+        for key, form_fields in self.setting_field_map.items():
+            is_active = self.active_proposal_fields.get(key, True)
+            is_required = self.required_proposal_fields.get(key, False)
+            if not is_active:
+                for field_name in form_fields:
+                    self.fields.pop(field_name, None)
+                continue
+
+            if key in file_field_keys or key == "booth_name":
+                continue
+
+            for field_name in form_fields:
+                if field_name in self.fields:
+                    self.fields[field_name].required = is_required
+
+    def field_setting_is_active(self, key):
+        return self.active_proposal_fields.get(key, True)
+
+    def field_setting_is_required(self, key):
+        return self.required_proposal_fields.get(key, False)
+
+    def clean(self):
+        cleaned_data = super().clean()
+        applying_for = cleaned_data.get("applying_for")
+        cleaned_data["is_exhibitor"] = applying_for in {"exhibitor", "both"}
+        cleaned_data["is_sponsor"] = applying_for in {"sponsor", "both"}
+
+        if "video_url" in self.fields and (video_url := cleaned_data.get("video_url")):
+            cleaned_data["video_url"] = normalize_url_scheme(video_url)
+
+        slides_url = cleaned_data.get("slides_url") or ""
+        submitted_slides = None
+        if "slides" in self.fields:
+            submitted_slides = self.fields["slides"].widget.value_from_datadict(
+                self.data,
+                self.files,
+                self.add_prefix("slides"),
+            )
+        has_new_slides_upload = isinstance(submitted_slides, UploadedFile)
+        if slides_url and has_new_slides_upload:
+            message = _("Either upload a PDF or enter an external PDF URL, not both.")
+            self.add_error("slides", message)
+            self.add_error("slides_url", message)
+        elif slides_url:
+            normalized_slides_url = normalize_url_scheme(slides_url)
+            if not normalized_slides_url.lower().split("?", 1)[0].endswith(".pdf"):
+                self.add_error("slides_url", _("Slides URL must point to a PDF file."))
+            else:
+                cleaned_data["slides_url"] = normalized_slides_url
+
+        for image_field, url_field in self.file_url_fields.items():
+            if image_field == "slides":
+                continue
+            if image_field not in self.fields and url_field not in self.fields:
+                continue
+            image_url = cleaned_data.get(url_field) or ""
+            submitted_image = None
+            if image_field in self.fields:
+                submitted_image = self.fields[image_field].widget.value_from_datadict(
+                    self.data,
+                    self.files,
+                    self.add_prefix(image_field),
+                )
+            has_new_upload = isinstance(submitted_image, UploadedFile)
+            if image_url and has_new_upload:
+                message = _("Either upload a file or enter an external URL, not both.")
+                self.add_error(image_field, message)
+                self.add_error(url_field, message)
+            elif image_url:
+                cleaned_data[url_field] = normalize_url_scheme(image_url)
+
+        self.validate_required_file_or_url("slides", has_new_slides_upload)
+        for image_field in ("logo", "header_image"):
+            if image_field not in self.fields and self.file_url_fields[image_field] not in self.fields:
+                continue
+            submitted_image = None
+            if image_field in self.fields:
+                submitted_image = self.fields[image_field].widget.value_from_datadict(
+                    self.data,
+                    self.files,
+                    self.add_prefix(image_field),
+                )
+            self.validate_required_file_or_url(
+                image_field,
+                isinstance(submitted_image, UploadedFile),
+            )
+
+        if not cleaned_data["is_exhibitor"]:
+            cleaned_data["booth_name"] = ""
+        elif (
+            self.field_setting_is_required("booth_name")
+            and "booth_name" in self.fields
+            and not cleaned_data.get("booth_name")
+        ):
+            self.add_error("booth_name", _("This field is required."))
+
+        return cleaned_data
+
+    def validate_required_file_or_url(self, field_name, has_new_upload):
+        if not self.field_setting_is_active(field_name) or not self.field_setting_is_required(
+            field_name
+        ):
+            return
+        file_field = self.fields.get(field_name)
+        url_field_name = self.file_url_fields[field_name]
+        if file_field is None and url_field_name not in self.fields:
+            return
+        has_url = bool(self.cleaned_data.get(url_field_name))
+        has_existing = bool(getattr(self.instance, f"visible_{field_name}_url", ""))
+        if not has_new_upload and not has_url and not has_existing:
+            self.add_error(
+                field_name if file_field else url_field_name,
+                _("This field is required."),
+            )
+
+    def save(self, commit=True):
+        instance = super().save(commit=False)
+        instance.is_exhibitor = self.cleaned_data.get("is_exhibitor", True)
+        instance.is_sponsor = self.cleaned_data.get("is_sponsor", False)
+        if not instance.is_exhibitor:
+            instance.booth_name = ""
+            instance.booth_id = None
+        if commit:
+            instance.save()
+            self.save_m2m()
+            self.save_exhibition_questions(instance)
+        return instance
+
+
+class ExhibitionProposalReviewForm(I18nModelForm):
+    sponsor_group = forms.ModelChoiceField(
+        queryset=SponsorGroup.objects.none(),
+        required=False,
+        label=_("Sponsor Group"),
+    )
+
+    class Meta:
+        model = ExhibitionProposal
+        localized_fields = "__all__"
+        fields = [
+            "is_exhibitor",
+            "is_sponsor",
+            "sponsor_group",
+            "booth_id",
+            "booth_name",
+            "review_notes",
+        ]
+        labels = {
+            "is_exhibitor": _("Approve as exhibitor"),
+            "is_sponsor": _("Approve as sponsor"),
+            "booth_id": _("Booth ID"),
+            "booth_name": _("Booth name"),
+            "review_notes": _("Internal review notes"),
+        }
+        widgets = {
+            "review_notes": forms.Textarea(attrs={"rows": 4}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        event = kwargs.get("event")
+        instance = kwargs.get("instance")
+        super().__init__(*args, **kwargs)
+        self.event = event or getattr(instance, "event", None)
+        self.fields["sponsor_group"].queryset = SponsorGroup.objects.filter(
+            event=self.event
+        ).order_by("level", "pk")
+        self.fields["sponsor_group"].empty_label = _("No sponsor group")
+
+    def clean(self):
+        cleaned_data = super().clean()
+        if not cleaned_data.get("is_sponsor"):
+            cleaned_data["sponsor_group"] = None
+        if not cleaned_data.get("is_exhibitor"):
+            cleaned_data["booth_id"] = None
+            cleaned_data["booth_name"] = ""
+        return cleaned_data
+
+
+class ExhibitionQuestionForm(I18nModelForm):
+    options_text = forms.CharField(
+        required=False,
+        label=_("Options"),
+        help_text=_("For choice fields, enter one option per line."),
+        widget=forms.Textarea(attrs={"rows": 6}),
+    )
+
+    class Meta:
+        model = ExhibitionQuestion
+        localized_fields = "__all__"
+        fields = [
+            "variant",
+            "question",
+            "help_text",
+            "required",
+            "active",
+            "position",
+        ]
+        labels = {
+            "variant": _("Field type"),
+            "question": _("Custom question"),
+            "help_text": _("Help text"),
+            "required": _("Required"),
+            "active": _("Active"),
+            "position": _("Position"),
+        }
+
+    choice_variants = {
+        ExhibitionQuestionVariant.CHOICES,
+        ExhibitionQuestionVariant.MULTIPLE,
+        ExhibitionQuestionVariant.SELECT,
+    }
+
+    def __init__(self, *args, **kwargs):
+        self.event = kwargs.get("event")
+        super().__init__(*args, **kwargs)
+        if self.instance and self.instance.pk:
+            self.fields["options_text"].initial = "\n".join(
+                str(option) for option in self.instance.options.all()
+            )
+        elif not self.initial.get("position") and self.event:
+            max_position = ExhibitionQuestion.objects.filter(event=self.event).aggregate(
+                Max("position")
+            )["position__max"]
+            self.initial["position"] = (max_position or -1) + 1
+
+    def clean(self):
+        cleaned_data = super().clean()
+        variant = cleaned_data.get("variant")
+        options = [
+            option.strip()
+            for option in (cleaned_data.get("options_text") or "").splitlines()
+            if option.strip()
+        ]
+        if variant in self.choice_variants and not options:
+            self.add_error(
+                "options_text",
+                _("Please provide at least one option for this question type."),
+            )
+        return cleaned_data
+
+    def save(self, commit=True):
+        instance = super().save(commit=False)
+        if self.event:
+            instance.event = self.event
+        if commit:
+            instance.save()
+            self.save_options(instance)
+        return instance
+
+    def save_options(self, question):
+        if question.variant not in self.choice_variants:
+            question.options.all().delete()
+            return
+        options = [
+            option.strip()
+            for option in (self.cleaned_data.get("options_text") or "").splitlines()
+            if option.strip()
+        ]
+        question.options.all().delete()
+        locale = self.event.locale if self.event else "en"
+        ExhibitionQuestionOption.objects.bulk_create(
+            [
+                ExhibitionQuestionOption(
+                    question=question,
+                    answer={locale: option},
+                    position=index,
+                )
+                for index, option in enumerate(options)
+            ]
+        )
+
+
 class ExhibitorSocialLinkForm(forms.ModelForm):
     network = forms.ChoiceField(
         choices=(("", _("Choose social platform")),) + SOCIAL_LINK_CHOICES,
@@ -435,6 +1019,95 @@ class ExhibitorExtraLinkForm(forms.ModelForm):
         return normalize_url_scheme(url)
 
 
+class ExhibitionProposalSocialLinkForm(forms.ModelForm):
+    network = forms.ChoiceField(
+        choices=(("", _("Choose social platform")),) + SOCIAL_LINK_CHOICES,
+        required=False,
+        label=_("Social platform"),
+    )
+    path = forms.CharField(
+        required=False,
+        label=_("Profile or path"),
+    )
+
+    class Meta:
+        model = ExhibitionProposalSocialLink
+        fields = ["network", "url"]
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["url"].required = False
+        self.fields["network"].widget.attrs.update({"class": "form-control"})
+        self.fields["path"].widget.attrs.update(
+            {
+                "class": "form-control",
+                "placeholder": _("Profile, handle, or full URL"),
+            }
+        )
+
+        network = self.initial.get("network") or getattr(self.instance, "network", "")
+        if network:
+            self.initial["path"] = get_social_link_value(self.instance.url, network)
+
+    def clean(self):
+        cleaned_data = super().clean()
+        network = cleaned_data.get("network", "")
+        path = (cleaned_data.get("path") or "").strip()
+
+        if self.cleaned_data.get("DELETE"):
+            return cleaned_data
+
+        if not network and not path:
+            if self.has_changed():
+                self.add_error(
+                    "path",
+                    _("Please enter a profile, handle, or URL or remove this row."),
+                )
+            cleaned_data["url"] = ""
+            return cleaned_data
+
+        if not network:
+            self.add_error("network", _("Please choose a social platform."))
+            return cleaned_data
+
+        if not path:
+            self.add_error("path", _("Please enter a profile, handle, or URL."))
+            return cleaned_data
+
+        cleaned_data["url"] = build_social_link_url(network, path)
+        return cleaned_data
+
+    def save(self, commit=True):
+        self.instance.url = self.cleaned_data.get("url", "")
+        self.instance.network = self.cleaned_data.get("network", "")
+        return super().save(commit=commit)
+
+
+class ExhibitionProposalExtraLinkForm(forms.ModelForm):
+    class Meta:
+        model = ExhibitionProposalExtraLink
+        fields = ["label", "url"]
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["label"].widget.attrs.update(
+            {
+                "class": "form-control",
+                "placeholder": _("Link label"),
+            }
+        )
+        self.fields["url"].widget.attrs.update(
+            {
+                "class": "form-control",
+                "placeholder": _("https://example.com"),
+            }
+        )
+
+    def clean_url(self):
+        url = self.cleaned_data.get("url") or ""
+        return normalize_url_scheme(url)
+
+
 ExhibitorSocialLinkFormSet = inlineformset_factory(
     ExhibitorInfo,
     ExhibitorSocialLink,
@@ -447,6 +1120,22 @@ ExhibitorExtraLinkFormSet = inlineformset_factory(
     ExhibitorInfo,
     ExhibitorExtraLink,
     form=ExhibitorExtraLinkForm,
+    can_delete=True,
+    extra=0,
+)
+
+ExhibitionProposalSocialLinkFormSet = inlineformset_factory(
+    ExhibitionProposal,
+    ExhibitionProposalSocialLink,
+    form=ExhibitionProposalSocialLinkForm,
+    can_delete=True,
+    extra=0,
+)
+
+ExhibitionProposalExtraLinkFormSet = inlineformset_factory(
+    ExhibitionProposal,
+    ExhibitionProposalExtraLink,
+    form=ExhibitionProposalExtraLinkForm,
     can_delete=True,
     extra=0,
 )

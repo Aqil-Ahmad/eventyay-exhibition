@@ -2,8 +2,11 @@ import os
 import secrets
 import string
 
+from django.conf import settings
 from django.db import models
 from django.db.models import Max, Q
+from django.utils import timezone
+from django.utils.crypto import get_random_string
 from django.utils.translation import gettext_lazy as _
 from eventyay.base.models import Event
 from eventyay.common.utils.language import localize_event_text
@@ -16,6 +19,11 @@ from .social_links import SOCIAL_LINK_CHOICES, get_social_link_spec
 def generate_key():
     alphabet = string.ascii_lowercase + string.digits
     return "".join(secrets.choice(alphabet) for _ in range(8))
+
+
+def generate_proposal_code():
+    alphabet = string.ascii_uppercase + string.digits
+    return get_random_string(length=12, allowed_chars=alphabet)
 
 
 def generate_booth_id(event=None):
@@ -71,17 +79,150 @@ def exhibitor_slides_path(instance, filename):
     return os.path.join("exhibitors", "slides", str(name), filename)
 
 
+def proposal_file_path(instance, filename, file_type):
+    code = instance.code or "new"
+    return os.path.join("exhibition-proposals", str(code), file_type, filename)
+
+
+def proposal_logo_path(instance, filename):
+    return proposal_file_path(instance, filename, "logos")
+
+
+def proposal_header_image_path(instance, filename):
+    return proposal_file_path(instance, filename, "headers")
+
+
+def proposal_slides_path(instance, filename):
+    return proposal_file_path(instance, filename, "slides")
+
+
+PROPOSAL_DEFAULT_FIELDS = (
+    {
+        "key": "applying_for",
+        "label": _("Application type"),
+        "active": True,
+        "required": True,
+        "active_locked": True,
+        "required_locked": True,
+    },
+    {
+        "key": "name",
+        "label": _("Partner Name"),
+        "active": True,
+        "required": True,
+        "active_locked": True,
+        "required_locked": True,
+    },
+    {"key": "description", "label": _("Partner Description"), "active": True},
+    {"key": "email", "label": _("Contact email"), "active": True},
+    {"key": "url", "label": _("Partner URL"), "active": True},
+    {"key": "contact_url", "label": _("Contact URL"), "active": True},
+    {"key": "video_url", "label": _("Video URL"), "active": True},
+    {"key": "slides", "label": _("Slides"), "active": True},
+    {"key": "logo", "label": _("Partner Logo"), "active": True},
+    {
+        "key": "header_image",
+        "label": _("Partner Header Image"),
+        "active": True,
+    },
+    {"key": "booth_name", "label": _("Preferred booth name"), "active": True},
+    {
+        "key": "notes",
+        "label": _("Message to the organizers"),
+        "active": True,
+    },
+    {
+        "key": "social_links",
+        "label": _("Social Media"),
+        "active": True,
+        "supports_required": False,
+    },
+    {
+        "key": "extra_links",
+        "label": _("Extra Links"),
+        "active": True,
+        "supports_required": False,
+    },
+)
+
+
+def default_proposal_field_settings():
+    return {
+        field["key"]: {
+            "active": field.get("active", True),
+            "required": field.get("required", False),
+        }
+        for field in PROPOSAL_DEFAULT_FIELDS
+    }
+
+
+def get_default_proposal_field_definition(key):
+    return next(field for field in PROPOSAL_DEFAULT_FIELDS if field["key"] == key)
+
+
 class ExhibitorSettings(models.Model):
     event = models.ForeignKey("base.Event", on_delete=models.CASCADE)
     exhibitors_access_mail_subject = models.CharField(max_length=255)
     exhibitors_access_mail_body = models.TextField()
     allowed_fields = models.JSONField(default=list)
+    call_enabled = models.BooleanField(default=False)
+    call_headline = I18nCharField(
+        max_length=200,
+        blank=True,
+        verbose_name=_("Call headline"),
+    )
+    call_text = I18nTextField(
+        blank=True,
+        verbose_name=_("Call text"),
+    )
+    call_deadline = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name=_("Submission deadline"),
+    )
+    call_hide_after_deadline = models.BooleanField(default=False)
+    proposal_field_settings = models.JSONField(default=default_proposal_field_settings)
 
     @property
     def all_allowed_fields(self):
         """Return all allowed fields, including required default fields"""
         default_fields = ["attendee_name", "attendee_email"]
         return list(set(default_fields + self.allowed_fields))
+
+    @property
+    def call_is_open(self):
+        if not self.call_enabled:
+            return False
+        return not self.call_deadline or self.call_deadline >= timezone.now()
+
+    @property
+    def normalized_proposal_field_settings(self):
+        stored_settings = self.proposal_field_settings or {}
+        normalized = default_proposal_field_settings()
+        for field in PROPOSAL_DEFAULT_FIELDS:
+            key = field["key"]
+            stored_field = stored_settings.get(key, {})
+            normalized[key]["active"] = bool(
+                stored_field.get("active", normalized[key]["active"])
+            )
+            normalized[key]["required"] = bool(
+                stored_field.get("required", normalized[key]["required"])
+            )
+            if field.get("active_locked"):
+                normalized[key]["active"] = True
+            if field.get("required_locked"):
+                normalized[key]["required"] = True
+            if field.get("supports_required") is False:
+                normalized[key]["required"] = False
+            if not normalized[key]["active"]:
+                normalized[key]["required"] = False
+        return normalized
+
+    def proposal_field_is_active(self, key):
+        return self.normalized_proposal_field_settings[key]["active"]
+
+    def proposal_field_is_required(self, key):
+        return self.normalized_proposal_field_settings[key]["required"]
 
     class Meta:
         unique_together = ("event",)
@@ -238,6 +379,268 @@ class ExhibitorExtraLink(models.Model):
 
     def __str__(self):
         return f"{self.label}: {self.url}"
+
+
+class ExhibitionProposalState(models.TextChoices):
+    DRAFT = "draft", _("draft")
+    SUBMITTED = "submitted", _("submitted")
+    ACCEPTED = "accepted", _("accepted")
+    REJECTED = "rejected", _("rejected")
+    WITHDRAWN = "withdrawn", _("withdrawn")
+
+
+class ExhibitionProposal(models.Model):
+    code = models.CharField(
+        max_length=12,
+        unique=True,
+        default=generate_proposal_code,
+    )
+    event = models.ForeignKey(
+        Event,
+        on_delete=models.CASCADE,
+        related_name="exhibition_proposals",
+    )
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="exhibition_proposals",
+    )
+    approved_exhibitor = models.ForeignKey(
+        ExhibitorInfo,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="source_proposals",
+    )
+    state = models.CharField(
+        max_length=16,
+        choices=ExhibitionProposalState.choices,
+        default=ExhibitionProposalState.SUBMITTED,
+        db_index=True,
+    )
+    name = I18nCharField(max_length=190, verbose_name=_("Name"))
+    description = I18nTextField(verbose_name=_("Description"), null=True, blank=True)
+    url = models.URLField(verbose_name=_("URL"), null=True, blank=True)
+    email = models.EmailField(verbose_name=_("Email"), null=True, blank=True)
+    contact_url = models.URLField(verbose_name=_("Contact URL"), null=True, blank=True)
+    video_url = models.URLField(verbose_name=_("Video URL"), null=True, blank=True)
+    slides = models.FileField(
+        upload_to=proposal_slides_path,
+        verbose_name=_("Slides"),
+        null=True,
+        blank=True,
+    )
+    slides_url = models.URLField(verbose_name=_("Slides URL"), null=True, blank=True)
+    logo = models.ImageField(upload_to=proposal_logo_path, null=True, blank=True)
+    logo_url = models.URLField(verbose_name=_("Logo URL"), null=True, blank=True)
+    header_image = models.ImageField(
+        upload_to=proposal_header_image_path, null=True, blank=True
+    )
+    header_image_url = models.URLField(
+        verbose_name=_("Header Image URL"), null=True, blank=True
+    )
+    is_sponsor = models.BooleanField(default=False)
+    sponsor_group = models.ForeignKey(
+        SponsorGroup,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="proposals",
+    )
+    is_exhibitor = models.BooleanField(default=True)
+    booth_id = models.CharField(
+        max_length=100,
+        null=True,
+        blank=True,
+    )
+    booth_name = I18nCharField(
+        max_length=100,
+        verbose_name=_("Booth Name"),
+        blank=True,
+    )
+    notes = models.TextField(
+        null=True,
+        blank=True,
+        verbose_name=_("Message to the organizers"),
+    )
+    review_notes = models.TextField(
+        null=True,
+        blank=True,
+        verbose_name=_("Internal review notes"),
+    )
+    submitted = models.DateTimeField(null=True, blank=True)
+    created = models.DateTimeField(auto_now_add=True)
+    updated = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("-updated", "-created")
+
+    def __str__(self):
+        return str(self.name)
+
+    @property
+    def editable(self):
+        return self.state in {
+            ExhibitionProposalState.DRAFT,
+            ExhibitionProposalState.SUBMITTED,
+        }
+
+    @property
+    def localized_booth_name(self):
+        booth_name = self.booth_name
+        if isinstance(booth_name, LazyI18nString):
+            locale = getattr(self.event, "locale", None)
+            booth_name = booth_name.localize(locale) if locale else str(booth_name)
+        return booth_name or ""
+
+    @property
+    def visible_logo_url(self):
+        if self.logo_url:
+            return self.logo_url
+        if self.logo:
+            return self.logo.url
+        return ""
+
+    @property
+    def visible_header_image_url(self):
+        if self.header_image_url:
+            return self.header_image_url
+        if self.header_image:
+            return self.header_image.url
+        return ""
+
+    @property
+    def visible_slides_url(self):
+        if self.slides_url:
+            return self.slides_url
+        if self.slides:
+            return self.slides.url
+        return ""
+
+
+class ExhibitionProposalSocialLink(models.Model):
+    proposal = models.ForeignKey(
+        ExhibitionProposal, on_delete=models.CASCADE, related_name="social_links"
+    )
+    network = models.CharField(max_length=32, choices=SOCIAL_LINK_CHOICES)
+    url = models.URLField(verbose_name=_("URL"))
+
+    class Meta:
+        ordering = ("network", "url")
+
+    @property
+    def spec(self):
+        return get_social_link_spec(self.network)
+
+    def __str__(self):
+        return f"{self.get_network_display()}: {self.url}"
+
+
+class ExhibitionProposalExtraLink(models.Model):
+    proposal = models.ForeignKey(
+        ExhibitionProposal, on_delete=models.CASCADE, related_name="extra_links"
+    )
+    label = models.CharField(max_length=120, verbose_name=_("Label"))
+    url = models.URLField(verbose_name=_("URL"))
+
+    class Meta:
+        ordering = ("label", "url")
+
+    def __str__(self):
+        return f"{self.label}: {self.url}"
+
+
+class ExhibitionQuestionVariant(models.TextChoices):
+    STRING = "string", _("Text (one-line)")
+    TEXT = "text", _("Multi-line text")
+    URL = "url", _("URL")
+    BOOLEAN = "boolean", _("Confirmation")
+    CHOICES = "choices", _("Radio button (Choose one option)")
+    MULTIPLE = "multiple_choice", _("Checkbox (Choose one or several options)")
+    SELECT = "select", _("Select (one option)")
+
+
+class ExhibitionQuestion(models.Model):
+    event = models.ForeignKey(
+        Event,
+        on_delete=models.CASCADE,
+        related_name="exhibition_questions",
+    )
+    variant = models.CharField(
+        max_length=32,
+        choices=ExhibitionQuestionVariant.choices,
+        default=ExhibitionQuestionVariant.STRING,
+    )
+    question = I18nCharField(max_length=800, verbose_name=_("Custom question"))
+    help_text = I18nCharField(
+        null=True,
+        blank=True,
+        max_length=800,
+        verbose_name=_("help text"),
+    )
+    required = models.BooleanField(default=False, verbose_name=_("required"))
+    active = models.BooleanField(default=True, verbose_name=_("active"))
+    position = models.IntegerField(default=0)
+
+    class Meta:
+        ordering = ("position", "id")
+
+    @property
+    def localized_question(self):
+        return localize_event_text(self.question) or ""
+
+    def __str__(self):
+        return self.localized_question or str(self.question)
+
+
+class ExhibitionQuestionOption(models.Model):
+    question = models.ForeignKey(
+        ExhibitionQuestion,
+        on_delete=models.CASCADE,
+        related_name="options",
+    )
+    answer = I18nCharField(verbose_name=_("Response"))
+    position = models.IntegerField(default=0)
+
+    class Meta:
+        ordering = ("position", "id")
+
+    def __str__(self):
+        return localize_event_text(self.answer) or str(self.answer)
+
+
+class ExhibitionAnswer(models.Model):
+    question = models.ForeignKey(
+        ExhibitionQuestion,
+        on_delete=models.CASCADE,
+        related_name="answers",
+    )
+    proposal = models.ForeignKey(
+        ExhibitionProposal,
+        on_delete=models.CASCADE,
+        related_name="answers",
+    )
+    answer = models.TextField(blank=True)
+    options = models.ManyToManyField(ExhibitionQuestionOption, related_name="answers")
+
+    class Meta:
+        unique_together = ("question", "proposal")
+
+    @property
+    def answer_string(self):
+        if self.question.variant == ExhibitionQuestionVariant.BOOLEAN:
+            if self.answer == "True":
+                return _("Yes")
+            if self.answer == "False":
+                return _("No")
+            return ""
+        if self.question.variant in {
+            ExhibitionQuestionVariant.CHOICES,
+            ExhibitionQuestionVariant.MULTIPLE,
+            ExhibitionQuestionVariant.SELECT,
+        }:
+            return ", ".join(str(option) for option in self.options.all())
+        return self.answer or ""
 
 
 class Lead(models.Model):

@@ -1,0 +1,54 @@
+{% extends "exhibitors/call_base.html" %}
+{% load i18n %}
+
+{% block call_content %}
+    <h2 id="exhibition-call-heading">{% trans "Your Exhibitor & Sponsor Proposals" %}</h2>
+    {% if proposals %}
+        <div class="table-responsive">
+            <table class="table table-sm table-flip">
+                <thead>
+                <tr>
+                    <th>{% trans "Name" %}</th>
+                    <th>{% trans "State" %}</th>
+                    <th>{% trans "Last modified" %}</th>
+                    <th></th>
+                </tr>
+                </thead>
+                <tbody>
+                {% for proposal in proposals %}
+                    <tr>
+                        <td>{{ proposal.name }}</td>
+                        <td>{{ proposal.get_state_display }}</td>
+                        <td>{{ proposal.updated|date:"SHORT_DATETIME_FORMAT" }}</td>
+                        <td class="text-right">
+                            <a class="btn btn-sm btn-info" href="{% url 'plugins:exhibition:proposal.user_edit' organizer=request.event.organizer.slug event=request.event.slug code=proposal.code %}">
+                                {% if proposal.editable and settings.call_is_open %}
+                                    <i class="fa fa-edit"></i> {% trans "Edit" %}
+                                {% else %}
+                                    <i class="fa fa-eye"></i> {% trans "View" %}
+                                {% endif %}
+                            </a>
+                        </td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% if settings.call_is_open %}
+            <p>
+                <a class="btn btn-success btn-lg" href="{% url 'plugins:exhibition:proposal.add' organizer=request.event.organizer.slug event=request.event.slug %}">
+                    {% trans "Create a new proposal" %}
+                </a>
+            </p>
+        {% endif %}
+    {% else %}
+        <p class="text-center">{% trans "You have not submitted an exhibitor or sponsor proposal yet." %}</p>
+        {% if settings.call_is_open %}
+            <p class="text-center">
+                <a class="btn btn-success btn-lg btn-block" href="{% url 'plugins:exhibition:proposal.add' organizer=request.event.organizer.slug event=request.event.slug %}">
+                    {% trans "Submit a proposal" %}
+                </a>
+            </p>
+        {% endif %}
+    {% endif %}
+{% endblock %}

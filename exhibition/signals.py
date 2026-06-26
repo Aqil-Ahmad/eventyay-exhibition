@@ -3,7 +3,7 @@ from django.dispatch import receiver
 from django.template.loader import get_template
 from django.templatetags.static import static
 from django.urls import reverse
-from django.utils.html import format_html
+from django.utils.html import format_html, format_html_join
 from django.utils.translation import gettext_lazy as _
 from eventyay.control.signals import event_dashboard_components
 from eventyay.presale.signals import (
@@ -12,7 +12,7 @@ from eventyay.presale.signals import (
     html_head,
 )
 
-from .models import ExhibitorInfo, SponsorGroup
+from .models import ExhibitorInfo, ExhibitorSettings, SponsorGroup
 from .utils import add_external_image_csp_sources, public_exhibitors_queryset
 
 
@@ -85,21 +85,50 @@ def presale_supported_by(sender, request=None, **kwargs):
 
 @receiver(header_nav_tabs, dispatch_uid="exhibition_presale_nav_tab")
 def exhibition_presale_nav_tab(sender, request=None, **kwargs):
-    if not request or not public_exhibitors_queryset(sender).exists():
+    if not request:
         return ""
 
-    return format_html(
-        '<a href="{}" class="header-tab {}"><i class="fa fa-building-o"></i> {}</a>',
-        reverse(
-            "plugins:exhibition:public_list",
-            kwargs={
-                "organizer": sender.organizer.slug,
-                "event": sender.slug,
-            },
-        ),
-        "active" if "/exhibition/" in request.path_info else "",
-        _("Exhibition"),
-    )
+    links = []
+    if public_exhibitors_queryset(sender).exists():
+        links.append(
+            format_html(
+                '<a href="{}" class="header-tab {}"><i class="fa fa-building-o"></i> {}</a>',
+                reverse(
+                    "plugins:exhibition:public_list",
+                    kwargs={
+                        "organizer": sender.organizer.slug,
+                        "event": sender.slug,
+                    },
+                ),
+                "active"
+                if "/exhibition/" in request.path_info
+                and "/exhibition/call/" not in request.path_info
+                else "",
+                _("Exhibition"),
+            )
+        )
+
+    settings = ExhibitorSettings.objects.filter(
+        event=sender,
+        call_enabled=True,
+    ).first()
+    if settings and (settings.call_is_open or not settings.call_hide_after_deadline):
+        links.append(
+            format_html(
+                '<a href="{}" class="header-tab {}"><i class="fa fa-handshake-o"></i> {}</a>',
+                reverse(
+                    "plugins:exhibition:public_call",
+                    kwargs={
+                        "organizer": sender.organizer.slug,
+                        "event": sender.slug,
+                    },
+                ),
+                "active" if "/exhibition/call/" in request.path_info else "",
+                _("Exhibitor & Sponsor Call"),
+            )
+        )
+
+    return format_html_join("", "{}", ((link,) for link in links))
 
 
 @receiver(html_head, dispatch_uid="exhibition_front_page_supporters_styles")

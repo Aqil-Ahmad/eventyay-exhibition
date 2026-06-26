@@ -3,7 +3,9 @@
 {% load static %}
 {% load bootstrap3 %}
 {% block title %}
-    {% if active_tab == "sponsors" %}
+    {% if active_tab == "call" %}
+        {% trans "Call Settings" %}
+    {% elif active_tab == "sponsors" %}
         {% trans "Sponsor Settings" %}
     {% else %}
         {% trans "Exhibitor Settings" %}
@@ -17,7 +19,9 @@
 
 {% block exhibitors_header %}
     <h1>
-        {% if active_tab == "sponsors" %}
+        {% if active_tab == "call" %}
+            {% trans "Call Settings" %}
+        {% elif active_tab == "sponsors" %}
             {% trans "Sponsor Settings" %}
         {% else %}
             {% trans "Exhibitor Settings" %}
@@ -34,7 +38,35 @@ You can access data associated to your account here:
 Using the following access code: {exhibitor_access_code}
 Best regards, Your {event} team{% endblocktrans %}
 
-    {% if active_tab == "exhibitors" %}
+    {% if active_tab == "call" %}
+            <form action="" method="post" class="form-horizontal">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="save_call_settings">
+                <input type="hidden" name="tab" value="call">
+                {% bootstrap_form_errors call_settings_form %}
+                <fieldset>
+                    <legend>{% trans "Call for Exhibitors & Sponsors" %}</legend>
+                    <p>{% trans "Publish a login-required application form for exhibitors and sponsors." %}</p>
+                    {% bootstrap_field call_settings_form.call_enabled layout="control" %}
+                    {% bootstrap_field call_settings_form.call_headline layout="control" %}
+                    {% bootstrap_field call_settings_form.call_text layout="control" %}
+                    {% bootstrap_field call_settings_form.call_deadline layout="control" %}
+                    {% bootstrap_field call_settings_form.call_hide_after_deadline layout="control" %}
+                </fieldset>
+                <div class="form-group submit-group">
+                    <div class="col-md-9 col-md-offset-3">
+                        <button type="submit" class="btn btn-primary btn-save">
+                            {% trans "Save" %}
+                        </button>
+                        {% if settings.call_enabled %}
+                            <a class="btn btn-default" href="{% url 'plugins:exhibition:public_call' organizer=request.event.organizer.slug event=request.event.slug %}">
+                                {% trans "View call page" %}
+                            </a>
+                        {% endif %}
+                    </div>
+                </div>
+            </form>
+    {% elif active_tab == "exhibitors" %}
             <form action="" method="post" class="form-horizontal">
                 {% csrf_token %}
                 <input type="hidden" name="action" value="save_exhibitor_settings">

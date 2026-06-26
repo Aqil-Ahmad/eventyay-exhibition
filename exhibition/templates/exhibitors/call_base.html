@@ -1,0 +1,12 @@
+{% extends "pretixpresale/event/base.html" %}
+{% load i18n %}
+
+{% block pagetitle %}{% trans "Call for Exhibitors & Sponsors" %}{% endblock %}
+
+{% block content %}
+    <main aria-label="{% trans 'Call for Exhibitors & Sponsors' %}">
+        <section class="front-page exhibition-call-page" aria-labelledby="exhibition-call-heading">
+            {% block call_content %}{% endblock %}
+        </section>
+    </main>
+{% endblock %}

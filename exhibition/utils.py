@@ -2,6 +2,7 @@ from typing import TYPE_CHECKING
 from urllib.parse import parse_qs, urlparse
 
 from django.db.models import Q, QuerySet
+from django.utils import timezone
 from eventyay.common.urls import get_url_origin, normalize_url_scheme
 
 if TYPE_CHECKING:
@@ -103,3 +104,66 @@ def build_exhibitor_video_embed(url: str) -> dict | None:
         return {"type": "iframe", "url": normalized}
 
     return None
+
+
+def create_exhibitor_from_proposal(proposal):
+    from .models import (
+        ExhibitionProposalState,
+        ExhibitorExtraLink,
+        ExhibitorInfo,
+        ExhibitorSocialLink,
+        generate_booth_id,
+    )
+
+    if proposal.approved_exhibitor_id:
+        return proposal.approved_exhibitor
+
+    booth_id = proposal.booth_id
+    if proposal.is_exhibitor and not booth_id:
+        booth_id = generate_booth_id(event=proposal.event)
+
+    exhibitor = ExhibitorInfo.objects.create(
+        event=proposal.event,
+        name=proposal.name,
+        description=proposal.description,
+        url=proposal.url,
+        email=proposal.email,
+        contact_url=proposal.contact_url,
+        video_url=proposal.video_url,
+        slides=proposal.slides,
+        slides_url=proposal.slides_url,
+        logo=proposal.logo,
+        logo_url=proposal.logo_url,
+        header_image=proposal.header_image,
+        header_image_url=proposal.header_image_url,
+        is_sponsor=proposal.is_sponsor,
+        sponsor_group=proposal.sponsor_group if proposal.is_sponsor else None,
+        is_exhibitor=proposal.is_exhibitor,
+        booth_id=booth_id if proposal.is_exhibitor else None,
+        booth_name=proposal.booth_name if proposal.is_exhibitor else "",
+    )
+    ExhibitorSocialLink.objects.bulk_create(
+        [
+            ExhibitorSocialLink(
+                exhibitor=exhibitor,
+                network=link.network,
+                url=link.url,
+            )
+            for link in proposal.social_links.all()
+        ]
+    )
+    ExhibitorExtraLink.objects.bulk_create(
+        [
+            ExhibitorExtraLink(
+                exhibitor=exhibitor,
+                label=link.label,
+                url=link.url,
+            )
+            for link in proposal.extra_links.all()
+        ]
+    )
+    proposal.approved_exhibitor = exhibitor
+    proposal.state = ExhibitionProposalState.ACCEPTED
+    proposal.submitted = proposal.submitted or timezone.now()
+    proposal.save(update_fields=["approved_exhibitor", "state", "submitted", "updated"])
+    return exhibitor

@@ -1,0 +1,25 @@
+{% extends "exhibitors/base.html" %}
+{% load i18n %}
+
+{% block title %}{{ request.event.name }} - {% trans "Delete Proposal Question" %}{% endblock %}
+
+{% block exhibitors_header %}
+    <h1>{% trans "Delete Proposal Question" %}</h1>
+{% endblock %}
+
+{% block exhibitors_content %}
+    <form action="" method="post">
+        {% csrf_token %}
+        <p>
+            {% blocktrans trimmed with question=object.localized_question %}
+                Are you sure you want to delete the question "{{ question }}"?
+            {% endblocktrans %}
+        </p>
+        <div class="form-group submit-group">
+            <button type="submit" class="btn btn-danger">{% trans "Delete" %}</button>
+            <a class="btn btn-default" href="{% url 'plugins:exhibition:call.questions' organizer=request.event.organizer.slug event=request.event.slug %}">
+                {% trans "Cancel" %}
+            </a>
+        </div>
+    </form>
+{% endblock %}

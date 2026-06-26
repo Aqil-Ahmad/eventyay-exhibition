@@ -11,16 +11,26 @@ from .api import (
     TagListView,
 )
 from .views import (
+    ExhibitionQuestionCreateView,
+    ExhibitionQuestionDeleteView,
+    ExhibitionQuestionEditView,
+    ExhibitionQuestionListView,
     ExhibitorCopyKeyView,
     ExhibitorCreateView,
     ExhibitorDeleteView,
     ExhibitorEditView,
     ExhibitorListView,
+    ProposalDetailView,
+    ProposalListView,
+    PublicCallView,
     PublicExhibitorDetailView,
     PublicExhibitorListView,
     SettingsView,
     SponsorGroupFrontPageToggleView,
     SponsorGroupReorderView,
+    UserProposalCreateView,
+    UserProposalEditView,
+    UserProposalListView,
 )
 
 urlpatterns = [
@@ -28,6 +38,26 @@ urlpatterns = [
         "<str:organizer>/<str:event>/exhibition/",
         PublicExhibitorListView.as_view(),
         name="public_list",
+    ),
+    path(
+        "<str:organizer>/<str:event>/exhibition/call/",
+        PublicCallView.as_view(),
+        name="public_call",
+    ),
+    path(
+        "<str:organizer>/<str:event>/exhibition/call/submit/",
+        UserProposalCreateView.as_view(),
+        name="proposal.add",
+    ),
+    path(
+        "<str:organizer>/<str:event>/exhibition/call/me/",
+        UserProposalListView.as_view(),
+        name="proposal.user_list",
+    ),
+    path(
+        "<str:organizer>/<str:event>/exhibition/call/proposals/<str:code>/",
+        UserProposalEditView.as_view(),
+        name="proposal.user_edit",
     ),
     path(
         "<str:organizer>/<str:event>/exhibition/<int:pk>/",
@@ -50,6 +80,11 @@ urlpatterns = [
         name="settings.sponsors",
     ),
     path(
+        "exhibitors/event/<orgslug:organizer>/<slug:event>/settings/call",
+        SettingsView.as_view(active_tab="call"),
+        name="settings.call",
+    ),
+    path(
         "exhibitors/event/<orgslug:organizer>/<slug:event>/settings/sponsors/groups/<int:pk>/toggle-front-page",
         SponsorGroupFrontPageToggleView.as_view(),
         name="toggle_front_page",
@@ -63,6 +98,36 @@ urlpatterns = [
         "exhibitors/event/<orgslug:organizer>/<slug:event>",
         ExhibitorListView.as_view(),
         name="info",
+    ),
+    path(
+        "exhibitors/event/<orgslug:organizer>/<slug:event>/call",
+        ProposalListView.as_view(),
+        name="proposal.list",
+    ),
+    path(
+        "exhibitors/event/<orgslug:organizer>/<slug:event>/call/proposals/<str:code>",
+        ProposalDetailView.as_view(),
+        name="proposal.detail",
+    ),
+    path(
+        "exhibitors/event/<orgslug:organizer>/<slug:event>/call/questions",
+        ExhibitionQuestionListView.as_view(),
+        name="call.questions",
+    ),
+    path(
+        "exhibitors/event/<orgslug:organizer>/<slug:event>/call/questions/add",
+        ExhibitionQuestionCreateView.as_view(),
+        name="call.questions.add",
+    ),
+    path(
+        "exhibitors/event/<orgslug:organizer>/<slug:event>/call/questions/<int:pk>/edit",
+        ExhibitionQuestionEditView.as_view(),
+        name="call.questions.edit",
+    ),
+    path(
+        "exhibitors/event/<orgslug:organizer>/<slug:event>/call/questions/<int:pk>/delete",
+        ExhibitionQuestionDeleteView.as_view(),
+        name="call.questions.delete",
     ),
     path(
         "exhibitors/event/<orgslug:organizer>/<slug:event>/add",

@@ -1,0 +1,62 @@
+{% extends "exhibitors/base.html" %}
+{% load i18n %}
+
+{% block title %}{{ request.event.name }} - {% trans "Exhibitor & Sponsor Proposals" %}{% endblock %}
+
+{% block exhibitors_header %}
+    <h1>{% trans "Exhibitor & Sponsor Proposals" %}</h1>
+{% endblock %}
+
+{% block exhibitors_content %}
+    {% if proposals %}
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead>
+                <tr>
+                    <th>{% trans "Name" %}</th>
+                    <th>{% trans "Submitter" %}</th>
+                    <th>{% trans "Type" %}</th>
+                    <th>{% trans "State" %}</th>
+                    <th>{% trans "Updated" %}</th>
+                    <th class="action-col-1"></th>
+                </tr>
+                </thead>
+                <tbody>
+                {% for proposal in proposals %}
+                    <tr>
+                        <td>
+                            <strong>
+                                <a href="{% url 'plugins:exhibition:proposal.detail' organizer=request.event.organizer.slug event=request.event.slug code=proposal.code %}">
+                                    {{ proposal.name }}
+                                </a>
+                            </strong>
+                        </td>
+                        <td>{{ proposal.user.get_display_name|default:proposal.user.email }}</td>
+                        <td>
+                            {% if proposal.is_exhibitor and proposal.is_sponsor %}
+                                {% trans "Exhibitor and sponsor" %}
+                            {% elif proposal.is_sponsor %}
+                                {% trans "Sponsor" %}
+                            {% else %}
+                                {% trans "Exhibitor" %}
+                            {% endif %}
+                        </td>
+                        <td>{{ proposal.get_state_display }}</td>
+                        <td>{{ proposal.updated|date:"SHORT_DATETIME_FORMAT" }}</td>
+                        <td class="text-right">
+                            <a class="btn btn-default btn-sm" href="{% url 'plugins:exhibition:proposal.detail' organizer=request.event.organizer.slug event=request.event.slug code=proposal.code %}">
+                                <i class="fa fa-eye"></i>
+                            </a>
+                        </td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    {% else %}
+        <div class="empty-collection">
+            <p>{% trans "No exhibitor or sponsor proposals have been submitted yet." %}</p>
+        </div>
+    {% endif %}
+    {% include "pretixcontrol/pagination.html" %}
+{% endblock %}

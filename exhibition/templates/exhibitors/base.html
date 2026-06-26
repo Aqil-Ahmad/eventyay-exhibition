@@ -24,11 +24,30 @@
             <span class="sidebar-text">{% trans "Sponsors" %}</span>
           </a>
         </li>
+        <li>
+          <a href="{% url 'plugins:exhibition:settings.call' organizer=request.event.organizer.slug event=request.event.slug %}" {% if url_name == 'settings.call' %}class="active"{% endif %}>
+            <span class="sidebar-text">{% trans "Call" %}</span>
+          </a>
+        </li>
       </ul>
     </li>
   {% endif %}
+  {% if 'can_change_event_settings' in request.eventpermset %}
+    <li>
+      <a href="{% url 'plugins:exhibition:proposal.list' organizer=request.event.organizer.slug event=request.event.slug %}" {% if url_name == 'proposal.list' or url_name == 'proposal.detail' %}class="active"{% endif %}>
+        <span class="fa fa-fw fa-inbox"></span>
+        <span class="sidebar-text">{% trans "Proposals" %}</span>
+      </a>
+    </li>
+    <li>
+      <a href="{% url 'plugins:exhibition:call.questions' organizer=request.event.organizer.slug event=request.event.slug %}" {% if url_name == 'call.questions' or url_name == 'call.questions.add' or url_name == 'call.questions.edit' or url_name == 'call.questions.delete' %}class="active"{% endif %}>
+        <span class="fa fa-fw fa-question-circle"></span>
+        <span class="sidebar-text">{% trans "Proposal Questions" %}</span>
+      </a>
+    </li>
+  {% endif %}
   <li>
-    <a href="{% url 'plugins:exhibition:info' organizer=request.event.organizer.slug event=request.event.slug %}" {% if url_name != 'settings' and url_name != 'settings.exhibitors' and url_name != 'settings.sponsors' %}class="active"{% endif %}>
+    <a href="{% url 'plugins:exhibition:info' organizer=request.event.organizer.slug event=request.event.slug %}" {% if url_name != 'settings' and url_name != 'settings.exhibitors' and url_name != 'settings.sponsors' and url_name != 'settings.call' and url_name != 'proposal.list' and url_name != 'proposal.detail' and url_name != 'call.questions' and url_name != 'call.questions.add' and url_name != 'call.questions.edit' and url_name != 'call.questions.delete' %}class="active"{% endif %}>
       <span class="fa fa-fw fa-map-pin"></span>
       <span class="sidebar-text">{% trans "Exhibitors & Sponsors" %}</span>
     </a>

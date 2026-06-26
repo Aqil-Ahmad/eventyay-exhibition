@@ -1,0 +1,140 @@
+{% extends "exhibitors/call_base.html" %}
+{% load i18n %}
+{% load bootstrap3 %}
+{% load static %}
+{% load escapejson %}
+
+{% block custom_header %}
+    {{ block.super }}
+    <link rel="stylesheet" href="{% static 'exhibition/css/exhibitors-add.css' %}">
+{% endblock %}
+
+{% block call_content %}
+    <h2 id="exhibition-call-heading">
+        {% if object %}
+            {% trans "Edit proposal" %}
+        {% else %}
+            {% trans "Submit a proposal" %}
+        {% endif %}
+    </h2>
+    {% if object and not can_edit %}
+        <div class="alert alert-warning" role="alert">
+            <i class="fa fa-lock"></i> {% trans "This proposal can no longer be edited." %}
+        </div>
+    {% endif %}
+    <form action="" method="post" class="form-horizontal" enctype="multipart/form-data" novalidate>
+        {% csrf_token %}
+        {% bootstrap_form_errors form %}
+        {% bootstrap_form form layout="control" %}
+
+        {% if can_edit and show_social_links %}
+            <fieldset>
+                <legend>{% trans "Social Media" %}</legend>
+                <div id="social-links-formset" class="partner-link-formset formset" data-formset-prefix="{{ social_media_formset.prefix }}" data-social-link-prefixes='{{ social_link_prefixes|escapejson_dumps }}'>
+                    {{ social_media_formset.management_form }}
+                    {{ social_media_formset.non_form_errors }}
+                    <div data-formset-body>
+                        {% for social_form in social_media_formset %}
+                            <div class="row partner-link-row" data-formset-form data-social-link-row>
+                                <div class="sr-only">{{ social_form.id }} {{ social_form.DELETE }}</div>
+                                <div class="col-md-3">{{ social_form.network.errors }}{{ social_form.network }}</div>
+                                <div class="col-md-8">
+                                    {{ social_form.path.errors }}
+                                    <div class="input-group">
+                                        <span class="input-group-addon partner-link-prefix" data-social-prefix>https://</span>
+                                        {{ social_form.path }}
+                                    </div>
+                                </div>
+                                <div class="col-md-1 text-right">
+                                    <button type="button" class="btn btn-delete btn-danger btn-sm partner-link-remove" data-formset-delete-button><i class="fa fa-minus"></i></button>
+                                </div>
+                            </div>
+                        {% endfor %}
+                    </div>
+                    <template data-formset-empty-form>
+                        <div class="row partner-link-row" data-formset-form data-social-link-row>
+                            <div class="sr-only">{{ social_media_formset.empty_form.id }} {{ social_media_formset.empty_form.DELETE }}</div>
+                            <div class="col-md-3">{{ social_media_formset.empty_form.network.errors }}{{ social_media_formset.empty_form.network }}</div>
+                            <div class="col-md-8">
+                                {{ social_media_formset.empty_form.path.errors }}
+                                <div class="input-group">
+                                    <span class="input-group-addon partner-link-prefix" data-social-prefix>https://</span>
+                                    {{ social_media_formset.empty_form.path }}
+                                </div>
+                            </div>
+                            <div class="col-md-1 text-right">
+                                <button type="button" class="btn btn-delete btn-danger btn-sm partner-link-remove" data-formset-delete-button><i class="fa fa-minus"></i></button>
+                            </div>
+                        </div>
+                    </template>
+                    <div class="partner-link-actions">
+                        <button type="button" class="btn btn-default btn-sm partner-link-add" data-formset-add>
+                            <i class="fa fa-plus"></i> {% trans "Add social media link" %}
+                        </button>
+                    </div>
+                </div>
+            </fieldset>
+
+        {% endif %}
+
+        {% if can_edit and show_extra_links %}
+            <fieldset>
+                <legend>{% trans "Extra Links" %}</legend>
+                <div id="extra-links-formset" class="partner-link-formset formset" data-formset-prefix="{{ extra_links_formset.prefix }}">
+                    {{ extra_links_formset.management_form }}
+                    {{ extra_links_formset.non_form_errors }}
+                    <div data-formset-body>
+                        {% for extra_form in extra_links_formset %}
+                            <div class="row partner-link-row" data-formset-form>
+                                <div class="sr-only">{{ extra_form.id }} {{ extra_form.DELETE }}</div>
+                                <div class="col-md-4">{{ extra_form.label.errors }}{{ extra_form.label }}</div>
+                                <div class="col-md-7">{{ extra_form.url.errors }}{{ extra_form.url }}</div>
+                                <div class="col-md-1 text-right">
+                                    <button type="button" class="btn btn-delete btn-danger btn-sm partner-link-remove" data-formset-delete-button><i class="fa fa-minus"></i></button>
+                                </div>
+                            </div>
+                        {% endfor %}
+                    </div>
+                    <template data-formset-empty-form>
+                        <div class="row partner-link-row" data-formset-form>
+                            <div class="sr-only">{{ extra_links_formset.empty_form.id }} {{ extra_links_formset.empty_form.DELETE }}</div>
+                            <div class="col-md-4">{{ extra_links_formset.empty_form.label.errors }}{{ extra_links_formset.empty_form.label }}</div>
+                            <div class="col-md-7">{{ extra_links_formset.empty_form.url.errors }}{{ extra_links_formset.empty_form.url }}</div>
+                            <div class="col-md-1 text-right">
+                                <button type="button" class="btn btn-delete btn-danger btn-sm partner-link-remove" data-formset-delete-button><i class="fa fa-minus"></i></button>
+                            </div>
+                        </div>
+                    </template>
+                    <div class="partner-link-actions">
+                        <button type="button" class="btn btn-default btn-sm partner-link-add" data-formset-add>
+                            <i class="fa fa-plus"></i> {% trans "Add extra link" %}
+                        </button>
+                    </div>
+                </div>
+            </fieldset>
+        {% endif %}
+
+        {% if can_edit %}
+            <div class="form-group submit-group">
+                <button type="submit" class="btn btn-primary btn-save" name="action" value="submit">
+                    {% trans "Submit proposal" %}
+                </button>
+                <button type="submit" class="btn btn-default" name="action" value="draft">
+                    {% trans "Save as draft" %}
+                </button>
+                <a class="btn btn-default" href="{% url 'plugins:exhibition:proposal.user_list' organizer=request.event.organizer.slug event=request.event.slug %}">
+                    {% trans "Cancel" %}
+                </a>
+            </div>
+        {% else %}
+            <p>
+                <a class="btn btn-default" href="{% url 'plugins:exhibition:proposal.user_list' organizer=request.event.organizer.slug event=request.event.slug %}">
+                    {% trans "Back to your proposals" %}
+                </a>
+            </p>
+        {% endif %}
+    </form>
+    {% if can_edit %}
+        <script type="text/javascript" src="{% static 'exhibition/js/exhibitors-add.js' %}"></script>
+    {% endif %}
+{% endblock %}

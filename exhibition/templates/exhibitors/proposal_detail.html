@@ -1,0 +1,134 @@
+{% extends "exhibitors/base.html" %}
+{% load i18n %}
+{% load bootstrap3 %}
+{% load event_tags %}
+
+{% block title %}{{ request.event.name }} - {% trans "Review Proposal" %}{% endblock %}
+
+{% block exhibitors_header %}
+    <h1>{% trans "Review Proposal" %}</h1>
+{% endblock %}
+
+{% block exhibitors_content %}
+    <p>
+        <a class="btn btn-default" href="{% url 'plugins:exhibition:proposal.list' organizer=request.event.organizer.slug event=request.event.slug %}">
+            <i class="fa fa-arrow-left"></i> {% trans "Back to proposals" %}
+        </a>
+    </p>
+
+    <div class="panel panel-default">
+        <div class="panel-heading">
+            <h3 class="panel-title">{{ proposal.name|event_localize }}</h3>
+        </div>
+        <div class="panel-body">
+            <dl class="dl-horizontal">
+                <dt>{% trans "Submitter" %}</dt>
+                <dd>{{ proposal.user.get_display_name|default:proposal.user.email }}</dd>
+                <dt>{% trans "Email" %}</dt>
+                <dd>{{ proposal.email|default:"-" }}</dd>
+                <dt>{% trans "State" %}</dt>
+                <dd>{{ proposal.get_state_display }}</dd>
+                <dt>{% trans "Type" %}</dt>
+                <dd>
+                    {% if proposal.is_exhibitor and proposal.is_sponsor %}
+                        {% trans "Exhibitor and sponsor" %}
+                    {% elif proposal.is_sponsor %}
+                        {% trans "Sponsor" %}
+                    {% else %}
+                        {% trans "Exhibitor" %}
+                    {% endif %}
+                </dd>
+                <dt>{% trans "URL" %}</dt>
+                <dd>{% if proposal.url %}<a href="{{ proposal.url }}">{{ proposal.url }}</a>{% else %}-{% endif %}</dd>
+                <dt>{% trans "Contact URL" %}</dt>
+                <dd>{% if proposal.contact_url %}<a href="{{ proposal.contact_url }}">{{ proposal.contact_url }}</a>{% else %}-{% endif %}</dd>
+                <dt>{% trans "Video URL" %}</dt>
+                <dd>{% if proposal.video_url %}<a href="{{ proposal.video_url }}">{{ proposal.video_url }}</a>{% else %}-{% endif %}</dd>
+                <dt>{% trans "Slides" %}</dt>
+                <dd>{% if proposal.visible_slides_url %}<a href="{{ proposal.visible_slides_url }}">{{ proposal.visible_slides_url }}</a>{% else %}-{% endif %}</dd>
+                <dt>{% trans "Logo" %}</dt>
+                <dd>{% if proposal.visible_logo_url %}<a href="{{ proposal.visible_logo_url }}">{{ proposal.visible_logo_url }}</a>{% else %}-{% endif %}</dd>
+                <dt>{% trans "Header image" %}</dt>
+                <dd>{% if proposal.visible_header_image_url %}<a href="{{ proposal.visible_header_image_url }}">{{ proposal.visible_header_image_url }}</a>{% else %}-{% endif %}</dd>
+            </dl>
+            {% if proposal.description %}
+                <h4>{% trans "Description" %}</h4>
+                <p>{{ proposal.description|event_localize|linebreaksbr }}</p>
+            {% endif %}
+            {% if proposal.notes %}
+                <h4>{% trans "Message to organizers" %}</h4>
+                <p>{{ proposal.notes|linebreaksbr }}</p>
+            {% endif %}
+        </div>
+    </div>
+
+    {% if proposal.social_links.all or proposal.extra_links.all %}
+        <div class="panel panel-default">
+            <div class="panel-heading"><h3 class="panel-title">{% trans "Links" %}</h3></div>
+            <div class="panel-body">
+                {% if proposal.social_links.all %}
+                    <h4>{% trans "Social media" %}</h4>
+                    <ul>
+                        {% for link in proposal.social_links.all %}
+                            <li>{{ link.get_network_display }}: <a href="{{ link.url }}">{{ link.url }}</a></li>
+                        {% endfor %}
+                    </ul>
+                {% endif %}
+                {% if proposal.extra_links.all %}
+                    <h4>{% trans "Extra links" %}</h4>
+                    <ul>
+                        {% for link in proposal.extra_links.all %}
+                            <li>{{ link.label }}: <a href="{{ link.url }}">{{ link.url }}</a></li>
+                        {% endfor %}
+                    </ul>
+                {% endif %}
+            </div>
+        </div>
+    {% endif %}
+
+    {% if answers %}
+        <div class="panel panel-default">
+            <div class="panel-heading"><h3 class="panel-title">{% trans "Custom answers" %}</h3></div>
+            <div class="panel-body">
+                <dl class="dl-horizontal">
+                    {% for answer in answers %}
+                        <dt>{{ answer.question.localized_question }}</dt>
+                        <dd>{{ answer.answer_string|linebreaksbr|default:"-" }}</dd>
+                    {% endfor %}
+                </dl>
+            </div>
+        </div>
+    {% endif %}
+
+    <form action="" method="post" class="form-horizontal">
+        {% csrf_token %}
+        {% bootstrap_form_errors form %}
+        <fieldset>
+            <legend>{% trans "Review" %}</legend>
+            {% bootstrap_field form.is_exhibitor layout="control" %}
+            {% bootstrap_field form.is_sponsor layout="control" %}
+            {% bootstrap_field form.sponsor_group layout="control" %}
+            {% bootstrap_field form.booth_id layout="control" %}
+            {% bootstrap_field form.booth_name layout="control" %}
+            {% bootstrap_field form.review_notes layout="control" %}
+        </fieldset>
+        <div class="form-group submit-group">
+            <button type="submit" class="btn btn-default" name="action" value="save">
+                {% trans "Save review notes" %}
+            </button>
+            {% if not proposal.approved_exhibitor_id and proposal.state != "rejected" %}
+                <button type="submit" class="btn btn-primary" name="action" value="approve">
+                    {% trans "Approve and create partner" %}
+                </button>
+                <button type="submit" class="btn btn-danger" name="action" value="reject">
+                    {% trans "Reject" %}
+                </button>
+            {% endif %}
+            {% if proposal.approved_exhibitor_id %}
+                <a class="btn btn-success" href="{% url 'plugins:exhibition:edit' organizer=request.event.organizer.slug event=request.event.slug pk=proposal.approved_exhibitor_id %}">
+                    {% trans "Open partner profile" %}
+                </a>
+            {% endif %}
+        </div>
+    </form>
+{% endblock %}

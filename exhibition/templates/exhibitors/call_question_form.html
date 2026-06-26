@@ -1,0 +1,29 @@
+{% extends "exhibitors/base.html" %}
+{% load i18n %}
+{% load bootstrap3 %}
+
+{% block title %}{{ request.event.name }} - {% trans "Proposal Question" %}{% endblock %}
+
+{% block exhibitors_header %}
+    <h1>{% trans "Proposal Question" %}</h1>
+{% endblock %}
+
+{% block exhibitors_content %}
+    <form action="" method="post" class="form-horizontal">
+        {% csrf_token %}
+        {% bootstrap_form_errors form %}
+        {% bootstrap_field form.variant layout="control" %}
+        {% bootstrap_field form.question layout="control" %}
+        {% bootstrap_field form.help_text layout="control" %}
+        {% bootstrap_field form.required layout="control" %}
+        {% bootstrap_field form.active layout="control" %}
+        {% bootstrap_field form.position layout="control" %}
+        {% bootstrap_field form.options_text layout="control" %}
+        <div class="form-group submit-group">
+            <button type="submit" class="btn btn-primary btn-save">{% trans "Save" %}</button>
+            <a class="btn btn-default" href="{% url 'plugins:exhibition:call.questions' organizer=request.event.organizer.slug event=request.event.slug %}">
+                {% trans "Cancel" %}
+            </a>
+        </div>
+    </form>
+{% endblock %}
