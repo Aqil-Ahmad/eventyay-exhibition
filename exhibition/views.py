@@ -473,7 +473,7 @@ class UserProposalCreateView(
         if not settings.call_is_open:
             if settings.call_hide_after_deadline:
                 raise Http404()
-            messages.error(request, _("The call for exhibitors and sponsors is closed."))
+            messages.error(request, _("The call for exhibitors is closed."))
             return redirect("plugins:exhibition:public_call", **event_kwargs(request.event))
         return super().dispatch(request, *args, **kwargs)
 

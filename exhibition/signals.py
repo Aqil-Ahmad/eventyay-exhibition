@@ -124,7 +124,7 @@ def exhibition_presale_nav_tab(sender, request=None, **kwargs):
                     },
                 ),
                 "active" if "/exhibition/call/" in request.path_info else "",
-                _("Exhibitor & Sponsor Call"),
+                _("Call for Exhibitors"),
             )
         )
 

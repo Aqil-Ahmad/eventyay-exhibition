@@ -4,7 +4,7 @@
 {% load rich_text %}
 
 {% block call_content %}
-    {% trans "Call for Exhibitors & Sponsors" as default_headline %}
+    {% trans "Call for Exhibitors" as default_headline %}
     <h2 id="exhibition-call-heading">
         {{ settings.call_headline|event_localize|default:default_headline }}
     </h2>
