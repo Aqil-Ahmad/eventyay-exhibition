@@ -373,7 +373,7 @@ class CallSettingsForm(I18nModelForm):
             "call_hide_after_deadline",
         ]
         labels = {
-            "call_enabled": _("Accept exhibitor and sponsor proposals"),
+            "call_enabled": _("Publish Call"),
             "call_hide_after_deadline": _("Hide call page after the deadline"),
         }
         widgets = {
