@@ -7,9 +7,23 @@ from django.test import RequestFactory
 from rest_framework import serializers
 
 from exhibition.api import ExhibitorInfoSerializer
-from exhibition.forms import SponsorGroupForm
-from exhibition.models import ExhibitorInfo, SponsorGroup, get_next_sponsor_group_level
-from exhibition.views import SponsorGroupReorderView
+from exhibition.forms import ExhibitionProposalForm, SponsorGroupForm
+from exhibition.models import (
+    PROPOSAL_DEFAULT_FIELD_KEYS,
+    ExhibitorInfo,
+    ExhibitorSettings,
+    SponsorGroup,
+    get_next_sponsor_group_level,
+)
+from exhibition.views import ExhibitionQuestionListView, SponsorGroupReorderView
+
+
+def make_exhibitor_settings(event):
+    return ExhibitorSettings.objects.create(
+        event=event,
+        exhibitors_access_mail_subject="",
+        exhibitors_access_mail_body="",
+    )
 
 
 @pytest.mark.django_db
@@ -198,3 +212,25 @@ def test_sponsor_group_reorder_requires_complete_unique_group_ids(event):
     group_two.refresh_from_db()
     assert group_two.level == 1
     assert group_one.level == 2
+
+
+@pytest.mark.django_db
+def test_save_field_order_persists_new_order(event):
+    settings = make_exhibitor_settings(event)
+    view = ExhibitionQuestionListView()
+    view.save_field_order(settings, "logo,header_image,name")
+
+    settings.refresh_from_db()
+    assert settings.ordered_proposal_field_keys[:3] == ["logo", "header_image", "name"]
+    assert set(settings.ordered_proposal_field_keys) == set(PROPOSAL_DEFAULT_FIELD_KEYS)
+
+
+@pytest.mark.django_db
+def test_proposal_form_reflects_saved_field_order(event):
+    settings = make_exhibitor_settings(event)
+    view = ExhibitionQuestionListView()
+    view.save_field_order(settings, "description,name")
+
+    form = ExhibitionProposalForm(event=event)
+    field_names = list(form.fields.keys())
+    assert field_names.index("description") < field_names.index("name")

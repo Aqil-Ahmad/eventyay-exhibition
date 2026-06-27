@@ -141,13 +141,17 @@ PROPOSAL_DEFAULT_FIELDS = (
 )
 
 
+PROPOSAL_DEFAULT_FIELD_KEYS = tuple(field["key"] for field in PROPOSAL_DEFAULT_FIELDS)
+
+
 def default_proposal_field_settings():
     return {
         field["key"]: {
             "active": field.get("active", True),
             "required": field.get("required", False),
+            "position": index,
         }
-        for field in PROPOSAL_DEFAULT_FIELDS
+        for index, field in enumerate(PROPOSAL_DEFAULT_FIELDS)
     }
 
 
@@ -194,11 +198,12 @@ class ExhibitorSettings(models.Model):
     def normalized_proposal_field_settings(self):
         stored_settings = self.proposal_field_settings or {}
         normalized = default_proposal_field_settings()
-        for field in PROPOSAL_DEFAULT_FIELDS:
+        for index, field in enumerate(PROPOSAL_DEFAULT_FIELDS):
             key = field["key"]
             stored_field = stored_settings.get(key, {})
             normalized[key]["active"] = bool(stored_field.get("active", normalized[key]["active"]))
             normalized[key]["required"] = bool(stored_field.get("required", normalized[key]["required"]))
+            normalized[key]["position"] = stored_field.get("position", index)
             if field.get("active_locked"):
                 normalized[key]["active"] = True
             if field.get("required_locked"):
@@ -208,6 +213,15 @@ class ExhibitorSettings(models.Model):
             if not normalized[key]["active"]:
                 normalized[key]["required"] = False
         return normalized
+
+    @property
+    def ordered_proposal_field_keys(self):
+        normalized = self.normalized_proposal_field_settings
+        default_index = {key: i for i, key in enumerate(PROPOSAL_DEFAULT_FIELD_KEYS)}
+        return sorted(
+            PROPOSAL_DEFAULT_FIELD_KEYS,
+            key=lambda key: (normalized[key]["position"], default_index[key]),
+        )
 
     def proposal_field_is_active(self, key):
         return self.normalized_proposal_field_settings[key]["active"]

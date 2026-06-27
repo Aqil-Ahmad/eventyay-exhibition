@@ -7,6 +7,9 @@
 {% block custom_header %}
     {{ block.super }}
     <link rel="stylesheet" href="{% static 'pretixcontrol/css/order-form-toggles.css' %}">
+    <link rel="stylesheet" href="{% static 'orga/css/dragsort.css' %}">
+    <link rel="stylesheet" href="{% static 'exhibition/css/proposal-field-order.css' %}">
+    <script defer src="{% static 'orga/js/dragsort.js' %}"></script>
 {% endblock %}
 
 {% block exhibitors_header %}
@@ -20,7 +23,7 @@
             <legend>{% trans "Proposal information" %}</legend>
             <p>{% trans "Choose which default fields are shown on the exhibitor and sponsor proposal form." %}</p>
             <div class="table-responsive table-responsive-always mw-100">
-                <table class="table table-hover">
+                <table class="table table-hover proposal-field-order">
                     <thead>
                     <tr>
                         <th>{% trans "Field" %}</th>
@@ -30,9 +33,9 @@
                         <th></th>
                     </tr>
                     </thead>
-                    <tbody>
+                    <tbody dragsort-url="{% url 'plugins:exhibition:call.questions' organizer=request.event.organizer.slug event=request.event.slug %}">
                     {% for field in default_fields %}
-                        <tr>
+                        <tr dragsort-id="{{ field.key }}">
                             <th>{{ field.label }}</th>
                             <td class="text-center">
                                 <label class="toggle-switch {% if field.active_locked %}always-on{% endif %}" aria-label="{% blocktrans trimmed with field=field.label %}Toggle active state for {{ field }}{% endblocktrans %}">
@@ -51,7 +54,11 @@
                                 {% endif %}
                             </td>
                             <td class="text-center">{{ field.answer_count }}</td>
-                            <td></td>
+                            <td class="text-right">
+                                <button type="button" draggable="true" class="btn btn-primary btn-sm dragsort-button" title="{% trans 'Move field' %}">
+                                    <i class="fa fa-arrows"></i>
+                                </button>
+                            </td>
                         </tr>
                     {% endfor %}
                     </tbody>
