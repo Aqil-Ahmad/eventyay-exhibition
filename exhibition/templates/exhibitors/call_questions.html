@@ -7,7 +7,6 @@
 {% block custom_header %}
     {{ block.super }}
     <link rel="stylesheet" href="{% static 'pretixcontrol/css/order-form-toggles.css' %}">
-    <link rel="stylesheet" href="{% static 'orga/css/dragsort.css' %}">
     <link rel="stylesheet" href="{% static 'exhibition/css/proposal-field-order.css' %}">
     <script defer src="{% static 'orga/js/dragsort.js' %}"></script>
 {% endblock %}
@@ -30,7 +29,7 @@
                         <th class="text-center">{% trans "Active" %}</th>
                         <th class="text-center">{% trans "Required" %}</th>
                         <th class="text-center">{% trans "Answers" %}</th>
-                        <th></th>
+                        <th class="text-right">{% trans "Settings" %}</th>
                     </tr>
                     </thead>
                     <tbody dragsort-url="{% url 'plugins:exhibition:call.questions' organizer=request.event.organizer.slug event=request.event.slug %}">
