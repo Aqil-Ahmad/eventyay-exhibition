@@ -34,7 +34,7 @@
                     </thead>
                     <tbody dragsort-url="{% url 'plugins:exhibition:call.questions' organizer=request.event.organizer.slug event=request.event.slug %}">
                     {% for field in default_fields %}
-                        <tr dragsort-id="{{ field.key }}">
+                        <tr {% if field.orderable %}dragsort-id="{{ field.key }}"{% endif %}>
                             <th>{{ field.label }}</th>
                             <td class="text-center">
                                 <label class="toggle-switch {% if field.active_locked %}always-on{% endif %}" aria-label="{% blocktrans trimmed with field=field.label %}Toggle active state for {{ field }}{% endblocktrans %}">
@@ -54,9 +54,15 @@
                             </td>
                             <td class="text-center">{{ field.answer_count }}</td>
                             <td class="text-right">
-                                <button type="button" draggable="true" class="btn btn-primary btn-sm dragsort-button" title="{% trans 'Move field' %}">
-                                    <i class="fa fa-arrows"></i>
-                                </button>
+                                {% if field.orderable %}
+                                    <button type="button" draggable="true" class="btn btn-primary btn-sm dragsort-button" title="{% trans 'Move field' %}">
+                                        <i class="fa fa-arrows"></i>
+                                    </button>
+                                {% else %}
+                                    <span class="text-muted" title="{% trans 'This field always appears at the end of the form.' %}">
+                                        <i class="fa fa-thumb-tack"></i>
+                                    </span>
+                                {% endif %}
                             </td>
                         </tr>
                     {% endfor %}

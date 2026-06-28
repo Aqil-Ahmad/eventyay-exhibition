@@ -30,6 +30,7 @@ from .forms import (
 from .models import (
     PROPOSAL_DEFAULT_FIELD_KEYS,
     PROPOSAL_DEFAULT_FIELDS,
+    PROPOSAL_FORMSET_FIELD_KEYS,
     ExhibitionProposal,
     ExhibitionProposalState,
     ExhibitionQuestion,
@@ -725,15 +726,19 @@ class ExhibitionQuestionListView(EventPermissionRequiredMixin, ListView):
         field_settings = settings.normalized_proposal_field_settings
         answer_counts = self.get_default_field_answer_counts()
         field_definitions = {field["key"]: field for field in PROPOSAL_DEFAULT_FIELDS}
+        ordered_keys = [
+            key for key in settings.ordered_proposal_field_keys if key not in PROPOSAL_FORMSET_FIELD_KEYS
+        ] + [key for key in PROPOSAL_DEFAULT_FIELD_KEYS if key in PROPOSAL_FORMSET_FIELD_KEYS]
         context["default_fields"] = [
             {
                 **field_definitions[key],
                 "active": field_settings[key]["active"],
                 "required": field_settings[key]["required"],
                 "supports_required": field_definitions[key].get("supports_required", True),
+                "orderable": key not in PROPOSAL_FORMSET_FIELD_KEYS,
                 "answer_count": answer_counts.get(key, 0),
             }
-            for key in settings.ordered_proposal_field_keys
+            for key in ordered_keys
         ]
         return context
 

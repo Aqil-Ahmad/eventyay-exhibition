@@ -143,6 +143,8 @@ PROPOSAL_DEFAULT_FIELDS = (
 
 PROPOSAL_DEFAULT_FIELD_KEYS = tuple(field["key"] for field in PROPOSAL_DEFAULT_FIELDS)
 
+PROPOSAL_FORMSET_FIELD_KEYS = ("social_links", "extra_links")
+
 
 def default_proposal_field_settings():
     return {
