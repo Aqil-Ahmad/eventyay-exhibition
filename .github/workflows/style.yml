@@ -2,15 +2,15 @@ name: Code Style
 
 on:
   push:
-    branches: [main, master]
+    branches: [main, master, dev]
     paths-ignore:
-      - "eventyay_exhibition/locale/**"
-      - "eventyay_exhibition/static/**"
+      - "exhibition/locale/**"
+      - "exhibition/static/**"
   pull_request:
-    branches: [main, master]
+    branches: [main, master, dev]
     paths-ignore:
-      - "eventyay_exhibition/locale/**"
-      - "eventyay_exhibition/static/**"
+      - "exhibition/locale/**"
+      - "exhibition/static/**"
 
 jobs:
   ruff:
