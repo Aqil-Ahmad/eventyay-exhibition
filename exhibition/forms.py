@@ -45,12 +45,12 @@ class ExhibitorInfoForm(I18nModelForm):
     )
     logo_url = forms.URLField(
         required=False,
-        label=_("Partner Logo URL"),
+        label=_("Logo URL"),
         help_text=_("Use an external image URL instead of uploading a logo file."),
     )
     header_image_url = forms.URLField(
         required=False,
-        label=_("Partner Header Image URL"),
+        label=_("Header Image URL"),
         help_text=_(
             "Use an external image URL instead of uploading a header image file."
         ),
@@ -140,15 +140,15 @@ class ExhibitorInfoForm(I18nModelForm):
             "lead_scanning_scope_by_device",
         ]
         labels = {
-            "name": _("Partner Name"),
-            "description": _("Partner Description"),
+            "name": _("Organization Name"),
+            "description": _("Organization Description"),
             "email": _("Contact email"),
-            "contact_url": _("Contact URL"),
-            "video_url": _("Video URL"),
-            "slides": _("Slides"),
-            "logo": _("Partner Logo"),
-            "header_image": _("Partner Header Image"),
-            "url": _("Partner URL"),
+            "contact_url": _("Contact Page URL"),
+            "video_url": _("Promotional Video URL"),
+            "slides": _("Promotional Slides"),
+            "logo": _("Logo"),
+            "header_image": _("Header Image"),
+            "url": _("Organization Website"),
             "is_sponsor": _("Mark this partner as an event sponsor"),
             "booth_name": _("Booth name"),
             "lead_scanning_enabled": _("Allow lead scanning"),
@@ -532,12 +532,12 @@ class ExhibitionProposalForm(ExhibitionQuestionFieldsMixin, I18nModelForm):
     )
     logo_url = forms.URLField(
         required=False,
-        label=_("Partner Logo URL"),
+        label=_("Logo URL"),
         help_text=_("Use an external image URL instead of uploading a logo file."),
     )
     header_image_url = forms.URLField(
         required=False,
-        label=_("Partner Header Image URL"),
+        label=_("Header Image URL"),
         help_text=_(
             "Use an external image URL instead of uploading a header image file."
         ),
@@ -583,15 +583,15 @@ class ExhibitionProposalForm(ExhibitionQuestionFieldsMixin, I18nModelForm):
             "notes",
         ]
         labels = {
-            "name": _("Partner Name"),
-            "description": _("Partner Description"),
+            "name": _("Organization Name"),
+            "description": _("Organization Description"),
             "email": _("Contact email"),
-            "contact_url": _("Contact URL"),
-            "video_url": _("Video URL"),
-            "slides": _("Slides"),
-            "logo": _("Partner Logo"),
-            "header_image": _("Partner Header Image"),
-            "url": _("Partner URL"),
+            "contact_url": _("Contact Page URL"),
+            "video_url": _("Promotional Video URL"),
+            "slides": _("Promotional Slides"),
+            "logo": _("Logo"),
+            "header_image": _("Header Image"),
+            "url": _("Organization Website"),
             "booth_name": _("Preferred booth name"),
             "notes": _("Message to the organizers"),
         }
