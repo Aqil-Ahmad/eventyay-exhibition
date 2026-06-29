@@ -29,7 +29,7 @@
 
         {% if can_edit and show_social_links %}
             <div class="form-group">
-                <label class="col-md-3 control-label partner-link-group-label">{% trans "Social Media" %}</label>
+                <div class="col-md-3 control-label partner-link-group-label">{% trans "Social Media" %}</div>
                 <div class="col-md-9">
                     <div id="social-links-formset" class="partner-link-formset formset" data-formset-prefix="{{ social_media_formset.prefix }}" data-social-link-prefixes='{{ social_link_prefixes|escapejson_dumps }}'>
                         {{ social_media_formset.management_form }}
@@ -80,7 +80,7 @@
 
         {% if can_edit and show_extra_links %}
             <div class="form-group">
-                <label class="col-md-3 control-label partner-link-group-label">{% trans "Extra Links" %}</label>
+                <div class="col-md-3 control-label partner-link-group-label">{% trans "Extra Links" %}</div>
                 <div class="col-md-9">
                     <div id="extra-links-formset" class="partner-link-formset formset" data-formset-prefix="{{ extra_links_formset.prefix }}">
                         {{ extra_links_formset.management_form }}
