@@ -49,7 +49,45 @@ Best regards, Your {event} team{% endblocktrans %}
                     <p>{% trans "Publish a login-required application form for exhibitors and sponsors." %}</p>
                     {% bootstrap_field call_settings_form.call_enabled layout="control" %}
                     {% bootstrap_field call_settings_form.call_headline layout="control" %}
-                    {% bootstrap_field call_settings_form.call_text layout="control" %}
+                    <div class="form-group call-text-group">
+                        <label class="col-md-3 control-label" for="{{ call_settings_form.call_text.id_for_label }}">
+                            <span class="label-text">{{ call_settings_form.call_text.label }}</span>
+                            <br><span class="optional">{% trans "Optional" %}</span>
+                            <br><span class="call-text-markdown-hint">{% trans "Supports Markdown" %}</span>
+                        </label>
+                        <div class="col-md-9">
+                            <div class="call-text-editor"
+                                 data-call-text-editor
+                                 data-preview-url="{% url 'plugins:exhibition:settings.call.preview' organizer=request.event.organizer.slug event=request.event.slug %}">
+                                <div class="btn-group call-text-mode-toggle" role="group" aria-label="{% trans 'Switch between editing and previewing the call text' %}">
+                                    <button type="button" class="btn btn-default active" data-call-text-mode="edit" aria-pressed="true">
+                                        {% trans "Edit" %}
+                                    </button>
+                                    <button type="button" class="btn btn-default" data-call-text-mode="preview" aria-pressed="false">
+                                        {% trans "Preview" %}
+                                    </button>
+                                </div>
+                                <div class="call-text-edit-pane" data-call-text-edit>
+                                    {% if call_settings_form.call_text.errors %}
+                                        {{ call_settings_form.call_text.errors }}
+                                    {% endif %}
+                                    {{ call_settings_form.call_text }}
+                                </div>
+                                <div class="call-text-preview-pane" data-call-text-preview hidden>
+                                    <div class="call-text-preview-rendered front-page exhibition-call-page" data-call-text-preview-body></div>
+                                    <p class="call-text-preview-empty text-muted" data-call-text-preview-empty hidden>
+                                        {% trans "Nothing to preview yet. Add some call text to see it rendered here." %}
+                                    </p>
+                                    <p class="call-text-preview-error text-danger" data-call-text-preview-error hidden>
+                                        {% trans "The preview could not be loaded. Please try again." %}
+                                    </p>
+                                    <div class="alert alert-info call-text-preview-note">
+                                        {% trans "This panel renders unsaved draft text using the same styling as the live public call page." %}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                     {% bootstrap_field call_settings_form.call_deadline layout="control" %}
                     {% bootstrap_field call_settings_form.call_hide_after_deadline layout="control" %}
                 </fieldset>

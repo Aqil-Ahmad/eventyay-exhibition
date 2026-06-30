@@ -11,6 +11,7 @@ from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 from django.views import View
 from django.views.generic import DeleteView, DetailView, ListView, TemplateView
+from eventyay.base.templatetags.rich_text import rich_text
 from eventyay.control.permissions import EventPermissionRequiredMixin
 from eventyay.control.views import CreateView, UpdateView
 
@@ -684,6 +685,24 @@ class SponsorGroupReorderView(EventPermissionRequiredMixin, View):
                 ]
             }
         )
+
+
+class CallTextPreviewView(EventPermissionRequiredMixin, View):
+    """Render draft Call text using the same ``rich_text`` conversion as the
+    public call page, so the preview can't drift from what applicants see."""
+
+    permission = "can_change_settings"
+
+    def post(self, request, *args, **kwargs):
+        try:
+            text = json.loads(request.body.decode("utf-8")).get("text", "")
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            return JsonResponse({"detail": _("Invalid request body.")}, status=400)
+
+        if not isinstance(text, str):
+            return JsonResponse({"detail": _("Invalid call text.")}, status=400)
+
+        return JsonResponse({"html": str(rich_text(text))})
 
 
 class ProposalListView(EventPermissionRequiredMixin, ListView):

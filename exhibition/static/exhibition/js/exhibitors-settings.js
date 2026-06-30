@@ -162,7 +162,115 @@
         })
     }
 
+    function getCallTextValue(editor) {
+        var inputs = editor.querySelectorAll(
+            '[data-call-text-edit] textarea, [data-call-text-edit] input[type="text"]'
+        )
+        if (!inputs.length) {
+            return ''
+        }
+        // i18n fields have one input per locale: prefer the focused one,
+        // else the first non-empty one, else the first.
+        var active = document.activeElement
+        for (var i = 0; i < inputs.length; i++) {
+            if (inputs[i] === active && inputs[i].value.trim()) {
+                return inputs[i].value
+            }
+        }
+        for (var j = 0; j < inputs.length; j++) {
+            if (inputs[j].value.trim()) {
+                return inputs[j].value
+            }
+        }
+        return inputs[0].value
+    }
+
+    function initCallTextPreview() {
+        var editor = document.querySelector('[data-call-text-editor]')
+        if (!editor) {
+            return
+        }
+
+        var previewUrl = editor.dataset.previewUrl
+        var editPane = editor.querySelector('[data-call-text-edit]')
+        var previewPane = editor.querySelector('[data-call-text-preview]')
+        var previewBody = editor.querySelector('[data-call-text-preview-body]')
+        var emptyMessage = editor.querySelector('[data-call-text-preview-empty]')
+        var errorMessage = editor.querySelector('[data-call-text-preview-error]')
+        var buttons = editor.querySelectorAll('[data-call-text-mode]')
+
+        if (!previewUrl || !editPane || !previewPane || !previewBody) {
+            return
+        }
+
+        function renderPreview() {
+            var text = getCallTextValue(editor)
+            if (errorMessage) {
+                errorMessage.hidden = true
+            }
+            if (!text.trim()) {
+                previewBody.innerHTML = ''
+                if (emptyMessage) {
+                    emptyMessage.hidden = false
+                }
+                return
+            }
+            if (emptyMessage) {
+                emptyMessage.hidden = true
+            }
+
+            fetch(previewUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCookie('eventyay_csrftoken') || getCookie('csrftoken'),
+                },
+                credentials: 'include',
+                body: JSON.stringify({ text: text }),
+            })
+                .then(function (response) {
+                    if (!response.ok) {
+                        throw new Error('Could not render call text preview.')
+                    }
+                    return response.json()
+                })
+                .then(function (data) {
+                    previewBody.innerHTML = data.html || ''
+                })
+                .catch(function () {
+                    previewBody.innerHTML = ''
+                    if (errorMessage) {
+                        errorMessage.hidden = false
+                    }
+                })
+        }
+
+        function setMode(mode) {
+            var isPreview = mode === 'preview'
+            buttons.forEach(function (button) {
+                var isActive = button.dataset.callTextMode === mode
+                button.classList.toggle('active', isActive)
+                button.classList.toggle('btn-primary', isActive)
+                button.setAttribute('aria-pressed', isActive ? 'true' : 'false')
+            })
+            editPane.hidden = isPreview
+            previewPane.hidden = !isPreview
+            if (isPreview) {
+                renderPreview()
+            }
+        }
+
+        buttons.forEach(function (button) {
+            button.addEventListener('click', function () {
+                setMode(button.dataset.callTextMode)
+            })
+        })
+
+        setMode('edit')
+    }
+
     document.addEventListener('DOMContentLoaded', function () {
+        initCallTextPreview()
         var showButton = document.getElementById('show-add-group-form')
         var addForm = document.getElementById('add-group-form')
         var cancelButton = document.getElementById('cancel-add-group-form')

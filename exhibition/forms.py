@@ -380,6 +380,13 @@ class CallSettingsForm(I18nModelForm):
             "call_deadline": HtmlDateTimeInput,
         }
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # call_text is hand-rendered in the template, so set widget attrs here.
+        call_text_widget = self.fields["call_text"].widget
+        call_text_widget.attrs.setdefault("class", "form-control")
+        call_text_widget.attrs.setdefault("rows", 8)
+
 
 class ExhibitionQuestionFieldsMixin:
     def inject_exhibition_questions(self, *, event, proposal=None, readonly=False):

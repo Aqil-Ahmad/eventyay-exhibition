@@ -67,3 +67,40 @@
 .sponsor-group-row.sortable-chosen {
     background: #f8fafc;
 }
+
+/* Call text: Markdown hint + Edit/Preview toggle */
+.call-text-markdown-hint {
+    display: inline-block;
+    font-size: 12px;
+    font-weight: 600;
+    color: #b8860b;
+}
+
+.call-text-mode-toggle {
+    margin-bottom: 10px;
+}
+
+.call-text-preview-pane {
+    margin-bottom: 5px;
+}
+
+.call-text-preview-rendered {
+    min-height: 120px;
+    padding: 15px 18px;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+    background: #fafbfc;
+}
+
+.call-text-preview-rendered > :first-child {
+    margin-top: 0;
+}
+
+.call-text-preview-rendered > :last-child {
+    margin-bottom: 0;
+}
+
+.call-text-preview-note {
+    margin-top: 12px;
+    margin-bottom: 0;
+}
