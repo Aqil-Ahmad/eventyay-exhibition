@@ -55,7 +55,7 @@
                             <td class="text-center">{{ field.answer_count }}</td>
                             <td class="text-right">
                                 {% if field.orderable %}
-                                    <button type="button" draggable="true" class="btn btn-primary btn-sm dragsort-button" title="{% trans 'Move field' %}">
+                                    <button type="button" draggable="true" class="btn btn-primary btn-sm dragsort-button" title="{% trans 'Move field' %}" aria-label="{% trans 'Move field' %}">
                                         <i class="fa fa-arrows"></i>
                                     </button>
                                 {% else %}

@@ -218,10 +218,11 @@ def test_sponsor_group_reorder_requires_complete_unique_group_ids(event):
 def test_save_field_order_persists_new_order(event):
     settings = make_exhibitor_settings(event)
     view = ExhibitionQuestionListView()
-    view.save_field_order(settings, "logo,header_image,name")
+    view.save_field_order(settings, "social_links,logo,header_image,name")
 
     settings.refresh_from_db()
     assert settings.ordered_proposal_field_keys[:3] == ["logo", "header_image", "name"]
+    assert settings.ordered_proposal_field_keys[-2:] == ["social_links", "extra_links"]
     assert set(settings.ordered_proposal_field_keys) == set(PROPOSAL_DEFAULT_FIELD_KEYS)
 
 
