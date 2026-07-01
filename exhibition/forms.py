@@ -382,10 +382,12 @@ class CallSettingsForm(I18nModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # call_text is hand-rendered in the template, so set widget attrs here.
-        call_text_widget = self.fields["call_text"].widget
-        call_text_widget.attrs.setdefault("class", "form-control")
-        call_text_widget.attrs.setdefault("rows", 8)
+        widget = self.fields["call_text"].widget
+        if isinstance(widget, forms.MultiWidget):
+            for sub_widget in widget.widgets:
+                sub_widget.attrs.setdefault("rows", 8)
+        else:
+            widget.attrs.setdefault("rows", 8)
 
 
 class ExhibitionQuestionFieldsMixin:

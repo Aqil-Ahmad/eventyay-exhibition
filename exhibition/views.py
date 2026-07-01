@@ -1,5 +1,6 @@
 import json
 
+from django.conf import settings as django_settings
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.db import transaction
@@ -688,21 +689,26 @@ class SponsorGroupReorderView(EventPermissionRequiredMixin, View):
 
 
 class CallTextPreviewView(EventPermissionRequiredMixin, View):
-    """Render draft Call text using the same ``rich_text`` conversion as the
-    public call page, so the preview can't drift from what applicants see."""
+    """Render draft Call text with the same ``rich_text`` conversion the public
+    call page uses, one rendering per language, so the preview matches what
+    applicants see regardless of the call's publish status."""
 
     permission = "can_change_settings"
 
     def post(self, request, *args, **kwargs):
-        try:
-            text = json.loads(request.body.decode("utf-8")).get("text", "")
-        except (json.JSONDecodeError, UnicodeDecodeError):
-            return JsonResponse({"detail": _("Invalid request body.")}, status=400)
-
-        if not isinstance(text, str):
-            return JsonResponse({"detail": _("Invalid call text.")}, status=400)
-
-        return JsonResponse({"html": str(rich_text(text))})
+        widget = CallSettingsForm(event=request.event).fields["call_text"].widget
+        # The i18n widget returns a list indexed by the global LANGUAGES order,
+        # so map each active event locale to its rendered value by that index.
+        values = widget.value_from_datadict(request.POST, request.FILES, "call_text")
+        if not isinstance(values, (list, tuple)):
+            values = [values]
+        event_locales = set(request.event.settings.locales)
+        msgs = {}
+        for index, (code, _name) in enumerate(django_settings.LANGUAGES):
+            if code in event_locales and index < len(values):
+                text = values[index]
+                msgs[code] = str(rich_text(text)) if text else ""
+        return JsonResponse({"msgs": msgs})
 
 
 class ProposalListView(EventPermissionRequiredMixin, ListView):
