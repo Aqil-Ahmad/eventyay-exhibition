@@ -812,9 +812,7 @@ class ExhibitionQuestionListView(EventPermissionRequiredMixin, ListView):
 
     def save_field_order(self, settings, order_str):
         proposal_field_settings = settings.normalized_proposal_field_settings
-        orderable_keys = [
-            key for key in PROPOSAL_DEFAULT_FIELD_KEYS if key not in PROPOSAL_FORMSET_FIELD_KEYS
-        ]
+        orderable_keys = [key for key in PROPOSAL_DEFAULT_FIELD_KEYS if key not in PROPOSAL_FORMSET_FIELD_KEYS]
         orderable_key_set = set(orderable_keys)
         seen = set()
         position = 0
