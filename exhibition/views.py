@@ -689,16 +689,13 @@ class SponsorGroupReorderView(EventPermissionRequiredMixin, View):
 
 
 class CallTextPreviewView(EventPermissionRequiredMixin, View):
-    """Render draft Call text with the same ``rich_text`` conversion the public
-    call page uses, one rendering per language, so the preview matches what
-    applicants see regardless of the call's publish status."""
+    """Render draft Call text with the same Markdown conversion as the public call page."""
 
     permission = "can_change_settings"
 
     def post(self, request, *args, **kwargs):
         widget = CallSettingsForm(event=request.event).fields["call_text"].widget
-        # The i18n widget returns a list indexed by the global LANGUAGES order,
-        # so map each active event locale to its rendered value by that index.
+        # The i18n widget returns values as a list indexed by global LANGUAGES order.
         values = widget.value_from_datadict(request.POST, request.FILES, "call_text")
         if not isinstance(values, (list, tuple)):
             values = [values]

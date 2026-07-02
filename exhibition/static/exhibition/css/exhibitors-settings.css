@@ -68,12 +68,7 @@
     background: #f8fafc;
 }
 
-/* Call text: Markdown hint + Edit/Preview tabs */
-.call-text-markdown-hint {
-    color: #e8850c;
-    font-weight: 600;
-}
-
+/* Call text: Edit/Preview tabs */
 .call-text-preview {
     min-height: 120px;
     padding: 12px 15px;

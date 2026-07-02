@@ -2,6 +2,7 @@ import json
 import re
 
 import pytest
+from django.conf import settings as django_settings
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import RequestFactory
 from rest_framework import serializers
@@ -9,7 +10,15 @@ from rest_framework import serializers
 from exhibition.api import ExhibitorInfoSerializer
 from exhibition.forms import SponsorGroupForm
 from exhibition.models import ExhibitorInfo, SponsorGroup, get_next_sponsor_group_level
-from exhibition.views import SponsorGroupReorderView
+from exhibition.views import CallTextPreviewView, SponsorGroupReorderView
+
+
+def _language_index(code):
+    """Global LANGUAGES index used to name the i18n input (e.g. ``call_text_0``)."""
+    for index, (candidate, _name) in enumerate(django_settings.LANGUAGES):
+        if candidate == code:
+            return index
+    raise AssertionError(f"language {code!r} not configured")
 
 
 @pytest.mark.django_db
@@ -209,3 +218,48 @@ def test_sponsor_group_reorder_requires_complete_unique_group_ids(event):
     group_two.refresh_from_db()
     assert group_two.level == 1
     assert group_one.level == 2
+
+
+@pytest.mark.django_db
+def test_call_text_preview_renders_markdown_per_active_locale(event):
+    event.settings.locales = ["en", "de"]
+    factory = RequestFactory()
+    view = CallTextPreviewView()
+
+    request = factory.post(
+        "/preview",
+        data={
+            f"call_text_{_language_index('en')}": "# Hello",
+            f"call_text_{_language_index('de')}": "## Hallo",
+        },
+    )
+    request.event = event
+    response = view.post(request)
+
+    assert response.status_code == 200
+    msgs = json.loads(response.content)["msgs"]
+    assert set(msgs.keys()) == {"en", "de"}
+    assert "<h1>Hello</h1>" in msgs["en"]
+    assert "<h2>Hallo</h2>" in msgs["de"]
+
+
+@pytest.mark.django_db
+def test_call_text_preview_ignores_inactive_locales_and_blank_text(event):
+    event.settings.locales = ["en"]
+    factory = RequestFactory()
+    view = CallTextPreviewView()
+
+    request = factory.post(
+        "/preview",
+        data={
+            f"call_text_{_language_index('en')}": "",
+            f"call_text_{_language_index('de')}": "# Nope",
+        },
+    )
+    request.event = event
+    response = view.post(request)
+
+    assert response.status_code == 200
+    msgs = json.loads(response.content)["msgs"]
+    assert set(msgs.keys()) == {"en"}
+    assert msgs["en"] == ""

@@ -222,7 +222,7 @@
 
         previewTab.addEventListener('click', renderPreview)
 
-        // Pre-render saved content so the preview is not blank after a reload.
+        // Pre-render so the preview is not blank after a save reload.
         var inputs = panel.querySelectorAll(
             '#call_text_edit textarea, #call_text_edit input[type="text"]'
         )
