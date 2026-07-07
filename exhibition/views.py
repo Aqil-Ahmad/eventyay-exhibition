@@ -129,9 +129,7 @@ class SettingsView(EventPermissionRequiredMixin, ListView):
             initial={"level": self.get_next_sponsor_group_level()},
             prefix="new-group",
         )
-        ctx["call_settings_form"] = kwargs.get(
-            "call_settings_form"
-        ) or CallSettingsForm(
+        ctx["call_settings_form"] = kwargs.get("call_settings_form") or CallSettingsForm(
             instance=settings,
             event=self.request.event,
         )
@@ -140,12 +138,9 @@ class SettingsView(EventPermissionRequiredMixin, ListView):
             # preview endpoint) so the preview tab is not blank on load.
             call_text = settings.call_text.data
             if not isinstance(call_text, dict):
-                call_text = dict.fromkeys(
-                    self.request.event.settings.locales, call_text or ""
-                )
+                call_text = dict.fromkeys(self.request.event.settings.locales, call_text or "")
             ctx["call_text_previews"] = [
-                (locale, rich_text(call_text.get(locale, "")))
-                for locale in self.request.event.settings.locales
+                (locale, rich_text(call_text.get(locale, ""))) for locale in self.request.event.settings.locales
             ]
         ctx["show_add_group_form"] = kwargs.get("show_add_group_form", False)
         ctx["expanded_group_pk"] = kwargs.get("expanded_group_pk")
@@ -448,9 +443,7 @@ class UserProposalCreateView(
             if settings.call_hide_after_deadline:
                 raise Http404()
             messages.error(request, _("The call for exhibitors is closed."))
-            return redirect(
-                "plugins:exhibition:public_call", **event_kwargs(request.event)
-            )
+            return redirect("plugins:exhibition:public_call", **event_kwargs(request.event))
         return super().dispatch(request, *args, **kwargs)
 
     def get_form_kwargs(self):
@@ -735,9 +728,7 @@ class ProposalDetailView(EventPermissionRequiredMixin, UpdateView):
             if self.object.approved_exhibitor_id:
                 messages.error(
                     self.request,
-                    _(
-                        "This proposal has already been approved and cannot be rejected."
-                    ),
+                    _("This proposal has already been approved and cannot be rejected."),
                 )
             else:
                 self.object.state = ExhibitionProposalState.REJECTED
@@ -821,9 +812,7 @@ class ExhibitionQuestionListView(EventPermissionRequiredMixin, ListView):
 
         for field in PROPOSAL_DEFAULT_FIELDS:
             key = field["key"]
-            is_active = (
-                field.get("active_locked") or request.POST.get(f"{key}_active") == "on"
-            )
+            is_active = field.get("active_locked") or request.POST.get(f"{key}_active") == "on"
             proposal_field_settings[key]["active"] = is_active
             proposal_field_settings[key]["required"] = is_active and (
                 field.get("required_locked")
@@ -838,16 +827,12 @@ class ExhibitionQuestionListView(EventPermissionRequiredMixin, ListView):
         questions = list(ExhibitionQuestion.objects.filter(event=request.event))
         for question in questions:
             question.active = request.POST.get(f"question_{question.pk}_active") == "on"
-            question.required = (
-                request.POST.get(f"question_{question.pk}_required") == "on"
-            )
+            question.required = request.POST.get(f"question_{question.pk}_required") == "on"
         if questions:
             ExhibitionQuestion.objects.bulk_update(questions, ["active", "required"])
 
         messages.success(request, _("Proposal form settings have been saved."))
-        return redirect(
-            "plugins:exhibition:call.questions", **event_kwargs(request.event)
-        )
+        return redirect("plugins:exhibition:call.questions", **event_kwargs(request.event))
 
 
 class ExhibitionQuestionCreateView(EventPermissionRequiredMixin, CreateView):
