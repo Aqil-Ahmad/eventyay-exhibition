@@ -70,8 +70,8 @@ Best regards, Your {event} team{% endblocktrans %}
                                 </div>
                                 <div id="call_text_preview" class="tab-pane call-text-preview-group"
                                      data-preview-url="{% url 'plugins:exhibition:settings.call.preview' organizer=request.event.organizer.slug event=request.event.slug %}">
-                                    {% for l in request.event.settings.locales %}
-                                        <div lang="{{ l }}" class="call-text-preview"></div>
+                                    {% for locale, html in call_text_previews %}
+                                        <div lang="{{ locale }}" class="call-text-preview">{{ html }}</div>
                                     {% endfor %}
                                     <div class="alert alert-info call-text-preview-note">
                                         {% trans "This panel renders unsaved draft text using the same styling as the live public call page." %}

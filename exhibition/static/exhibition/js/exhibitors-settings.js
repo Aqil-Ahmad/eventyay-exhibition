@@ -188,9 +188,6 @@
             inputs.forEach(function (input) {
                 params.append(input.name, input.value)
             })
-            blocks.forEach(function (block) {
-                block.textContent = gettext('Generating preview …')
-            })
 
             fetch(previewUrl, {
                 method: 'POST',
@@ -220,18 +217,7 @@
                 })
         }
 
-        previewTab.addEventListener('click', renderPreview)
-
-        // Pre-render so the preview is not blank after a save reload.
-        var inputs = panel.querySelectorAll(
-            '#call_text_edit textarea, #call_text_edit input[type="text"]'
-        )
-        var hasContent = Array.prototype.some.call(inputs, function (input) {
-            return input.value.trim()
-        })
-        if (hasContent) {
-            renderPreview()
-        }
+        $(previewTab).on('shown.bs.tab', renderPreview)
     }
 
     document.addEventListener('DOMContentLoaded', function () {
