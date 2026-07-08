@@ -1,5 +1,6 @@
 import json
 
+from django.conf import settings as django_settings
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.db import transaction
@@ -11,6 +12,7 @@ from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 from django.views import View
 from django.views.generic import DeleteView, DetailView, ListView, TemplateView
+from eventyay.base.templatetags.rich_text import rich_text
 from eventyay.control.permissions import EventPermissionRequiredMixin
 from eventyay.control.views import CreateView, UpdateView
 
@@ -133,6 +135,15 @@ class SettingsView(EventPermissionRequiredMixin, ListView):
             instance=settings,
             event=self.request.event,
         )
+        if ctx["active_tab"] == "call":
+            # Server-render the saved Call text (per language, matching the
+            # preview endpoint) so the preview tab is not blank on load.
+            call_text = settings.call_text.data
+            if not isinstance(call_text, dict):
+                call_text = dict.fromkeys(self.request.event.settings.locales, call_text or "")
+            ctx["call_text_previews"] = [
+                (locale, rich_text(call_text.get(locale, ""))) for locale in self.request.event.settings.locales
+            ]
         ctx["show_add_group_form"] = kwargs.get("show_add_group_form", False)
         ctx["expanded_group_pk"] = kwargs.get("expanded_group_pk")
         return ctx
@@ -462,7 +473,10 @@ class UserProposalCreateView(
         return response
 
     def get_success_url(self):
-        return reverse("plugins:exhibition:proposal.user_list", kwargs=event_kwargs(self.request.event))
+        return reverse(
+            "plugins:exhibition:proposal.user_list",
+            kwargs=event_kwargs(self.request.event),
+        )
 
 
 class UserProposalEditView(
@@ -519,7 +533,10 @@ class UserProposalEditView(
         return context
 
     def get_success_url(self):
-        return reverse("plugins:exhibition:proposal.user_list", kwargs=event_kwargs(self.request.event))
+        return reverse(
+            "plugins:exhibition:proposal.user_list",
+            kwargs=event_kwargs(self.request.event),
+        )
 
 
 class ExhibitorLinkFormsetMixin:
@@ -626,6 +643,26 @@ class SponsorGroupReorderView(EventPermissionRequiredMixin, View):
             SponsorGroup.objects.bulk_update(ordered_groups, ["level"])
 
         return JsonResponse({"levels": [{"id": group.pk, "level": group.level} for group in ordered_groups]})
+
+
+class CallTextPreviewView(EventPermissionRequiredMixin, View):
+    """Render draft Call text with the same Markdown conversion as the public call page."""
+
+    permission = "can_change_settings"
+
+    def post(self, request, *args, **kwargs):
+        widget = CallSettingsForm(event=request.event).fields["call_text"].widget
+        # The i18n widget returns values as a list indexed by global LANGUAGES order.
+        values = widget.value_from_datadict(request.POST, request.FILES, "call_text")
+        if not isinstance(values, (list, tuple)):
+            values = [values]
+        event_locales = set(request.event.settings.locales)
+        msgs = {}
+        for index, (code, _name) in enumerate(django_settings.LANGUAGES):
+            if code in event_locales and index < len(values):
+                text = values[index]
+                msgs[code] = str(rich_text(text)) if text else ""
+        return JsonResponse({"msgs": msgs})
 
 
 class ProposalListView(EventPermissionRequiredMixin, ListView):

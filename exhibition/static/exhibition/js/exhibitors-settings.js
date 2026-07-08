@@ -162,7 +162,66 @@
         })
     }
 
+    function initCallTextPreview() {
+        var panel = document.getElementById('call_text_panel')
+        if (!panel) {
+            return
+        }
+
+        var previewPane = panel.querySelector('#call_text_preview')
+        var previewTab = panel.querySelector('[data-call-text-preview-tab]')
+        if (!previewPane || !previewTab) {
+            return
+        }
+
+        var previewUrl = previewPane.dataset.previewUrl
+        var blocks = previewPane.querySelectorAll('.call-text-preview')
+        if (!previewUrl || !blocks.length) {
+            return
+        }
+
+        function renderPreview() {
+            var inputs = panel.querySelectorAll(
+                '#call_text_edit textarea, #call_text_edit input[type="text"]'
+            )
+            var params = new URLSearchParams()
+            inputs.forEach(function (input) {
+                params.append(input.name, input.value)
+            })
+
+            fetch(previewUrl, {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': getCookie('eventyay_csrftoken') || getCookie('csrftoken'),
+                },
+                credentials: 'include',
+                body: params,
+            })
+                .then(function (response) {
+                    if (!response.ok) {
+                        throw new Error('Could not render call text preview.')
+                    }
+                    return response.json()
+                })
+                .then(function (data) {
+                    var msgs = data.msgs || {}
+                    blocks.forEach(function (block) {
+                        block.innerHTML = msgs[block.getAttribute('lang')] || ''
+                    })
+                })
+                .catch(function () {
+                    blocks.forEach(function (block) {
+                        block.textContent = ''
+                    })
+                    blocks[0].textContent = gettext('The preview could not be loaded. Please try again.')
+                })
+        }
+
+        $(previewTab).on('shown.bs.tab', renderPreview)
+    }
+
     document.addEventListener('DOMContentLoaded', function () {
+        initCallTextPreview()
         var showButton = document.getElementById('show-add-group-form')
         var addForm = document.getElementById('add-group-form')
         var cancelButton = document.getElementById('cancel-add-group-form')

@@ -49,7 +49,37 @@ Best regards, Your {event} team{% endblocktrans %}
                     <p>{% trans "Publish a login-required application form for exhibitors and sponsors." %}</p>
                     {% bootstrap_field call_settings_form.call_enabled layout="control" %}
                     {% bootstrap_field call_settings_form.call_headline layout="control" %}
-                    {% bootstrap_field call_settings_form.call_text layout="control" %}
+                    <div id="call_text_panel" class="form-group call-text-group">
+                        <label class="col-md-3 control-label" for="{{ call_settings_form.call_text.id_for_label }}">
+                            <span class="label-text">{{ call_settings_form.call_text.label }}</span>
+                            <br><span class="optional">{% trans "Optional" %}</span>
+                            <br><span class="optional">{% trans "Supports Markdown" %}</span>
+                        </label>
+                        <div class="col-md-9">
+                            <ul class="nav nav-tabs" role="tablist">
+                                <li role="presentation" class="active">
+                                    <a data-toggle="tab" href="#call_text_edit"><i class="fa fa-pencil-square-o fa-fw"></i> {% trans "Edit" %}</a>
+                                </li>
+                                <li role="presentation">
+                                    <a data-toggle="tab" href="#call_text_preview" data-call-text-preview-tab><i class="fa fa-tv fa-fw"></i> {% trans "Preview" %}</a>
+                                </li>
+                            </ul>
+                            <div class="tab-content">
+                                <div id="call_text_edit" class="tab-pane fade in active">
+                                    {% bootstrap_field call_settings_form.call_text show_label=False form_group_class="" %}
+                                </div>
+                                <div id="call_text_preview" class="tab-pane call-text-preview-group"
+                                     data-preview-url="{% url 'plugins:exhibition:settings.call.preview' organizer=request.event.organizer.slug event=request.event.slug %}">
+                                    {% for locale, html in call_text_previews %}
+                                        <div lang="{{ locale }}" class="call-text-preview">{{ html }}</div>
+                                    {% endfor %}
+                                    <div class="alert alert-info call-text-preview-note">
+                                        {% trans "This panel renders unsaved draft text using the same styling as the live public call page." %}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                     {% bootstrap_field call_settings_form.call_deadline layout="control" %}
                     {% bootstrap_field call_settings_form.call_hide_after_deadline layout="control" %}
                 </fieldset>

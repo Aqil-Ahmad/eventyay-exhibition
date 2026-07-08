@@ -11,6 +11,7 @@ from .api import (
     TagListView,
 )
 from .views import (
+    CallTextPreviewView,
     ExhibitionQuestionCreateView,
     ExhibitionQuestionDeleteView,
     ExhibitionQuestionEditView,
@@ -83,6 +84,11 @@ urlpatterns = [
         "exhibitors/event/<orgslug:organizer>/<slug:event>/settings/call",
         SettingsView.as_view(active_tab="call"),
         name="settings.call",
+    ),
+    path(
+        "exhibitors/event/<orgslug:organizer>/<slug:event>/settings/call/preview",
+        CallTextPreviewView.as_view(),
+        name="settings.call.preview",
     ),
     path(
         "exhibitors/event/<orgslug:organizer>/<slug:event>/settings/sponsors/groups/<int:pk>/toggle-front-page",
