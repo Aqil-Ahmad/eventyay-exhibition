@@ -611,6 +611,7 @@ class ExhibitionProposalForm(ExhibitionQuestionFieldsMixin, I18nModelForm):
                 widget.attrs.setdefault("rows", 4)
         if self.event:
             self.apply_proposal_field_settings()
+            self.apply_proposal_field_order()
             self.inject_exhibition_questions(
                 event=self.event,
                 proposal=instance,
@@ -646,6 +647,16 @@ class ExhibitionProposalForm(ExhibitionQuestionFieldsMixin, I18nModelForm):
             for field_name in form_fields:
                 if field_name in self.fields:
                     self.fields[field_name].required = is_required
+
+    def apply_proposal_field_order(self):
+        if not self.exhibition_settings:
+            return
+        ordered_field_names = []
+        for key in self.exhibition_settings.ordered_proposal_field_keys:
+            for field_name in self.setting_field_map.get(key, ()):
+                if field_name in self.fields:
+                    ordered_field_names.append(field_name)
+        self.order_fields(ordered_field_names)
 
     def field_setting_is_active(self, key):
         return self.active_proposal_fields.get(key, True)
