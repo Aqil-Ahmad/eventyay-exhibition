@@ -8,9 +8,27 @@ from django.test import RequestFactory
 from rest_framework import serializers
 
 from exhibition.api import ExhibitorInfoSerializer
-from exhibition.forms import SponsorGroupForm
-from exhibition.models import ExhibitorInfo, SponsorGroup, get_next_sponsor_group_level
-from exhibition.views import CallTextPreviewView, SponsorGroupReorderView
+from exhibition.forms import ExhibitionProposalForm, SponsorGroupForm
+from exhibition.models import (
+    PROPOSAL_DEFAULT_FIELD_KEYS,
+    ExhibitorInfo,
+    ExhibitorSettings,
+    SponsorGroup,
+    get_next_sponsor_group_level,
+)
+from exhibition.views import (
+    CallTextPreviewView,
+    ExhibitionQuestionListView,
+    SponsorGroupReorderView,
+)
+
+
+def make_exhibitor_settings(event):
+    return ExhibitorSettings.objects.create(
+        event=event,
+        exhibitors_access_mail_subject="",
+        exhibitors_access_mail_body="",
+    )
 
 
 def _language_index(code):
@@ -252,3 +270,26 @@ def test_call_text_preview_ignores_inactive_locales_and_blank_text(event):
     msgs = json.loads(response.content)["msgs"]
     assert set(msgs.keys()) == {"en"}
     assert msgs["en"] == ""
+
+
+@pytest.mark.django_db
+def test_save_field_order_persists_new_order(event):
+    settings = make_exhibitor_settings(event)
+    view = ExhibitionQuestionListView()
+    view.save_field_order(settings, "social_links,logo,header_image,name")
+
+    settings.refresh_from_db()
+    assert settings.ordered_proposal_field_keys[:3] == ["logo", "header_image", "name"]
+    assert settings.ordered_proposal_field_keys[-2:] == ["social_links", "extra_links"]
+    assert set(settings.ordered_proposal_field_keys) == set(PROPOSAL_DEFAULT_FIELD_KEYS)
+
+
+@pytest.mark.django_db
+def test_proposal_form_reflects_saved_field_order(event):
+    settings = make_exhibitor_settings(event)
+    view = ExhibitionQuestionListView()
+    view.save_field_order(settings, "description,name")
+
+    form = ExhibitionProposalForm(event=event)
+    field_names = list(form.fields.keys())
+    assert field_names.index("description") < field_names.index("name")

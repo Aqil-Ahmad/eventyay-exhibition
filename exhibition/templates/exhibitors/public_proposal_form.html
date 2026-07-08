@@ -28,90 +28,93 @@
         {% bootstrap_form form layout="control" %}
 
         {% if can_edit and show_social_links %}
-            <fieldset>
-                <legend>{% trans "Social Media" %}</legend>
-                <div id="social-links-formset" class="partner-link-formset formset" data-formset-prefix="{{ social_media_formset.prefix }}" data-social-link-prefixes='{{ social_link_prefixes|escapejson_dumps }}'>
-                    {{ social_media_formset.management_form }}
-                    {{ social_media_formset.non_form_errors }}
-                    <div data-formset-body>
-                        {% for social_form in social_media_formset %}
+            <div class="form-group">
+                <div class="col-md-3 control-label partner-link-group-label">{% trans "Social Media" %}</div>
+                <div class="col-md-9">
+                    <div id="social-links-formset" class="partner-link-formset formset" data-formset-prefix="{{ social_media_formset.prefix }}" data-social-link-prefixes='{{ social_link_prefixes|escapejson_dumps }}'>
+                        {{ social_media_formset.management_form }}
+                        {{ social_media_formset.non_form_errors }}
+                        <div data-formset-body>
+                            {% for social_form in social_media_formset %}
+                                <div class="row partner-link-row" data-formset-form data-social-link-row>
+                                    <div class="sr-only">{{ social_form.id }} {{ social_form.DELETE }}</div>
+                                    <div class="col-md-3">{{ social_form.network.errors }}{{ social_form.network }}</div>
+                                    <div class="col-md-8">
+                                        {{ social_form.path.errors }}
+                                        <div class="input-group">
+                                            <span class="input-group-addon partner-link-prefix" data-social-prefix>https://</span>
+                                            {{ social_form.path }}
+                                        </div>
+                                    </div>
+                                    <div class="col-md-1 text-right">
+                                        <button type="button" class="btn btn-delete btn-danger btn-sm partner-link-remove" data-formset-delete-button><i class="fa fa-minus"></i></button>
+                                    </div>
+                                </div>
+                            {% endfor %}
+                        </div>
+                        <template data-formset-empty-form>
                             <div class="row partner-link-row" data-formset-form data-social-link-row>
-                                <div class="sr-only">{{ social_form.id }} {{ social_form.DELETE }}</div>
-                                <div class="col-md-3">{{ social_form.network.errors }}{{ social_form.network }}</div>
+                                <div class="sr-only">{{ social_media_formset.empty_form.id }} {{ social_media_formset.empty_form.DELETE }}</div>
+                                <div class="col-md-3">{{ social_media_formset.empty_form.network.errors }}{{ social_media_formset.empty_form.network }}</div>
                                 <div class="col-md-8">
-                                    {{ social_form.path.errors }}
+                                    {{ social_media_formset.empty_form.path.errors }}
                                     <div class="input-group">
                                         <span class="input-group-addon partner-link-prefix" data-social-prefix>https://</span>
-                                        {{ social_form.path }}
+                                        {{ social_media_formset.empty_form.path }}
                                     </div>
                                 </div>
                                 <div class="col-md-1 text-right">
                                     <button type="button" class="btn btn-delete btn-danger btn-sm partner-link-remove" data-formset-delete-button><i class="fa fa-minus"></i></button>
                                 </div>
                             </div>
-                        {% endfor %}
-                    </div>
-                    <template data-formset-empty-form>
-                        <div class="row partner-link-row" data-formset-form data-social-link-row>
-                            <div class="sr-only">{{ social_media_formset.empty_form.id }} {{ social_media_formset.empty_form.DELETE }}</div>
-                            <div class="col-md-3">{{ social_media_formset.empty_form.network.errors }}{{ social_media_formset.empty_form.network }}</div>
-                            <div class="col-md-8">
-                                {{ social_media_formset.empty_form.path.errors }}
-                                <div class="input-group">
-                                    <span class="input-group-addon partner-link-prefix" data-social-prefix>https://</span>
-                                    {{ social_media_formset.empty_form.path }}
-                                </div>
-                            </div>
-                            <div class="col-md-1 text-right">
-                                <button type="button" class="btn btn-delete btn-danger btn-sm partner-link-remove" data-formset-delete-button><i class="fa fa-minus"></i></button>
-                            </div>
+                        </template>
+                        <div class="partner-link-actions">
+                            <button type="button" class="btn btn-default btn-sm partner-link-add" data-formset-add>
+                                <i class="fa fa-plus"></i> {% trans "Add social media link" %}
+                            </button>
                         </div>
-                    </template>
-                    <div class="partner-link-actions">
-                        <button type="button" class="btn btn-default btn-sm partner-link-add" data-formset-add>
-                            <i class="fa fa-plus"></i> {% trans "Add social media link" %}
-                        </button>
                     </div>
                 </div>
-            </fieldset>
-
+            </div>
         {% endif %}
 
         {% if can_edit and show_extra_links %}
-            <fieldset>
-                <legend>{% trans "Extra Links" %}</legend>
-                <div id="extra-links-formset" class="partner-link-formset formset" data-formset-prefix="{{ extra_links_formset.prefix }}">
-                    {{ extra_links_formset.management_form }}
-                    {{ extra_links_formset.non_form_errors }}
-                    <div data-formset-body>
-                        {% for extra_form in extra_links_formset %}
+            <div class="form-group">
+                <div class="col-md-3 control-label partner-link-group-label">{% trans "Extra Links" %}</div>
+                <div class="col-md-9">
+                    <div id="extra-links-formset" class="partner-link-formset formset" data-formset-prefix="{{ extra_links_formset.prefix }}">
+                        {{ extra_links_formset.management_form }}
+                        {{ extra_links_formset.non_form_errors }}
+                        <div data-formset-body>
+                            {% for extra_form in extra_links_formset %}
+                                <div class="row partner-link-row" data-formset-form>
+                                    <div class="sr-only">{{ extra_form.id }} {{ extra_form.DELETE }}</div>
+                                    <div class="col-md-4">{{ extra_form.label.errors }}{{ extra_form.label }}</div>
+                                    <div class="col-md-7">{{ extra_form.url.errors }}{{ extra_form.url }}</div>
+                                    <div class="col-md-1 text-right">
+                                        <button type="button" class="btn btn-delete btn-danger btn-sm partner-link-remove" data-formset-delete-button><i class="fa fa-minus"></i></button>
+                                    </div>
+                                </div>
+                            {% endfor %}
+                        </div>
+                        <template data-formset-empty-form>
                             <div class="row partner-link-row" data-formset-form>
-                                <div class="sr-only">{{ extra_form.id }} {{ extra_form.DELETE }}</div>
-                                <div class="col-md-4">{{ extra_form.label.errors }}{{ extra_form.label }}</div>
-                                <div class="col-md-7">{{ extra_form.url.errors }}{{ extra_form.url }}</div>
+                                <div class="sr-only">{{ extra_links_formset.empty_form.id }} {{ extra_links_formset.empty_form.DELETE }}</div>
+                                <div class="col-md-4">{{ extra_links_formset.empty_form.label.errors }}{{ extra_links_formset.empty_form.label }}</div>
+                                <div class="col-md-7">{{ extra_links_formset.empty_form.url.errors }}{{ extra_links_formset.empty_form.url }}</div>
                                 <div class="col-md-1 text-right">
                                     <button type="button" class="btn btn-delete btn-danger btn-sm partner-link-remove" data-formset-delete-button><i class="fa fa-minus"></i></button>
                                 </div>
                             </div>
-                        {% endfor %}
-                    </div>
-                    <template data-formset-empty-form>
-                        <div class="row partner-link-row" data-formset-form>
-                            <div class="sr-only">{{ extra_links_formset.empty_form.id }} {{ extra_links_formset.empty_form.DELETE }}</div>
-                            <div class="col-md-4">{{ extra_links_formset.empty_form.label.errors }}{{ extra_links_formset.empty_form.label }}</div>
-                            <div class="col-md-7">{{ extra_links_formset.empty_form.url.errors }}{{ extra_links_formset.empty_form.url }}</div>
-                            <div class="col-md-1 text-right">
-                                <button type="button" class="btn btn-delete btn-danger btn-sm partner-link-remove" data-formset-delete-button><i class="fa fa-minus"></i></button>
-                            </div>
+                        </template>
+                        <div class="partner-link-actions">
+                            <button type="button" class="btn btn-default btn-sm partner-link-add" data-formset-add>
+                                <i class="fa fa-plus"></i> {% trans "Add extra link" %}
+                            </button>
                         </div>
-                    </template>
-                    <div class="partner-link-actions">
-                        <button type="button" class="btn btn-default btn-sm partner-link-add" data-formset-add>
-                            <i class="fa fa-plus"></i> {% trans "Add extra link" %}
-                        </button>
                     </div>
                 </div>
-            </fieldset>
+            </div>
         {% endif %}
 
         {% if can_edit %}

@@ -30,7 +30,9 @@ from .forms import (
     social_link_prefixes,
 )
 from .models import (
+    PROPOSAL_DEFAULT_FIELD_KEYS,
     PROPOSAL_DEFAULT_FIELDS,
+    PROPOSAL_FORMSET_FIELD_KEYS,
     ExhibitionProposal,
     ExhibitionProposalState,
     ExhibitionQuestion,
@@ -760,15 +762,20 @@ class ExhibitionQuestionListView(EventPermissionRequiredMixin, ListView):
         settings = ExhibitorSettings.objects.get_or_create(event=self.request.event)[0]
         field_settings = settings.normalized_proposal_field_settings
         answer_counts = self.get_default_field_answer_counts()
+        field_definitions = {field["key"]: field for field in PROPOSAL_DEFAULT_FIELDS}
+        ordered_keys = [
+            key for key in settings.ordered_proposal_field_keys if key not in PROPOSAL_FORMSET_FIELD_KEYS
+        ] + [key for key in PROPOSAL_DEFAULT_FIELD_KEYS if key in PROPOSAL_FORMSET_FIELD_KEYS]
         context["default_fields"] = [
             {
-                **field,
-                "active": field_settings[field["key"]]["active"],
-                "required": field_settings[field["key"]]["required"],
-                "supports_required": field.get("supports_required", True),
-                "answer_count": answer_counts.get(field["key"], 0),
+                **field_definitions[key],
+                "active": field_settings[key]["active"],
+                "required": field_settings[key]["required"],
+                "supports_required": field_definitions[key].get("supports_required", True),
+                "orderable": key not in PROPOSAL_FORMSET_FIELD_KEYS,
+                "answer_count": answer_counts.get(key, 0),
             }
-            for field in PROPOSAL_DEFAULT_FIELDS
+            for key in ordered_keys
         ]
         return context
 
@@ -808,6 +815,12 @@ class ExhibitionQuestionListView(EventPermissionRequiredMixin, ListView):
 
     def post(self, request, *args, **kwargs):
         settings = ExhibitorSettings.objects.get_or_create(event=request.event)[0]
+
+        order_param = request.POST.get("order")
+        if order_param:
+            self.save_field_order(settings, order_param)
+            return HttpResponse(status=204)
+
         proposal_field_settings = settings.normalized_proposal_field_settings
 
         for field in PROPOSAL_DEFAULT_FIELDS:
@@ -833,6 +846,27 @@ class ExhibitionQuestionListView(EventPermissionRequiredMixin, ListView):
 
         messages.success(request, _("Proposal form settings have been saved."))
         return redirect("plugins:exhibition:call.questions", **event_kwargs(request.event))
+
+    def save_field_order(self, settings, order_str):
+        proposal_field_settings = settings.normalized_proposal_field_settings
+        orderable_keys = [key for key in PROPOSAL_DEFAULT_FIELD_KEYS if key not in PROPOSAL_FORMSET_FIELD_KEYS]
+        orderable_key_set = set(orderable_keys)
+        seen = set()
+        position = 0
+        for key in order_str.split(","):
+            if key in orderable_key_set and key not in seen:
+                seen.add(key)
+                proposal_field_settings[key]["position"] = position
+                position += 1
+        for key in orderable_keys:
+            if key not in seen:
+                proposal_field_settings[key]["position"] = position
+                position += 1
+        for key in PROPOSAL_FORMSET_FIELD_KEYS:
+            proposal_field_settings[key]["position"] = position
+            position += 1
+        settings.proposal_field_settings = proposal_field_settings
+        settings.save(update_fields=["proposal_field_settings"])
 
 
 class ExhibitionQuestionCreateView(EventPermissionRequiredMixin, CreateView):
