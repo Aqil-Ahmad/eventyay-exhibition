@@ -2,18 +2,17 @@
 
 from django.db import migrations
 
-from exhibition.models import PROPOSAL_DEFAULT_FIELD_KEYS
+DEFAULT_FIELD_COUNT = 14
 
 
 def offset_question_positions(apps, schema_editor):
     ExhibitionQuestion = apps.get_model("exhibition", "ExhibitionQuestion")
-    offset = len(PROPOSAL_DEFAULT_FIELD_KEYS)
     event_ids = ExhibitionQuestion.objects.values_list("event_id", flat=True).distinct()
     for event_id in event_ids:
-        questions = ExhibitionQuestion.objects.filter(event_id=event_id).order_by("position", "id")
+        questions = list(ExhibitionQuestion.objects.filter(event_id=event_id).order_by("position", "id"))
         for index, question in enumerate(questions):
-            question.position = offset + index
-            question.save(update_fields=["position"])
+            question.position = DEFAULT_FIELD_COUNT + index
+        ExhibitionQuestion.objects.bulk_update(questions, ["position"])
 
 
 def noop(apps, schema_editor):
