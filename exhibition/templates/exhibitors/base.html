@@ -47,9 +47,15 @@
     </li>
   {% endif %}
   <li>
-    <a href="{% url 'plugins:exhibition:info' organizer=request.event.organizer.slug event=request.event.slug %}" {% if url_name != 'settings' and url_name != 'settings.exhibitors' and url_name != 'settings.sponsors' and url_name != 'settings.call' and url_name != 'proposal.list' and url_name != 'proposal.detail' and url_name != 'call.questions' and url_name != 'call.questions.add' and url_name != 'call.questions.edit' and url_name != 'call.questions.delete' %}class="active"{% endif %}>
+    <a href="{% url 'plugins:exhibition:exhibitors' organizer=request.event.organizer.slug event=request.event.slug %}" {% if url_name == 'exhibitors' or url_name == 'exhibitors.add' or url_name == 'info' or url_name == 'add' or url_name == 'edit' and request.GET.type != 'sponsor' or url_name == 'delete' and request.GET.type != 'sponsor' or url_name == 'copy_key' and request.GET.type != 'sponsor' %}class="active"{% endif %}>
       <span class="fa fa-fw fa-map-pin"></span>
-      <span class="sidebar-text">{% trans "Exhibitors & Sponsors" %}</span>
+      <span class="sidebar-text">{% trans "Exhibitors" %}</span>
+    </a>
+  </li>
+  <li>
+    <a href="{% url 'plugins:exhibition:sponsors' organizer=request.event.organizer.slug event=request.event.slug %}" {% if url_name == 'sponsors' or url_name == 'sponsors.add' or url_name == 'edit' and request.GET.type == 'sponsor' or url_name == 'delete' and request.GET.type == 'sponsor' or url_name == 'copy_key' and request.GET.type == 'sponsor' %}class="active"{% endif %}>
+      <span class="fa fa-fw fa-star"></span>
+      <span class="sidebar-text">{% trans "Sponsors" %}</span>
     </a>
   </li>
 {% endblock %}

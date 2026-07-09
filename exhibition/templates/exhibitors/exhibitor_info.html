@@ -1,25 +1,40 @@
 {% extends "exhibitors/base.html" %}
 {% load i18n %}
-{% block title %}{{ request.event.name }} - {% trans "Exhibitors & Sponsors" %}{% endblock %}
+{% block title %}{{ request.event.name }} - {% if partner_type == 'sponsor' %}{% trans "Sponsors" %}{% elif partner_type == 'exhibitor' %}{% trans "Exhibitors" %}{% else %}{% trans "Exhibitors & Sponsors" %}{% endif %}{% endblock %}
+{% block exhibitors_header %}
+    <h1>{% if partner_type == 'sponsor' %}{% trans "Sponsors" %}{% elif partner_type == 'exhibitor' %}{% trans "Exhibitors" %}{% else %}{% trans "Exhibitors & Sponsors" %}{% endif %}</h1>
+{% endblock %}
 {% block exhibitors_content %}
+    {% if partner_type == 'sponsor' %}
+        {% url 'plugins:exhibition:sponsors.add' organizer=request.event.organizer.slug event=request.event.slug as add_url %}
+    {% elif partner_type == 'exhibitor' %}
+        {% url 'plugins:exhibition:exhibitors.add' organizer=request.event.organizer.slug event=request.event.slug as add_url %}
+    {% else %}
+        {% url 'plugins:exhibition:add' organizer=request.event.organizer.slug event=request.event.slug as add_url %}
+    {% endif %}
     {% if exhibitors|length == 0 %}
         <div class="empty-collection">
             <p>
-                {% blocktrans trimmed %}
-                    You don't have any exhibitors or sponsors yet.
-                {% endblocktrans %}
+                {% if partner_type == 'sponsor' %}
+                    {% blocktrans trimmed %}You don't have any sponsors yet.{% endblocktrans %}
+                {% elif partner_type == 'exhibitor' %}
+                    {% blocktrans trimmed %}You don't have any exhibitors yet.{% endblocktrans %}
+                {% else %}
+                    {% blocktrans trimmed %}You don't have any exhibitors or sponsors yet.{% endblocktrans %}
+                {% endif %}
             </p>
 
             {% if "can_change_event_settings" in request.eventpermset %}
-                <a href="{% url "plugins:exhibition:add" organizer=request.event.organizer.slug event=request.event.slug %}"
-                        class="btn btn-primary btn-lg"><i class="fa fa-plus"></i> {% trans "Add an Exhibitor or Sponsor" %}
+                <a href="{{ add_url }}" class="btn btn-primary btn-lg"><i class="fa fa-plus"></i>
+                    {% if partner_type == 'sponsor' %}{% trans "Add a Sponsor" %}{% elif partner_type == 'exhibitor' %}{% trans "Add an Exhibitor" %}{% else %}{% trans "Add an Exhibitor or Sponsor" %}{% endif %}
                 </a>
             {% endif %}
         </div>
     {% else %}
         <p>
             {% if "can_change_event_settings" in request.eventpermset %}
-                <a href="{% url "plugins:exhibition:add" organizer=request.event.organizer.slug event=request.event.slug %}" class="btn btn-default"><i class="fa fa-plus"></i> {% trans "Add an Exhibitor or Sponsor" %}
+                <a href="{{ add_url }}" class="btn btn-default"><i class="fa fa-plus"></i>
+                    {% if partner_type == 'sponsor' %}{% trans "Add a Sponsor" %}{% elif partner_type == 'exhibitor' %}{% trans "Add an Exhibitor" %}{% else %}{% trans "Add an Exhibitor or Sponsor" %}{% endif %}
                 </a>
             {% endif %}
         </p>
@@ -38,7 +53,7 @@
                     <tr>
                         <td>
                             {% if "can_change_event_settings" in request.eventpermset %}
-                                <strong><a href="{% url "plugins:exhibition:edit" organizer=request.event.organizer.slug event=request.event.slug pk=e.id %}">
+                                <strong><a href="{% url "plugins:exhibition:edit" organizer=request.event.organizer.slug event=request.event.slug pk=e.id %}?type={{ partner_type }}">
                                     {{ e.name }}
                                 </a></strong>
                             {% else %}
@@ -63,9 +78,9 @@
                         </td>
                         <td class="text-right flip">
                             {% if "can_change_event_settings" in request.eventpermset %}
-                                <a href="{% url "plugins:exhibition:edit" organizer=request.event.organizer.slug event=request.event.slug pk=e.id %}" class="btn btn-default btn-sm"><i class="fa fa-edit"></i></a>
-                                <a href="{% url "plugins:exhibition:copy_key" organizer=request.event.organizer.slug event=request.event.slug pk=e.id %}" class="btn btn-default btn-sm" title="{% trans "Key" %}" data-toggle="tooltip"><i class="fa fa-copy"></i></a>
-                                <a href="{% url "plugins:exhibition:delete" organizer=request.event.organizer.slug event=request.event.slug pk=e.id %}" class="btn btn-delete btn-danger btn-sm"><i class="fa fa-trash"></i></a>
+                                <a href="{% url "plugins:exhibition:edit" organizer=request.event.organizer.slug event=request.event.slug pk=e.id %}?type={{ partner_type }}" class="btn btn-default btn-sm"><i class="fa fa-edit"></i></a>
+                                <a href="{% url "plugins:exhibition:copy_key" organizer=request.event.organizer.slug event=request.event.slug pk=e.id %}?type={{ partner_type }}" class="btn btn-default btn-sm" title="{% trans "Key" %}" data-toggle="tooltip"><i class="fa fa-copy"></i></a>
+                                <a href="{% url "plugins:exhibition:delete" organizer=request.event.organizer.slug event=request.event.slug pk=e.id %}?type={{ partner_type }}" class="btn btn-delete btn-danger btn-sm"><i class="fa fa-trash"></i></a>
                             {% endif %}
                         </td>
                     </tr>

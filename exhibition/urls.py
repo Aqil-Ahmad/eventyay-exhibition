@@ -106,6 +106,26 @@ urlpatterns = [
         name="info",
     ),
     path(
+        "exhibitors/event/<orgslug:organizer>/<slug:event>/exhibitors",
+        ExhibitorListView.as_view(partner_type="exhibitor"),
+        name="exhibitors",
+    ),
+    path(
+        "exhibitors/event/<orgslug:organizer>/<slug:event>/sponsors",
+        ExhibitorListView.as_view(partner_type="sponsor"),
+        name="sponsors",
+    ),
+    path(
+        "exhibitors/event/<orgslug:organizer>/<slug:event>/exhibitors/add",
+        ExhibitorCreateView.as_view(partner_type="exhibitor"),
+        name="exhibitors.add",
+    ),
+    path(
+        "exhibitors/event/<orgslug:organizer>/<slug:event>/sponsors/add",
+        ExhibitorCreateView.as_view(partner_type="sponsor"),
+        name="sponsors.add",
+    ),
+    path(
         "exhibitors/event/<orgslug:organizer>/<slug:event>/call",
         ProposalListView.as_view(),
         name="proposal.list",
