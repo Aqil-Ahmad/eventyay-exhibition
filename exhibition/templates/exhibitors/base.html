@@ -37,12 +37,12 @@
       <ul class="nav nav-second-level">
         <li>
           <a href="{% url 'plugins:exhibition:settings.call' organizer=request.event.organizer.slug event=request.event.slug %}" {% if url_name == 'settings.call' %}class="active"{% endif %}>
-            <span class="sidebar-text">{% trans "Configuration" %}</span>
+            <span class="sidebar-text">{% trans "Announcement" %}</span>
           </a>
         </li>
         <li>
           <a href="{% url 'plugins:exhibition:call.questions' organizer=request.event.organizer.slug event=request.event.slug %}" {% if url_name == 'call.questions' or url_name == 'call.questions.add' or url_name == 'call.questions.edit' or url_name == 'call.questions.delete' %}class="active"{% endif %}>
-            <span class="sidebar-text">{% trans "Proposal Form" %}</span>
+            <span class="sidebar-text">{% trans "Form" %}</span>
           </a>
         </li>
       </ul>
