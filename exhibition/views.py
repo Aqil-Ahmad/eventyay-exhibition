@@ -32,9 +32,10 @@ from .forms import (
     social_link_prefixes,
 )
 from .models import (
-    PROPOSAL_DEFAULT_FIELD_KEYS,
-    PROPOSAL_DEFAULT_FIELDS,
+    CALL_DEFAULT_FIELD_KEYS,
+    CALL_DEFAULT_FIELDS,
     PROPOSAL_FORMSET_FIELD_KEYS,
+    ExhibitionCall,
     ExhibitionProposal,
     ExhibitionProposalState,
     ExhibitionQuestion,
@@ -66,19 +67,15 @@ class PublicEventLoginRequiredMixin(LoginRequiredMixin):
         return reverse("cfp:event.login", kwargs=event_kwargs(self.request.event))
 
 
-class PublicCallEnabledMixin:
-    hide_after_deadline = False
-
-    def get_exhibition_settings(self):
-        return ExhibitorSettings.objects.get_or_create(event=self.request.event)[0]
-
-    def dispatch(self, request, *args, **kwargs):
-        settings = self.get_exhibition_settings()
-        if not settings.call_enabled:
+class CallViewMixin:
+    def get_call(self):
+        call = getattr(self, "call", None)
+        if call is not None:
+            return call
+        call_type = self.kwargs.get("call_type")
+        if call_type not in (ExhibitionCall.EXHIBITOR, ExhibitionCall.SPONSOR):
             raise Http404()
-        if self.hide_after_deadline and settings.call_hide_after_deadline and not settings.call_is_open:
-            raise Http404()
-        return super().dispatch(request, *args, **kwargs)
+        return get_object_or_404(ExhibitionCall, event=self.request.event, call_type=call_type)
 
 
 class SettingsView(EventPermissionRequiredMixin, ListView):
@@ -97,9 +94,16 @@ class SettingsView(EventPermissionRequiredMixin, ListView):
             return "exhibitors"
         return tab
 
-    def get_settings_url(self, tab):
+    def get_settings_url(self, tab, call_type=None):
+        if tab == "call":
+            return reverse(
+                "plugins:exhibition:settings.call",
+                kwargs={
+                    **event_kwargs(self.request.event),
+                    "call_type": call_type or self.get_call_type(),
+                },
+            )
         route_names = {
-            "call": "plugins:exhibition:settings.call",
             "sponsors": "plugins:exhibition:settings.sponsors",
         }
         route_name = route_names.get(tab, "plugins:exhibition:settings.exhibitors")
@@ -107,6 +111,16 @@ class SettingsView(EventPermissionRequiredMixin, ListView):
             route_name,
             kwargs=event_kwargs(self.request.event),
         )
+
+    def get_call_type(self):
+        call_type = self.kwargs.get("call_type") or self.request.GET.get("call") or self.request.POST.get("call")
+        if call_type not in (ExhibitionCall.EXHIBITOR, ExhibitionCall.SPONSOR):
+            return ExhibitionCall.EXHIBITOR
+        return call_type
+
+    def get_call(self, call_type=None):
+        call_type = call_type or self.get_call_type()
+        return ExhibitionCall.objects.get_or_create(event=self.request.event, call_type=call_type)[0]
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
@@ -134,14 +148,16 @@ class SettingsView(EventPermissionRequiredMixin, ListView):
             initial={"level": self.get_next_sponsor_group_level()},
             prefix="new-group",
         )
+        call = self.get_call()
+        ctx["call"] = call
+        ctx["call_type"] = call.call_type
+        ctx["call_types"] = ExhibitionCall.TYPE_CHOICES
         ctx["call_settings_form"] = kwargs.get("call_settings_form") or CallSettingsForm(
-            instance=settings,
+            instance=call,
             event=self.request.event,
         )
         if ctx["active_tab"] == "call":
-            # Server-render the saved Call text (per language, matching the
-            # preview endpoint) so the preview tab is not blank on load.
-            call_text = settings.call_text.data
+            call_text = call.text.data
             if not isinstance(call_text, dict):
                 call_text = dict.fromkeys(self.request.event.settings.locales, call_text or "")
             ctx["call_text_previews"] = [
@@ -169,15 +185,16 @@ class SettingsView(EventPermissionRequiredMixin, ListView):
             return redirect(self.get_settings_url("exhibitors"))
 
         if action == "save_call_settings":
+            call = self.get_call()
             form = CallSettingsForm(
                 request.POST,
-                instance=settings,
+                instance=call,
                 event=request.event,
             )
             if form.is_valid():
                 form.save()
                 messages.success(self.request, _("Call settings have been saved."))
-                return redirect(self.get_settings_url("call"))
+                return redirect(self.get_settings_url("call", call.call_type))
             return self.render_to_response(self.get_context_data(call_settings_form=form))
 
         if action == "add_group":
@@ -322,36 +339,52 @@ class PublicExhibitorDetailView(DetailView):
         return context
 
 
-class PublicCallView(PublicCallEnabledMixin, TemplateView):
+class PublicCallView(CallViewMixin, TemplateView):
     template_name = "exhibitors/public_call.html"
-    hide_after_deadline = True
+
+    def dispatch(self, request, *args, **kwargs):
+        self.call = self.get_call()
+        if not self.call.enabled:
+            raise Http404()
+        if self.call.hide_after_deadline and not self.call.is_open:
+            raise Http404()
+        return super().dispatch(request, *args, **kwargs)
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context["event"] = self.request.event
-        context["settings"] = self.get_exhibition_settings()
+        context["call"] = self.call
         if self.request.user.is_authenticated:
             context["user_proposals"] = ExhibitionProposal.objects.filter(
                 event=self.request.event,
                 user=self.request.user,
+                call=self.call,
             )
         return context
 
 
-class UserProposalListView(PublicCallEnabledMixin, PublicEventLoginRequiredMixin, ListView):
+class UserProposalListView(PublicEventLoginRequiredMixin, ListView):
     model = ExhibitionProposal
     template_name = "exhibitors/public_proposal_list.html"
     context_object_name = "proposals"
 
     def get_queryset(self):
-        return ExhibitionProposal.objects.filter(
-            event=self.request.event,
-            user=self.request.user,
-        ).order_by("-updated", "-created")
+        return (
+            ExhibitionProposal.objects.filter(
+                event=self.request.event,
+                user=self.request.user,
+            )
+            .select_related("call")
+            .order_by("-updated", "-created")
+        )
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context["settings"] = self.get_exhibition_settings()
+        context["open_calls"] = [
+            call
+            for call in ExhibitionCall.objects.filter(event=self.request.event, enabled=True).order_by("call_type")
+            if call.is_open
+        ]
         return context
 
 
@@ -359,12 +392,19 @@ class ProposalLinkFormsetMixin:
     social_formset_prefix = "social_links"
     extra_formset_prefix = "extra_links"
 
+    def get_proposal_call(self):
+        call = getattr(self, "call", None)
+        if call is not None:
+            return call
+        obj = getattr(self, "object", None)
+        return obj.call if obj is not None else None
+
     def get_proposal_field_settings(self):
-        settings = ExhibitorSettings.objects.get_or_create(event=self.request.event)[0]
-        return settings.normalized_proposal_field_settings
+        call = self.get_proposal_call()
+        return call.normalized_field_settings if call else {}
 
     def proposal_field_is_active(self, key):
-        return self.get_proposal_field_settings()[key]["active"]
+        return bool(self.get_proposal_field_settings().get(key, {}).get("active"))
 
     def get_formset_instance(self):
         obj = getattr(self, "object", None)
@@ -412,7 +452,7 @@ class ProposalLinkFormsetMixin:
             getattr(self, "extra_links_formset", None) or self.get_extra_link_formset(),
         )
         context["social_link_prefixes"] = social_link_prefixes()
-        context["settings"] = self.get_exhibition_settings()
+        context["call"] = self.get_proposal_call()
         context["show_social_links"] = self.proposal_field_is_active("social_links")
         context["show_extra_links"] = self.proposal_field_is_active("extra_links")
         context.setdefault("can_edit", True)
@@ -432,7 +472,7 @@ class ProposalLinkFormsetMixin:
 
 class UserProposalCreateView(
     ProposalLinkFormsetMixin,
-    PublicCallEnabledMixin,
+    CallViewMixin,
     PublicEventLoginRequiredMixin,
     CreateView,
 ):
@@ -441,19 +481,24 @@ class UserProposalCreateView(
     template_name = "exhibitors/public_proposal_form.html"
 
     def dispatch(self, request, *args, **kwargs):
-        settings = ExhibitorSettings.objects.get_or_create(event=request.event)[0]
-        if not settings.call_enabled:
+        self.call = self.get_call()
+        if not self.call.enabled:
             raise Http404()
-        if not settings.call_is_open:
-            if settings.call_hide_after_deadline:
+        if not self.call.is_open:
+            if self.call.hide_after_deadline:
                 raise Http404()
-            messages.error(request, _("The call for exhibitors is closed."))
-            return redirect("plugins:exhibition:public_call", **event_kwargs(request.event))
+            messages.error(request, _("This call is closed."))
+            return redirect(
+                "plugins:exhibition:public_call",
+                call_type=self.call.call_type,
+                **event_kwargs(request.event),
+            )
         return super().dispatch(request, *args, **kwargs)
 
     def get_form_kwargs(self):
         kwargs = super().get_form_kwargs()
         kwargs["event"] = self.request.event
+        kwargs["call"] = self.call
         return kwargs
 
     def post(self, request, *args, **kwargs):
@@ -464,6 +509,7 @@ class UserProposalCreateView(
     def form_valid(self, form):
         form.instance.event = self.request.event
         form.instance.user = self.request.user
+        form.instance.call = self.call
         if self.request.POST.get("action") == "draft":
             form.instance.state = ExhibitionProposalState.DRAFT
             form.instance.submitted = None
@@ -484,7 +530,6 @@ class UserProposalCreateView(
 
 class UserProposalEditView(
     ProposalLinkFormsetMixin,
-    PublicCallEnabledMixin,
     PublicEventLoginRequiredMixin,
     UpdateView,
 ):
@@ -495,18 +540,23 @@ class UserProposalEditView(
     slug_url_kwarg = "code"
 
     def get_queryset(self):
-        return ExhibitionProposal.objects.filter(
-            event=self.request.event,
-            user=self.request.user,
-        ).prefetch_related("answers", "answers__options")
+        return (
+            ExhibitionProposal.objects.filter(
+                event=self.request.event,
+                user=self.request.user,
+            )
+            .select_related("call")
+            .prefetch_related("answers", "answers__options")
+        )
 
     def can_edit(self):
-        settings = self.get_exhibition_settings()
-        return self.object.editable and settings.call_is_open
+        call = self.object.call
+        return self.object.editable and bool(call and call.is_open)
 
     def get_form_kwargs(self):
         kwargs = super().get_form_kwargs()
         kwargs["event"] = self.request.event
+        kwargs["call"] = self.object.call
         kwargs["read_only"] = not self.can_edit()
         return kwargs
 
@@ -654,9 +704,8 @@ class CallTextPreviewView(EventPermissionRequiredMixin, View):
     permission = "can_change_settings"
 
     def post(self, request, *args, **kwargs):
-        widget = CallSettingsForm(event=request.event).fields["call_text"].widget
-        # The i18n widget returns values as a list indexed by global LANGUAGES order.
-        values = widget.value_from_datadict(request.POST, request.FILES, "call_text")
+        widget = CallSettingsForm(event=request.event).fields["text"].widget
+        values = widget.value_from_datadict(request.POST, request.FILES, "text")
         if not isinstance(values, (list, tuple)):
             values = [values]
         event_locales = set(request.event.settings.locales)
@@ -796,15 +845,21 @@ class ExhibitionQuestionListView(EventPermissionRequiredMixin, ListView):
     def get_queryset(self):
         return ExhibitionQuestion.objects.filter(event=self.request.event).annotate(answer_count=Count("answers"))
 
+    def get_call(self):
+        call_type = self.kwargs.get("call_type")
+        if call_type not in (ExhibitionCall.EXHIBITOR, ExhibitionCall.SPONSOR):
+            call_type = ExhibitionCall.EXHIBITOR
+        return ExhibitionCall.objects.get_or_create(event=self.request.event, call_type=call_type)[0]
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        settings = ExhibitorSettings.objects.get_or_create(event=self.request.event)[0]
-        field_settings = settings.normalized_proposal_field_settings
-        answer_counts = self.get_default_field_answer_counts()
-        field_definitions = {field["key"]: field for field in PROPOSAL_DEFAULT_FIELDS}
+        call = self.get_call()
+        field_settings = call.normalized_field_settings
+        answer_counts = self.get_default_field_answer_counts(call)
+        field_definitions = {field["key"]: field for field in CALL_DEFAULT_FIELDS}
         ordered_keys = [
-            key for key in settings.ordered_proposal_field_keys if key not in PROPOSAL_FORMSET_FIELD_KEYS
-        ] + [key for key in PROPOSAL_DEFAULT_FIELD_KEYS if key in PROPOSAL_FORMSET_FIELD_KEYS]
+            key for key in call.ordered_field_keys if key not in PROPOSAL_FORMSET_FIELD_KEYS
+        ] + [key for key in CALL_DEFAULT_FIELD_KEYS if key in PROPOSAL_FORMSET_FIELD_KEYS]
         context["default_fields"] = [
             {
                 **field_definitions[key],
@@ -816,10 +871,13 @@ class ExhibitionQuestionListView(EventPermissionRequiredMixin, ListView):
             }
             for key in ordered_keys
         ]
+        context["call"] = call
+        context["call_type"] = call.call_type
+        context["call_types"] = ExhibitionCall.TYPE_CHOICES
         return context
 
-    def get_default_field_answer_counts(self):
-        proposals = ExhibitionProposal.objects.filter(event=self.request.event).exclude(
+    def get_default_field_answer_counts(self, call):
+        proposals = ExhibitionProposal.objects.filter(event=self.request.event, call=call).exclude(
             state=ExhibitionProposalState.DRAFT
         )
         file_has_value = {
@@ -838,7 +896,6 @@ class ExhibitionQuestionListView(EventPermissionRequiredMixin, ListView):
             "notes",
         )
         counts = {
-            "applying_for": proposals.filter(Q(is_exhibitor=True) | Q(is_sponsor=True)).count(),
             "name": proposals.count(),
             "social_links": proposals.filter(social_links__isnull=False).distinct().count(),
             "extra_links": proposals.filter(extra_links__isnull=False).distinct().count(),
@@ -853,28 +910,28 @@ class ExhibitionQuestionListView(EventPermissionRequiredMixin, ListView):
         return counts
 
     def post(self, request, *args, **kwargs):
-        settings = ExhibitorSettings.objects.get_or_create(event=request.event)[0]
+        call = self.get_call()
 
         order_param = request.POST.get("order")
         if order_param:
-            self.save_field_order(settings, order_param)
+            self.save_field_order(call, order_param)
             return HttpResponse(status=204)
 
-        proposal_field_settings = settings.normalized_proposal_field_settings
+        field_settings = call.normalized_field_settings
 
-        for field in PROPOSAL_DEFAULT_FIELDS:
+        for field in CALL_DEFAULT_FIELDS:
             key = field["key"]
             is_active = field.get("active_locked") or request.POST.get(f"{key}_active") == "on"
-            proposal_field_settings[key]["active"] = is_active
-            proposal_field_settings[key]["required"] = is_active and (
+            field_settings[key]["active"] = is_active
+            field_settings[key]["required"] = is_active and (
                 field.get("required_locked")
                 or (field.get("supports_required", True) and request.POST.get(f"{key}_required") == "on")
             )
             if field.get("supports_required") is False:
-                proposal_field_settings[key]["required"] = False
+                field_settings[key]["required"] = False
 
-        settings.proposal_field_settings = proposal_field_settings
-        settings.save(update_fields=["proposal_field_settings"])
+        call.field_settings = field_settings
+        call.save(update_fields=["field_settings"])
 
         questions = list(ExhibitionQuestion.objects.filter(event=request.event))
         for question in questions:
@@ -884,31 +941,54 @@ class ExhibitionQuestionListView(EventPermissionRequiredMixin, ListView):
             ExhibitionQuestion.objects.bulk_update(questions, ["active", "required"])
 
         messages.success(request, _("Proposal form settings have been saved."))
-        return redirect("plugins:exhibition:call.questions", **event_kwargs(request.event))
+        return redirect(
+            "plugins:exhibition:call.questions",
+            **event_kwargs(request.event),
+            call_type=call.call_type,
+        )
 
-    def save_field_order(self, settings, order_str):
-        proposal_field_settings = settings.normalized_proposal_field_settings
-        orderable_keys = [key for key in PROPOSAL_DEFAULT_FIELD_KEYS if key not in PROPOSAL_FORMSET_FIELD_KEYS]
+    def save_field_order(self, call, order_str):
+        field_settings = call.normalized_field_settings
+        orderable_keys = [key for key in CALL_DEFAULT_FIELD_KEYS if key not in PROPOSAL_FORMSET_FIELD_KEYS]
         orderable_key_set = set(orderable_keys)
         seen = set()
         position = 0
         for key in order_str.split(","):
             if key in orderable_key_set and key not in seen:
                 seen.add(key)
-                proposal_field_settings[key]["position"] = position
+                field_settings[key]["position"] = position
                 position += 1
         for key in orderable_keys:
             if key not in seen:
-                proposal_field_settings[key]["position"] = position
+                field_settings[key]["position"] = position
                 position += 1
         for key in PROPOSAL_FORMSET_FIELD_KEYS:
-            proposal_field_settings[key]["position"] = position
+            field_settings[key]["position"] = position
             position += 1
-        settings.proposal_field_settings = proposal_field_settings
-        settings.save(update_fields=["proposal_field_settings"])
+        call.field_settings = field_settings
+        call.save(update_fields=["field_settings"])
 
 
-class ExhibitionQuestionCreateView(EventPermissionRequiredMixin, CreateView):
+class CallQuestionRedirectMixin:
+    def get_call_type(self):
+        call_type = self.request.GET.get("call") or self.request.POST.get("call")
+        if call_type not in (ExhibitionCall.EXHIBITOR, ExhibitionCall.SPONSOR):
+            return ExhibitionCall.EXHIBITOR
+        return call_type
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["call_type"] = self.get_call_type()
+        return context
+
+    def get_success_url(self):
+        return reverse(
+            "plugins:exhibition:call.questions",
+            kwargs={**event_kwargs(self.request.event), "call_type": self.get_call_type()},
+        )
+
+
+class ExhibitionQuestionCreateView(CallQuestionRedirectMixin, EventPermissionRequiredMixin, CreateView):
     model = ExhibitionQuestion
     form_class = ExhibitionQuestionForm
     permission = "can_change_settings"
@@ -919,14 +999,8 @@ class ExhibitionQuestionCreateView(EventPermissionRequiredMixin, CreateView):
         kwargs["event"] = self.request.event
         return kwargs
 
-    def get_success_url(self):
-        return reverse(
-            "plugins:exhibition:call.questions",
-            kwargs=event_kwargs(self.request.event),
-        )
 
-
-class ExhibitionQuestionEditView(EventPermissionRequiredMixin, UpdateView):
+class ExhibitionQuestionEditView(CallQuestionRedirectMixin, EventPermissionRequiredMixin, UpdateView):
     model = ExhibitionQuestion
     form_class = ExhibitionQuestionForm
     permission = "can_change_settings"
@@ -940,26 +1014,14 @@ class ExhibitionQuestionEditView(EventPermissionRequiredMixin, UpdateView):
         kwargs["event"] = self.request.event
         return kwargs
 
-    def get_success_url(self):
-        return reverse(
-            "plugins:exhibition:call.questions",
-            kwargs=event_kwargs(self.request.event),
-        )
 
-
-class ExhibitionQuestionDeleteView(EventPermissionRequiredMixin, DeleteView):
+class ExhibitionQuestionDeleteView(CallQuestionRedirectMixin, EventPermissionRequiredMixin, DeleteView):
     model = ExhibitionQuestion
     permission = "can_change_settings"
     template_name = "exhibitors/call_question_delete.html"
 
     def get_queryset(self):
         return ExhibitionQuestion.objects.filter(event=self.request.event)
-
-    def get_success_url(self):
-        return reverse(
-            "plugins:exhibition:call.questions",
-            kwargs=event_kwargs(self.request.event),
-        )
 
 
 class ExhibitorCreateView(ExhibitorLinkFormsetMixin, EventPermissionRequiredMixin, CreateView):

@@ -5,6 +5,7 @@ from django.templatetags.static import static
 from django.urls import reverse
 from django.utils.html import format_html, format_html_join
 from django.utils.translation import gettext_lazy as _
+from eventyay.common.utils.language import localize_event_text
 from eventyay.control.signals import event_dashboard_components
 from eventyay.presale.signals import (
     front_page_after_content,
@@ -12,7 +13,7 @@ from eventyay.presale.signals import (
     html_head,
 )
 
-from .models import ExhibitorInfo, ExhibitorSettings, SponsorGroup
+from .models import ExhibitionCall, ExhibitorInfo, SponsorGroup
 from .utils import add_external_image_csp_sources, public_exhibitors_queryset
 
 
@@ -117,11 +118,10 @@ def exhibition_presale_nav_tab(sender, request=None, **kwargs):
             )
         )
 
-    settings = ExhibitorSettings.objects.filter(
-        event=sender,
-        call_enabled=True,
-    ).first()
-    if settings and (settings.call_is_open or not settings.call_hide_after_deadline):
+    for call in ExhibitionCall.objects.filter(event=sender, enabled=True).order_by("call_type"):
+        if not (call.is_open or not call.hide_after_deadline):
+            continue
+        call_label = localize_event_text(call.headline) or call.default_headline
         links.append(
             format_html(
                 '<a href="{}" class="header-tab {}"><i class="fa fa-handshake-o"></i> {}</a>',
@@ -130,10 +130,11 @@ def exhibition_presale_nav_tab(sender, request=None, **kwargs):
                     kwargs={
                         "organizer": sender.organizer.slug,
                         "event": sender.slug,
+                        "call_type": call.call_type,
                     },
                 ),
-                "active" if "/exhibition/call/" in request.path_info else "",
-                _("Call for Exhibitors"),
+                "active" if f"/exhibition/call/{call.call_type}/" in request.path_info else "",
+                call_label,
             )
         )
 

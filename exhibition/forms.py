@@ -16,6 +16,7 @@ from eventyay.common.utils.language import localize_event_text
 
 from .models import (
     ExhibitionAnswer,
+    ExhibitionCall,
     ExhibitionProposal,
     ExhibitionProposalExtraLink,
     ExhibitionProposalSocialLink,
@@ -347,26 +348,26 @@ class SponsorGroupForm(I18nModelForm):
 
 class CallSettingsForm(I18nModelForm):
     class Meta:
-        model = ExhibitorSettings
+        model = ExhibitionCall
         localized_fields = "__all__"
         fields = [
-            "call_enabled",
-            "call_headline",
-            "call_text",
-            "call_deadline",
-            "call_hide_after_deadline",
+            "enabled",
+            "headline",
+            "text",
+            "deadline",
+            "hide_after_deadline",
         ]
         labels = {
-            "call_enabled": _("Publish Call"),
-            "call_hide_after_deadline": _("Hide call page after the deadline"),
+            "enabled": _("Publish Call"),
+            "hide_after_deadline": _("Hide call page after the deadline"),
         }
         widgets = {
-            "call_deadline": HtmlDateTimeInput,
+            "deadline": HtmlDateTimeInput,
         }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        widget = self.fields["call_text"].widget
+        widget = self.fields["text"].widget
         if isinstance(widget, forms.MultiWidget):
             for sub_widget in widget.widgets:
                 sub_widget.attrs.setdefault("rows", 8)
@@ -508,16 +509,6 @@ class ExhibitionQuestionFieldsMixin:
 
 
 class ExhibitionProposalForm(ExhibitionQuestionFieldsMixin, I18nModelForm):
-    applying_for = forms.ChoiceField(
-        choices=(
-            ("exhibitor", _("Exhibitor")),
-            ("sponsor", _("Sponsor")),
-            ("both", _("Exhibitor and sponsor")),
-        ),
-        initial="exhibitor",
-        label=_("Application type"),
-        widget=forms.RadioSelect,
-    )
     slides_url = forms.URLField(
         required=False,
         label=_("Slides URL"),
@@ -540,7 +531,6 @@ class ExhibitionProposalForm(ExhibitionQuestionFieldsMixin, I18nModelForm):
         "header_image": "header_image_url",
     }
     setting_field_map = {
-        "applying_for": ("applying_for",),
         "name": ("name",),
         "description": ("description",),
         "email": ("email",),
@@ -591,20 +581,20 @@ class ExhibitionProposalForm(ExhibitionQuestionFieldsMixin, I18nModelForm):
         }
 
     def __init__(self, *args, **kwargs):
+        self.call = kwargs.pop("call", None)
         event = kwargs.get("event")
         self.read_only = kwargs.pop("read_only", False)
         instance = kwargs.get("instance")
         super().__init__(*args, **kwargs)
         self.event = event or getattr(instance, "event", None)
-        self.exhibition_settings = None
+        if self.call is None and instance is not None:
+            self.call = instance.call
         self.active_proposal_fields = {}
         self.required_proposal_fields = {}
-        if self.event:
-            self.exhibition_settings = ExhibitorSettings.objects.get_or_create(event=self.event)[0]
-            proposal_field_settings = self.exhibition_settings.normalized_proposal_field_settings
-            self.active_proposal_fields = {key: value["active"] for key, value in proposal_field_settings.items()}
-            self.required_proposal_fields = {key: value["required"] for key, value in proposal_field_settings.items()}
-        self.fields["applying_for"].initial = self.get_applying_for_initial(instance)
+        if self.call:
+            field_settings = self.call.normalized_field_settings
+            self.active_proposal_fields = {key: value["active"] for key, value in field_settings.items()}
+            self.required_proposal_fields = {key: value["required"] for key, value in field_settings.items()}
         for field_name in ("logo", "header_image"):
             if field_name in self.fields:
                 self.fields[field_name].widget.attrs.setdefault("accept", "image/*")
@@ -618,9 +608,10 @@ class ExhibitionProposalForm(ExhibitionQuestionFieldsMixin, I18nModelForm):
                     sub_widget.attrs.setdefault("rows", 4)
             else:
                 widget.attrs.setdefault("rows", 4)
-        if self.event:
+        if self.call:
             self.apply_proposal_field_settings()
             self.apply_proposal_field_order()
+        if self.event:
             self.inject_exhibition_questions(
                 event=self.event,
                 proposal=instance,
@@ -629,16 +620,6 @@ class ExhibitionProposalForm(ExhibitionQuestionFieldsMixin, I18nModelForm):
         if self.read_only:
             for field in self.fields.values():
                 field.disabled = True
-
-    @staticmethod
-    def get_applying_for_initial(instance):
-        if not instance:
-            return "exhibitor"
-        if instance.is_exhibitor and instance.is_sponsor:
-            return "both"
-        if instance.is_sponsor:
-            return "sponsor"
-        return "exhibitor"
 
     def apply_proposal_field_settings(self):
         file_field_keys = set(self.file_url_fields)
@@ -658,10 +639,10 @@ class ExhibitionProposalForm(ExhibitionQuestionFieldsMixin, I18nModelForm):
                     self.fields[field_name].required = is_required
 
     def apply_proposal_field_order(self):
-        if not self.exhibition_settings:
+        if not self.call:
             return
         ordered_field_names = []
-        for key in self.exhibition_settings.ordered_proposal_field_keys:
+        for key in self.call.ordered_field_keys:
             for field_name in self.setting_field_map.get(key, ()):
                 if field_name in self.fields:
                     ordered_field_names.append(field_name)
@@ -675,9 +656,12 @@ class ExhibitionProposalForm(ExhibitionQuestionFieldsMixin, I18nModelForm):
 
     def clean(self):
         cleaned_data = super().clean()
-        applying_for = cleaned_data.get("applying_for")
-        cleaned_data["is_exhibitor"] = applying_for in {"exhibitor", "both"}
-        cleaned_data["is_sponsor"] = applying_for in {"sponsor", "both"}
+        if self.call:
+            cleaned_data["is_sponsor"] = self.call.is_sponsor_call
+            cleaned_data["is_exhibitor"] = not self.call.is_sponsor_call
+        else:
+            cleaned_data.setdefault("is_exhibitor", True)
+            cleaned_data.setdefault("is_sponsor", False)
 
         if "video_url" in self.fields and (video_url := cleaned_data.get("video_url")):
             cleaned_data["video_url"] = normalize_url_scheme(video_url)

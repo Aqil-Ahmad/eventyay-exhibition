@@ -161,28 +161,27 @@ def get_default_proposal_field_definition(key):
     return next(field for field in PROPOSAL_DEFAULT_FIELDS if field["key"] == key)
 
 
+CALL_DEFAULT_FIELDS = tuple(field for field in PROPOSAL_DEFAULT_FIELDS if field["key"] != "applying_for")
+
+CALL_DEFAULT_FIELD_KEYS = tuple(field["key"] for field in CALL_DEFAULT_FIELDS)
+
+
+def default_call_field_settings():
+    return {
+        field["key"]: {
+            "active": field.get("active", True),
+            "required": field.get("required", False),
+            "position": index,
+        }
+        for index, field in enumerate(CALL_DEFAULT_FIELDS)
+    }
+
+
 class ExhibitorSettings(models.Model):
     event = models.ForeignKey("base.Event", on_delete=models.CASCADE)
     exhibitors_access_mail_subject = models.CharField(max_length=255)
     exhibitors_access_mail_body = models.TextField()
     allowed_fields = models.JSONField(default=list)
-    call_enabled = models.BooleanField(default=False)
-    call_headline = I18nCharField(
-        max_length=200,
-        blank=True,
-        verbose_name=_("Call headline"),
-    )
-    call_text = I18nTextField(
-        blank=True,
-        verbose_name=_("Call text"),
-    )
-    call_deadline = models.DateTimeField(
-        null=True,
-        blank=True,
-        verbose_name=_("Submission deadline"),
-    )
-    call_hide_after_deadline = models.BooleanField(default=False)
-    proposal_field_settings = models.JSONField(default=default_proposal_field_settings)
 
     @property
     def all_allowed_fields(self):
@@ -190,17 +189,49 @@ class ExhibitorSettings(models.Model):
         default_fields = ["attendee_name", "attendee_email"]
         return list(set(default_fields + self.allowed_fields))
 
-    @property
-    def call_is_open(self):
-        if not self.call_enabled:
-            return False
-        return not self.call_deadline or self.call_deadline >= timezone.now()
+    class Meta:
+        unique_together = ("event",)
+
+
+class ExhibitionCall(models.Model):
+    EXHIBITOR = "exhibitor"
+    SPONSOR = "sponsor"
+    TYPE_CHOICES = (
+        (EXHIBITOR, _("Exhibitor")),
+        (SPONSOR, _("Sponsor")),
+    )
+
+    event = models.ForeignKey(Event, on_delete=models.CASCADE, related_name="exhibition_calls")
+    call_type = models.CharField(max_length=20, choices=TYPE_CHOICES)
+    enabled = models.BooleanField(default=False)
+    headline = I18nCharField(max_length=200, blank=True, verbose_name=_("Call headline"))
+    text = I18nTextField(blank=True, verbose_name=_("Call text"))
+    deadline = models.DateTimeField(null=True, blank=True, verbose_name=_("Submission deadline"))
+    hide_after_deadline = models.BooleanField(default=False)
+    field_settings = models.JSONField(default=default_call_field_settings)
+
+    class Meta:
+        unique_together = ("event", "call_type")
 
     @property
-    def normalized_proposal_field_settings(self):
-        stored_settings = self.proposal_field_settings or {}
-        normalized = default_proposal_field_settings()
-        for index, field in enumerate(PROPOSAL_DEFAULT_FIELDS):
+    def is_sponsor_call(self):
+        return self.call_type == self.SPONSOR
+
+    @property
+    def default_headline(self):
+        return _("Call for Sponsors") if self.is_sponsor_call else _("Call for Exhibitors")
+
+    @property
+    def is_open(self):
+        if not self.enabled:
+            return False
+        return not self.deadline or self.deadline >= timezone.now()
+
+    @property
+    def normalized_field_settings(self):
+        stored_settings = self.field_settings or {}
+        normalized = default_call_field_settings()
+        for index, field in enumerate(CALL_DEFAULT_FIELDS):
             key = field["key"]
             stored_field = stored_settings.get(key, {})
             normalized[key]["active"] = bool(stored_field.get("active", normalized[key]["active"]))
@@ -217,22 +248,19 @@ class ExhibitorSettings(models.Model):
         return normalized
 
     @property
-    def ordered_proposal_field_keys(self):
-        normalized = self.normalized_proposal_field_settings
-        default_index = {key: i for i, key in enumerate(PROPOSAL_DEFAULT_FIELD_KEYS)}
+    def ordered_field_keys(self):
+        normalized = self.normalized_field_settings
+        default_index = {key: i for i, key in enumerate(CALL_DEFAULT_FIELD_KEYS)}
         return sorted(
-            PROPOSAL_DEFAULT_FIELD_KEYS,
+            CALL_DEFAULT_FIELD_KEYS,
             key=lambda key: (normalized[key]["position"], default_index[key]),
         )
 
-    def proposal_field_is_active(self, key):
-        return self.normalized_proposal_field_settings[key]["active"]
+    def field_is_active(self, key):
+        return self.normalized_field_settings[key]["active"]
 
-    def proposal_field_is_required(self, key):
-        return self.normalized_proposal_field_settings[key]["required"]
-
-    class Meta:
-        unique_together = ("event",)
+    def field_is_required(self, key):
+        return self.normalized_field_settings[key]["required"]
 
 
 class SponsorGroup(models.Model):
@@ -394,6 +422,13 @@ class ExhibitionProposal(models.Model):
         Event,
         on_delete=models.CASCADE,
         related_name="exhibition_proposals",
+    )
+    call = models.ForeignKey(
+        "ExhibitionCall",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="proposals",
     )
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,

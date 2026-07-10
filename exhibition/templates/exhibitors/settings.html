@@ -39,19 +39,32 @@ Using the following access code: {exhibitor_access_code}
 Best regards, Your {event} team{% endblocktrans %}
 
     {% if active_tab == "call" %}
+            <ul class="nav nav-tabs">
+                {% for value, label in call_types %}
+                    <li {% if value == call_type %}class="active"{% endif %}>
+                        <a href="{% url 'plugins:exhibition:settings.call' organizer=request.event.organizer.slug event=request.event.slug call_type=value %}">
+                            {{ label }}
+                        </a>
+                    </li>
+                {% endfor %}
+            </ul>
             <form action="" method="post" class="form-horizontal">
                 {% csrf_token %}
                 <input type="hidden" name="action" value="save_call_settings">
                 <input type="hidden" name="tab" value="call">
                 {% bootstrap_form_errors call_settings_form %}
                 <fieldset>
-                    <legend>{% trans "Call for Exhibitors" %}</legend>
-                    <p>{% trans "Publish a login-required application form for exhibitors and sponsors." %}</p>
-                    {% bootstrap_field call_settings_form.call_enabled layout="control" %}
-                    {% bootstrap_field call_settings_form.call_headline layout="control" %}
+                    <legend>{{ call.default_headline }}</legend>
+                    {% if call.is_sponsor_call %}
+                        <p>{% trans "Publish a login-required application form for sponsors." %}</p>
+                    {% else %}
+                        <p>{% trans "Publish a login-required application form for exhibitors." %}</p>
+                    {% endif %}
+                    {% bootstrap_field call_settings_form.enabled layout="control" %}
+                    {% bootstrap_field call_settings_form.headline layout="control" %}
                     <div id="call_text_panel" class="form-group call-text-group">
-                        <label class="col-md-3 control-label" for="{{ call_settings_form.call_text.id_for_label }}">
-                            <span class="label-text">{{ call_settings_form.call_text.label }}</span>
+                        <label class="col-md-3 control-label" for="{{ call_settings_form.text.id_for_label }}">
+                            <span class="label-text">{{ call_settings_form.text.label }}</span>
                             <br><span class="optional">{% trans "Optional" %}</span>
                             <br><span class="optional">{% trans "Supports Markdown" %}</span>
                         </label>
@@ -66,7 +79,7 @@ Best regards, Your {event} team{% endblocktrans %}
                             </ul>
                             <div class="tab-content">
                                 <div id="call_text_edit" class="tab-pane fade in active">
-                                    {% bootstrap_field call_settings_form.call_text show_label=False form_group_class="" %}
+                                    {% bootstrap_field call_settings_form.text show_label=False form_group_class="" %}
                                 </div>
                                 <div id="call_text_preview" class="tab-pane call-text-preview-group"
                                      data-preview-url="{% url 'plugins:exhibition:settings.call.preview' organizer=request.event.organizer.slug event=request.event.slug %}">
@@ -80,16 +93,16 @@ Best regards, Your {event} team{% endblocktrans %}
                             </div>
                         </div>
                     </div>
-                    {% bootstrap_field call_settings_form.call_deadline layout="control" %}
-                    {% bootstrap_field call_settings_form.call_hide_after_deadline layout="control" %}
+                    {% bootstrap_field call_settings_form.deadline layout="control" %}
+                    {% bootstrap_field call_settings_form.hide_after_deadline layout="control" %}
                 </fieldset>
                 <div class="form-group submit-group">
                     <div class="col-md-9 col-md-offset-3">
                         <button type="submit" class="btn btn-primary btn-save">
                             {% trans "Save" %}
                         </button>
-                        {% if settings.call_enabled %}
-                            <a class="btn btn-default" href="{% url 'plugins:exhibition:public_call' organizer=request.event.organizer.slug event=request.event.slug %}">
+                        {% if call.enabled %}
+                            <a class="btn btn-default" href="{% url 'plugins:exhibition:public_call' organizer=request.event.organizer.slug event=request.event.slug call_type=call.call_type %}">
                                 {% trans "View call page" %}
                             </a>
                         {% endif %}

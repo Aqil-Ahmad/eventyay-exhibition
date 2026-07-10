@@ -4,24 +4,25 @@
 {% load rich_text %}
 
 {% block call_content %}
-    {% trans "Call for Exhibitors" as default_headline %}
     <h2 id="exhibition-call-heading">
-        {{ settings.call_headline|event_localize|default:default_headline }}
+        {{ call.headline|event_localize|default:call.default_headline }}
     </h2>
-    {% if settings.call_text %}
-        {{ settings.call_text|event_localize|rich_text }}
+    {% if call.text %}
+        {{ call.text|event_localize|rich_text }}
+    {% elif call.is_sponsor_call %}
+        <p>{% trans "Submit a proposal to become a sponsor for this event." %}</p>
     {% else %}
-        <p>{% trans "Submit a proposal to become an exhibitor or sponsor for this event." %}</p>
+        <p>{% trans "Submit a proposal to become an exhibitor for this event." %}</p>
     {% endif %}
-    {% if settings.call_deadline %}
+    {% if call.deadline %}
         <p>
             <strong>
-                {% if settings.call_is_open %}
-                    {% blocktrans with deadline=settings.call_deadline|date:"SHORT_DATETIME_FORMAT" timezone=request.timezone trimmed %}
+                {% if call.is_open %}
+                    {% blocktrans with deadline=call.deadline|date:"SHORT_DATETIME_FORMAT" timezone=request.timezone trimmed %}
                         You can submit proposals until {{ deadline }} ({{ timezone }}).
                     {% endblocktrans %}
                 {% else %}
-                    {% blocktrans with deadline=settings.call_deadline|date:"SHORT_DATETIME_FORMAT" timezone=request.timezone trimmed %}
+                    {% blocktrans with deadline=call.deadline|date:"SHORT_DATETIME_FORMAT" timezone=request.timezone trimmed %}
                         This call closed on {{ deadline }} ({{ timezone }}).
                     {% endblocktrans %}
                 {% endif %}
@@ -34,9 +35,9 @@
                 {% trans "View your proposals" %}
             </a>
         {% endif %}
-        <a class="btn btn-success btn-lg btn-block {% if not settings.call_is_open %}disabled{% endif %}"
-           href="{% url 'plugins:exhibition:proposal.add' organizer=request.event.organizer.slug event=request.event.slug %}">
-            {% if settings.call_is_open %}
+        <a class="btn btn-success btn-lg btn-block {% if not call.is_open %}disabled{% endif %}"
+           href="{% url 'plugins:exhibition:proposal.add' organizer=request.event.organizer.slug event=request.event.slug call_type=call.call_type %}">
+            {% if call.is_open %}
                 {% trans "Submit a proposal" %}
             {% else %}
                 {% trans "Proposals are closed" %}

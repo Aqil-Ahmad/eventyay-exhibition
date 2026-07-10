@@ -9,6 +9,7 @@
 
 {% block exhibitors_content %}
     <form action="" method="post">
+        <input type="hidden" name="call" value="{{ call_type }}">
         {% csrf_token %}
         <p>
             {% blocktrans trimmed with question=object.localized_question %}
@@ -17,7 +18,7 @@
         </p>
         <div class="form-group submit-group">
             <button type="submit" class="btn btn-danger">{% trans "Delete" %}</button>
-            <a class="btn btn-default" href="{% url 'plugins:exhibition:call.questions' organizer=request.event.organizer.slug event=request.event.slug %}">
+            <a class="btn btn-default" href="{% url 'plugins:exhibition:call.questions' organizer=request.event.organizer.slug event=request.event.slug call_type=call_type %}">
                 {% trans "Cancel" %}
             </a>
         </div>

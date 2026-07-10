@@ -41,16 +41,6 @@ urlpatterns = [
         name="public_list",
     ),
     path(
-        "<str:organizer>/<str:event>/exhibition/call/",
-        PublicCallView.as_view(),
-        name="public_call",
-    ),
-    path(
-        "<str:organizer>/<str:event>/exhibition/call/submit/",
-        UserProposalCreateView.as_view(),
-        name="proposal.add",
-    ),
-    path(
         "<str:organizer>/<str:event>/exhibition/call/me/",
         UserProposalListView.as_view(),
         name="proposal.user_list",
@@ -59,6 +49,16 @@ urlpatterns = [
         "<str:organizer>/<str:event>/exhibition/call/proposals/<str:code>/",
         UserProposalEditView.as_view(),
         name="proposal.user_edit",
+    ),
+    path(
+        "<str:organizer>/<str:event>/exhibition/call/<str:call_type>/submit/",
+        UserProposalCreateView.as_view(),
+        name="proposal.add",
+    ),
+    path(
+        "<str:organizer>/<str:event>/exhibition/call/<str:call_type>/",
+        PublicCallView.as_view(),
+        name="public_call",
     ),
     path(
         "<str:organizer>/<str:event>/exhibition/<int:pk>/",
@@ -81,14 +81,14 @@ urlpatterns = [
         name="settings.sponsors",
     ),
     path(
-        "exhibitors/event/<orgslug:organizer>/<slug:event>/settings/call",
-        SettingsView.as_view(active_tab="call"),
-        name="settings.call",
-    ),
-    path(
         "exhibitors/event/<orgslug:organizer>/<slug:event>/settings/call/preview",
         CallTextPreviewView.as_view(),
         name="settings.call.preview",
+    ),
+    path(
+        "exhibitors/event/<orgslug:organizer>/<slug:event>/settings/call/<str:call_type>",
+        SettingsView.as_view(active_tab="call"),
+        name="settings.call",
     ),
     path(
         "exhibitors/event/<orgslug:organizer>/<slug:event>/settings/sponsors/groups/<int:pk>/toggle-front-page",
@@ -116,7 +116,7 @@ urlpatterns = [
         name="proposal.detail",
     ),
     path(
-        "exhibitors/event/<orgslug:organizer>/<slug:event>/call/questions",
+        "exhibitors/event/<orgslug:organizer>/<slug:event>/call/<str:call_type>/questions",
         ExhibitionQuestionListView.as_view(),
         name="call.questions",
     ),
