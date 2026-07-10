@@ -39,13 +39,15 @@
                             {% endif %}
                         </td>
                         <td>
-                            {% if proposal.is_exhibitor and proposal.is_sponsor %}
-                                {% trans "Exhibitor and sponsor" %}
-                            {% elif proposal.is_sponsor %}
-                                {% trans "Sponsor" %}
-                            {% else %}
-                                {% trans "Exhibitor" %}
-                            {% endif %}
+                            {% with partner=proposal.approved_exhibitor|default:proposal %}
+                                {% if partner.is_exhibitor and partner.is_sponsor %}
+                                    {% trans "Exhibitor and sponsor" %}
+                                {% elif partner.is_sponsor %}
+                                    {% trans "Sponsor" %}
+                                {% else %}
+                                    {% trans "Exhibitor" %}
+                                {% endif %}
+                            {% endwith %}
                         </td>
                         <td>{{ proposal.get_state_display }}</td>
                         <td>{{ proposal.updated|date:"SHORT_DATETIME_FORMAT" }}</td>
