@@ -23,9 +23,21 @@
         <div class="panel-body">
             <dl class="dl-horizontal">
                 <dt>{% trans "Submitter" %}</dt>
-                <dd>{{ proposal.user.get_display_name|default:proposal.user.email }}</dd>
+                <dd>
+                    {% if hide_applicant_emails %}
+                        {{ proposal.user.fullname|default:"—" }}
+                    {% else %}
+                        {{ proposal.user.get_display_name|default:proposal.user.email }}
+                    {% endif %}
+                </dd>
                 <dt>{% trans "Email" %}</dt>
-                <dd>{{ proposal.email|default:"-" }}</dd>
+                <dd>
+                    {% if hide_applicant_emails %}
+                        <span class="text-muted">{% trans "Hidden" %}</span>
+                    {% else %}
+                        {{ proposal.email|default:"-" }}
+                    {% endif %}
+                </dd>
                 <dt>{% trans "State" %}</dt>
                 <dd>{{ proposal.get_state_display }}</dd>
                 <dt>{% trans "Type" %}</dt>
@@ -105,18 +117,20 @@
         {% bootstrap_form_errors form %}
         <fieldset>
             <legend>{% trans "Review" %}</legend>
-            {% bootstrap_field form.is_exhibitor layout="control" %}
-            {% bootstrap_field form.is_sponsor layout="control" %}
-            {% bootstrap_field form.sponsor_group layout="control" %}
-            {% bootstrap_field form.booth_id layout="control" %}
-            {% bootstrap_field form.booth_name layout="control" %}
+            {% if can_manage %}
+                {% bootstrap_field form.is_exhibitor layout="control" %}
+                {% bootstrap_field form.is_sponsor layout="control" %}
+                {% bootstrap_field form.sponsor_group layout="control" %}
+                {% bootstrap_field form.booth_id layout="control" %}
+                {% bootstrap_field form.booth_name layout="control" %}
+            {% endif %}
             {% bootstrap_field form.review_notes layout="control" %}
         </fieldset>
         <div class="form-group submit-group">
             <button type="submit" class="btn btn-default" name="action" value="save">
                 {% trans "Save review notes" %}
             </button>
-            {% if not proposal.approved_exhibitor_id and proposal.state != "rejected" %}
+            {% if can_manage and not proposal.approved_exhibitor_id and proposal.state != "rejected" %}
                 <button type="submit" class="btn btn-primary" name="action" value="approve">
                     {% trans "Approve and create partner" %}
                 </button>
@@ -124,7 +138,7 @@
                     {% trans "Reject" %}
                 </button>
             {% endif %}
-            {% if proposal.approved_exhibitor_id %}
+            {% if can_edit_exhibitor and proposal.approved_exhibitor_id %}
                 <a class="btn btn-success" href="{% url 'plugins:exhibition:edit' organizer=request.event.organizer.slug event=request.event.slug pk=proposal.approved_exhibitor_id %}">
                     {% trans "Open partner profile" %}
                 </a>

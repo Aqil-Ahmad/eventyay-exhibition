@@ -3,6 +3,7 @@ import json
 from django.conf import settings as django_settings
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.core.exceptions import PermissionDenied
 from django.db import transaction
 from django.db.models import Count, Q
 from django.http import Http404, HttpResponse, JsonResponse
@@ -21,6 +22,7 @@ from .forms import (
     ExhibitionProposalExtraLinkFormSet,
     ExhibitionProposalForm,
     ExhibitionProposalReviewForm,
+    ExhibitionProposalReviewNotesForm,
     ExhibitionProposalSocialLinkFormSet,
     ExhibitionQuestionForm,
     ExhibitorExtraLinkFormSet,
@@ -48,6 +50,7 @@ from .utils import (
     build_exhibitor_video_embed,
     create_exhibitor_from_proposal,
     public_exhibitors_queryset,
+    should_hide_applicant_emails,
 )
 
 
@@ -678,7 +681,7 @@ class CallTextPreviewView(EventPermissionRequiredMixin, View):
 
 class ProposalListView(EventPermissionRequiredMixin, ListView):
     model = ExhibitionProposal
-    permission = "can_change_event_settings"
+    permission = ("can_change_event_settings", "can_change_exhibition_proposals", "is_exhibition_reviewer")
     template_name = "exhibitors/proposal_list.html"
     context_object_name = "proposals"
 
@@ -689,15 +692,42 @@ class ProposalListView(EventPermissionRequiredMixin, ListView):
             .order_by("-updated", "-created")
         )
 
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["hide_applicant_emails"] = should_hide_applicant_emails(
+            self.request.user, self.request.event, request=self.request
+        )
+        return context
+
 
 class ProposalDetailView(EventPermissionRequiredMixin, UpdateView):
     model = ExhibitionProposal
-    form_class = ExhibitionProposalReviewForm
-    permission = "can_change_event_settings"
+    permission = ("can_change_event_settings", "can_change_exhibition_proposals", "is_exhibition_reviewer")
     template_name = "exhibitors/proposal_detail.html"
     context_object_name = "proposal"
     slug_field = "code"
     slug_url_kwarg = "code"
+
+    def can_manage(self):
+        return self.request.user.has_event_permission(
+            self.request.event.organizer,
+            self.request.event,
+            ("can_change_event_settings", "can_change_exhibition_proposals"),
+            request=self.request,
+        )
+
+    def can_edit_exhibitor(self):
+        return self.request.user.has_event_permission(
+            self.request.event.organizer,
+            self.request.event,
+            "can_change_event_settings",
+            request=self.request,
+        )
+
+    def get_form_class(self):
+        if self.can_manage():
+            return ExhibitionProposalReviewForm
+        return ExhibitionProposalReviewNotesForm
 
     def get_queryset(self):
         return (
@@ -720,23 +750,32 @@ class ProposalDetailView(EventPermissionRequiredMixin, UpdateView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context["answers"] = self.object.answers.select_related("question").prefetch_related("options")
+        context["can_manage"] = self.can_manage()
+        context["can_edit_exhibitor"] = self.can_edit_exhibitor()
+        context["hide_applicant_emails"] = should_hide_applicant_emails(
+            self.request.user, self.request.event, request=self.request
+        )
         return context
 
     @transaction.atomic
     def form_valid(self, form):
         self.object = form.save()
         action = self.request.POST.get("action", "save")
+        if action in ("approve", "reject") and not self.can_manage():
+            raise PermissionDenied()
         if action == "approve":
             exhibitor = create_exhibitor_from_proposal(self.object)
             messages.success(
                 self.request,
                 _("Proposal approved and partner profile created."),
             )
-            return redirect(
-                "plugins:exhibition:edit",
-                **event_kwargs(self.request.event),
-                pk=exhibitor.pk,
-            )
+            if self.can_edit_exhibitor():
+                return redirect(
+                    "plugins:exhibition:edit",
+                    **event_kwargs(self.request.event),
+                    pk=exhibitor.pk,
+                )
+            return redirect(self.get_success_url())
         if action == "reject":
             if self.object.approved_exhibitor_id:
                 messages.error(
