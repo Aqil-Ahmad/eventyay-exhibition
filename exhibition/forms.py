@@ -253,10 +253,13 @@ class ExhibitorInfoForm(I18nModelForm):
             if image_url:
                 cleaned_data[url_field] = normalize_url_scheme(image_url)
 
+        editing_existing = bool(self.instance and self.instance.pk)
         if self.partner_type == "sponsor":
-            is_sponsor, is_exhibitor = True, False
+            is_sponsor = True
+            is_exhibitor = self.instance.is_exhibitor if editing_existing else False
         elif self.partner_type == "exhibitor":
-            is_sponsor, is_exhibitor = False, True
+            is_sponsor = self.instance.is_sponsor if editing_existing else False
+            is_exhibitor = True
         else:
             is_sponsor = bool(cleaned_data.get("is_sponsor"))
             is_exhibitor = not cleaned_data.get("not_an_exhibitor", False)
