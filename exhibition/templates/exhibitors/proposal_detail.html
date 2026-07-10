@@ -3,16 +3,16 @@
 {% load bootstrap3 %}
 {% load event_tags %}
 
-{% block title %}{{ request.event.name }} - {% trans "Review Proposal" %}{% endblock %}
+{% block title %}{{ request.event.name }} - {% trans "Review exhibition request" %}{% endblock %}
 
 {% block exhibitors_header %}
-    <h1>{% trans "Review Proposal" %}</h1>
+    <h1>{% trans "Review exhibition request" %}</h1>
 {% endblock %}
 
 {% block exhibitors_content %}
     <p>
         <a class="btn btn-default" href="{% url 'plugins:exhibition:proposal.list' organizer=request.event.organizer.slug event=request.event.slug %}">
-            <i class="fa fa-arrow-left"></i> {% trans "Back to proposals" %}
+            <i class="fa fa-arrow-left"></i> {% trans "Back to exhibition requests" %}
         </a>
     </p>
 

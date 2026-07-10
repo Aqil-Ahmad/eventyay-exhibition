@@ -12,14 +12,14 @@
 {% block call_content %}
     <h2 id="exhibition-call-heading">
         {% if object %}
-            {% trans "Edit proposal" %}
+            {% trans "Edit request" %}
         {% else %}
-            {% trans "Submit a proposal" %}
+            {% trans "Submit a request" %}
         {% endif %}
     </h2>
     {% if object and not can_edit %}
         <div class="alert alert-warning" role="alert">
-            <i class="fa fa-lock"></i> {% trans "This proposal can no longer be edited." %}
+            <i class="fa fa-lock"></i> {% trans "This request can no longer be edited." %}
         </div>
     {% endif %}
     <form action="" method="post" class="form-horizontal" enctype="multipart/form-data" novalidate>
@@ -120,7 +120,7 @@
         {% if can_edit %}
             <div class="form-group submit-group">
                 <button type="submit" class="btn btn-primary btn-save" name="action" value="submit">
-                    {% trans "Submit proposal" %}
+                    {% trans "Submit request" %}
                 </button>
                 <button type="submit" class="btn btn-default" name="action" value="draft">
                     {% trans "Save as draft" %}
@@ -132,7 +132,7 @@
         {% else %}
             <p>
                 <a class="btn btn-default" href="{% url 'plugins:exhibition:proposal.user_list' organizer=request.event.organizer.slug event=request.event.slug %}">
-                    {% trans "Back to your proposals" %}
+                    {% trans "Back to your requests" %}
                 </a>
             </p>
         {% endif %}

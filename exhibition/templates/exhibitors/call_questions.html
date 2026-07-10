@@ -2,7 +2,7 @@
 {% load i18n %}
 {% load static %}
 
-{% block title %}{{ request.event.name }} - {% trans "Proposal Form" %}{% endblock %}
+{% block title %}{{ request.event.name }} - {% trans "Exhibitor form" %}{% endblock %}
 
 {% block custom_header %}
     {{ block.super }}
@@ -12,15 +12,15 @@
 {% endblock %}
 
 {% block exhibitors_header %}
-    <h1>{% trans "Proposal Form" %}</h1>
+    <h1>{% trans "Exhibitor form" %}</h1>
 {% endblock %}
 
 {% block exhibitors_content %}
     <form action="" method="post">
         {% csrf_token %}
         <fieldset>
-            <legend>{% trans "Proposal information" %}</legend>
-            <p>{% trans "Choose which default fields are shown on the exhibitor and sponsor proposal form." %}</p>
+            <legend>{% trans "Form fields" %}</legend>
+            <p>{% trans "Choose which default fields are shown on the exhibitor and sponsor form." %}</p>
             <div class="table-responsive table-responsive-always mw-100">
                 <table class="table table-hover proposal-field-order">
                     <thead>
@@ -72,7 +72,7 @@
         </fieldset>
 
         <fieldset>
-            <legend>{% trans "Custom proposal fields" %}</legend>
+            <legend>{% trans "Custom fields" %}</legend>
             <p>{% trans "Add custom fields to collect event-specific information from applicants." %}</p>
             {% if questions %}
                 <div class="table-responsive table-responsive-always mw-100">
@@ -116,7 +116,7 @@
                 </div>
             {% else %}
                 <div class="empty-collection">
-                    <p>{% trans "No custom proposal fields have been configured yet." %}</p>
+                    <p>{% trans "No custom fields have been configured yet." %}</p>
                 </div>
             {% endif %}
             <p class="text-right">

@@ -11,14 +11,14 @@
     {% if settings.call_text %}
         {{ settings.call_text|event_localize|rich_text }}
     {% else %}
-        <p>{% trans "Submit a proposal to become an exhibitor or sponsor for this event." %}</p>
+        <p>{% trans "Submit a request to become an exhibitor or sponsor for this event." %}</p>
     {% endif %}
     {% if settings.call_deadline %}
         <p>
             <strong>
                 {% if settings.call_is_open %}
                     {% blocktrans with deadline=settings.call_deadline|date:"SHORT_DATETIME_FORMAT" timezone=request.timezone trimmed %}
-                        You can submit proposals until {{ deadline }} ({{ timezone }}).
+                        You can submit requests until {{ deadline }} ({{ timezone }}).
                     {% endblocktrans %}
                 {% else %}
                     {% blocktrans with deadline=settings.call_deadline|date:"SHORT_DATETIME_FORMAT" timezone=request.timezone trimmed %}
@@ -31,15 +31,15 @@
     <div class="url-links">
         {% if request.user.is_authenticated %}
             <a class="btn btn-info btn-lg btn-block" href="{% url 'plugins:exhibition:proposal.user_list' organizer=request.event.organizer.slug event=request.event.slug %}">
-                {% trans "View your proposals" %}
+                {% trans "View your requests" %}
             </a>
         {% endif %}
         <a class="btn btn-success btn-lg btn-block {% if not settings.call_is_open %}disabled{% endif %}"
            href="{% url 'plugins:exhibition:proposal.add' organizer=request.event.organizer.slug event=request.event.slug %}">
             {% if settings.call_is_open %}
-                {% trans "Submit a proposal" %}
+                {% trans "Submit a request" %}
             {% else %}
-                {% trans "Proposals are closed" %}
+                {% trans "Requests are closed" %}
             {% endif %}
         </a>
     </div>
