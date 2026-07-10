@@ -20,7 +20,7 @@
         {% csrf_token %}
         <fieldset>
             <legend>{% trans "Proposal information" %}</legend>
-            <p>{% trans "Choose which default fields are shown on the exhibitor and sponsor proposal form." %}</p>
+            <p>{% trans "Choose which fields are shown on the exhibitor and sponsor proposal form. Custom fields can be reordered alongside the default fields." %}</p>
             <div class="table-responsive table-responsive-always mw-100">
                 <table class="table table-hover proposal-field-order">
                     <thead>
@@ -33,19 +33,26 @@
                     </tr>
                     </thead>
                     <tbody dragsort-url="{% url 'plugins:exhibition:call.questions' organizer=request.event.organizer.slug event=request.event.slug %}">
-                    {% for field in default_fields %}
-                        <tr {% if field.orderable %}dragsort-id="{{ field.key }}"{% endif %}>
-                            <th>{{ field.label }}</th>
+                    {% for field in proposal_fields %}
+                        <tr {% if field.orderable %}dragsort-id="{{ field.dragsort_id }}"{% endif %}>
+                            <th>
+                                {% if field.is_custom %}
+                                    <a href="{% url 'plugins:exhibition:call.questions.edit' organizer=request.event.organizer.slug event=request.event.slug pk=field.pk %}">{{ field.label }}</a>
+                                    <small class="text-muted">{% trans "Custom" %}</small>
+                                {% else %}
+                                    {{ field.label }}
+                                {% endif %}
+                            </th>
                             <td class="text-center">
                                 <label class="toggle-switch {% if field.active_locked %}always-on{% endif %}" aria-label="{% blocktrans trimmed with field=field.label %}Toggle active state for {{ field }}{% endblocktrans %}">
-                                    <input type="checkbox" name="{{ field.key }}_active" {% if field.active %}checked{% endif %} {% if field.active_locked %}disabled{% endif %}>
+                                    <input type="checkbox" name="{{ field.input_prefix }}_active" {% if field.active %}checked{% endif %} {% if field.active_locked %}disabled{% endif %}>
                                     <span class="toggle-slider"></span>
                                 </label>
                             </td>
                             <td class="text-center">
                                 {% if field.supports_required %}
                                     <label class="toggle-switch {% if field.required_locked %}always-on{% endif %}" aria-label="{% blocktrans trimmed with field=field.label %}Toggle required state for {{ field }}{% endblocktrans %}">
-                                        <input type="checkbox" name="{{ field.key }}_required" {% if field.required %}checked{% endif %} {% if field.required_locked %}disabled{% endif %}>
+                                        <input type="checkbox" name="{{ field.input_prefix }}_required" {% if field.required %}checked{% endif %} {% if field.required_locked %}disabled{% endif %}>
                                         <span class="toggle-slider"></span>
                                     </label>
                                 {% else %}
@@ -54,6 +61,10 @@
                             </td>
                             <td class="text-center">{{ field.answer_count }}</td>
                             <td class="text-right">
+                                {% if field.is_custom %}
+                                    <a class="btn btn-default btn-sm" href="{% url 'plugins:exhibition:call.questions.edit' organizer=request.event.organizer.slug event=request.event.slug pk=field.pk %}" title="{% trans 'Edit' %}"><i class="fa fa-edit"></i></a>
+                                    <a class="btn btn-delete btn-danger btn-sm" href="{% url 'plugins:exhibition:call.questions.delete' organizer=request.event.organizer.slug event=request.event.slug pk=field.pk %}" title="{% trans 'Delete' %}"><i class="fa fa-trash"></i></a>
+                                {% endif %}
                                 {% if field.orderable %}
                                     <button type="button" draggable="true" class="btn btn-primary btn-sm dragsort-button" title="{% trans 'Move field' %}" aria-label="{% trans 'Move field' %}">
                                         <i class="fa fa-arrows"></i>
@@ -69,56 +80,6 @@
                     </tbody>
                 </table>
             </div>
-        </fieldset>
-
-        <fieldset>
-            <legend>{% trans "Custom proposal fields" %}</legend>
-            <p>{% trans "Add custom fields to collect event-specific information from applicants." %}</p>
-            {% if questions %}
-                <div class="table-responsive table-responsive-always mw-100">
-                    <table class="table table-hover">
-                        <thead>
-                        <tr>
-                            <th>{% trans "Field" %}</th>
-                            <th>{% trans "Type" %}</th>
-                            <th class="text-center">{% trans "Active" %}</th>
-                            <th class="text-center">{% trans "Required" %}</th>
-                            <th class="text-center">{% trans "Answers" %}</th>
-                            <th class="text-right">{% trans "Settings" %}</th>
-                        </tr>
-                        </thead>
-                        <tbody>
-                        {% for question in questions %}
-                            <tr>
-                                <th>{{ question.localized_question }}</th>
-                                <td>{{ question.get_variant_display }}</td>
-                                <td class="text-center">
-                                    <label class="toggle-switch" aria-label="{% blocktrans trimmed with question=question.localized_question %}Toggle active state for {{ question }}{% endblocktrans %}">
-                                        <input type="checkbox" name="question_{{ question.pk }}_active" {% if question.active %}checked{% endif %}>
-                                        <span class="toggle-slider"></span>
-                                    </label>
-                                </td>
-                                <td class="text-center">
-                                    <label class="toggle-switch" aria-label="{% blocktrans trimmed with question=question.localized_question %}Toggle required state for {{ question }}{% endblocktrans %}">
-                                        <input type="checkbox" name="question_{{ question.pk }}_required" {% if question.required %}checked{% endif %}>
-                                        <span class="toggle-slider"></span>
-                                    </label>
-                                </td>
-                                <td class="text-center">{{ question.answer_count }}</td>
-                                <td class="text-right">
-                                    <a class="btn btn-default btn-sm" href="{% url 'plugins:exhibition:call.questions.edit' organizer=request.event.organizer.slug event=request.event.slug pk=question.pk %}" title="{% trans 'Edit' %}"><i class="fa fa-edit"></i></a>
-                                    <a class="btn btn-delete btn-danger btn-sm" href="{% url 'plugins:exhibition:call.questions.delete' organizer=request.event.organizer.slug event=request.event.slug pk=question.pk %}" title="{% trans 'Delete' %}"><i class="fa fa-trash"></i></a>
-                                </td>
-                            </tr>
-                        {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-            {% else %}
-                <div class="empty-collection">
-                    <p>{% trans "No custom proposal fields have been configured yet." %}</p>
-                </div>
-            {% endif %}
             <p class="text-right">
                 <a class="btn btn-default" href="{% url 'plugins:exhibition:call.questions.add' organizer=request.event.organizer.slug event=request.event.slug %}">
                     <i class="fa fa-plus"></i> {% trans "New custom field" %}
