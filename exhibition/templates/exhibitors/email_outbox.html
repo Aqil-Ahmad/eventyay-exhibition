@@ -1,0 +1,55 @@
+{% extends "exhibitors/base.html" %}
+{% load i18n %}
+
+{% block title %}{{ request.event.name }} - {% trans "Email outbox" %}{% endblock %}
+
+{% block exhibitors_header %}
+    <h1>{% trans "Email outbox" %}</h1>
+{% endblock %}
+
+{% block exhibitors_content %}
+    <p class="text-muted">
+        {% trans "Emails waiting to be sent. Review, edit, or discard them before sending." %}
+    </p>
+    {% if emails %}
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead>
+                <tr>
+                    <th>{% trans "Recipient" %}</th>
+                    <th>{% trans "Subject" %}</th>
+                    <th>{% trans "Created" %}</th>
+                    <th class="text-right">{% trans "Actions" %}</th>
+                </tr>
+                </thead>
+                <tbody>
+                {% for email in emails %}
+                    <tr>
+                        <td>{{ email.to_email }}</td>
+                        <td>
+                            <a href="{% url 'plugins:exhibition:email.edit' organizer=request.event.organizer.slug event=request.event.slug pk=email.pk %}">
+                                {{ email.subject }}
+                            </a>
+                        </td>
+                        <td>{{ email.created }}</td>
+                        <td class="text-right">
+                            <a class="btn btn-default btn-sm" href="{% url 'plugins:exhibition:email.edit' organizer=request.event.organizer.slug event=request.event.slug pk=email.pk %}">
+                                <i class="fa fa-eye"></i> {% trans "Preview / edit" %}
+                            </a>
+                            <form action="{% url 'plugins:exhibition:email.send' organizer=request.event.organizer.slug event=request.event.slug pk=email.pk %}" method="post" style="display:inline">
+                                {% csrf_token %}
+                                <button type="submit" class="btn btn-primary btn-sm"><i class="fa fa-paper-plane"></i> {% trans "Send" %}</button>
+                            </form>
+                            <a class="btn btn-danger btn-sm" href="{% url 'plugins:exhibition:email.delete' organizer=request.event.organizer.slug event=request.event.slug pk=email.pk %}">
+                                <i class="fa fa-trash"></i> {% trans "Discard" %}
+                            </a>
+                        </td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    {% else %}
+        <p>{% trans "The outbox is empty." %}</p>
+    {% endif %}
+{% endblock %}

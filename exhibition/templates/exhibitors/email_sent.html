@@ -1,0 +1,35 @@
+{% extends "exhibitors/base.html" %}
+{% load i18n %}
+
+{% block title %}{{ request.event.name }} - {% trans "Sent emails" %}{% endblock %}
+
+{% block exhibitors_header %}
+    <h1>{% trans "Sent emails" %}</h1>
+{% endblock %}
+
+{% block exhibitors_content %}
+    {% if emails %}
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead>
+                <tr>
+                    <th>{% trans "Recipient" %}</th>
+                    <th>{% trans "Subject" %}</th>
+                    <th>{% trans "Sent" %}</th>
+                </tr>
+                </thead>
+                <tbody>
+                {% for email in emails %}
+                    <tr>
+                        <td>{{ email.to_email }}</td>
+                        <td>{{ email.subject }}</td>
+                        <td>{{ email.sent_at }}</td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    {% else %}
+        <p>{% trans "No emails have been sent yet." %}</p>
+    {% endif %}
+{% endblock %}

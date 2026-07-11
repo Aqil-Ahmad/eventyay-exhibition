@@ -7,6 +7,8 @@
         {% trans "Call for Exhibitors" %}
     {% elif active_tab == "sponsors" %}
         {% trans "Sponsor Settings" %}
+    {% elif active_tab == "emails" %}
+        {% trans "Email Templates" %}
     {% else %}
         {% trans "Exhibitor Settings" %}
     {% endif %}
@@ -23,6 +25,8 @@
             {% trans "Call for Exhibitors" %}
         {% elif active_tab == "sponsors" %}
             {% trans "Sponsor Settings" %}
+        {% elif active_tab == "emails" %}
+            {% trans "Email Templates" %}
         {% else %}
             {% trans "Exhibitor Settings" %}
         {% endif %}
@@ -284,6 +288,31 @@ Best regards, Your {event} team{% endblocktrans %}
                     <p>{% trans "You do not have any sponsor groups yet." %}</p>
                 {% endif %}
             </fieldset>
+    {% elif active_tab == "emails" %}
+            <form action="" method="post" class="form-horizontal">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="save_email_templates">
+                <input type="hidden" name="tab" value="emails">
+                <fieldset>
+                    <legend>{% trans "Proposal lifecycle emails" %}</legend>
+                    <p class="text-muted">
+                        {% trans "These templates are used for the confirmation email sent when an applicant submits a proposal, and for the accept/reject emails you send from the outbox." %}
+                    </p>
+                    {% bootstrap_form email_templates_form layout="control" %}
+                </fieldset>
+                <fieldset>
+                    <legend>{% trans "Available placeholders" %}</legend>
+                    <dl class="dl-horizontal">
+                        {% for token, description in email_placeholders %}
+                            <dt><code>{{ token }}</code></dt>
+                            <dd>{{ description }}</dd>
+                        {% endfor %}
+                    </dl>
+                </fieldset>
+                <div class="form-group submit-group">
+                    <button type="submit" class="btn btn-primary btn-save">{% trans "Save" %}</button>
+                </div>
+            </form>
     {% endif %}
 <script type="text/javascript" src="{% static 'exhibition/js/exhibitors-settings.js' %}"></script>
 {% endblock %}

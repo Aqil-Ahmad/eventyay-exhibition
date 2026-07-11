@@ -17,8 +17,11 @@ from eventyay.base.templatetags.rich_text import rich_text
 from eventyay.control.permissions import EventPermissionRequiredMixin
 from eventyay.control.views import CreateView, UpdateView
 
+from . import mail as mail_helpers
 from .forms import (
     CallSettingsForm,
+    ExhibitionEmailQueueForm,
+    ExhibitionMailTemplatesForm,
     ExhibitionProposalExtraLinkFormSet,
     ExhibitionProposalForm,
     ExhibitionProposalReviewForm,
@@ -35,6 +38,7 @@ from .models import (
     PROPOSAL_DEFAULT_FIELD_KEYS,
     PROPOSAL_DEFAULT_FIELDS,
     PROPOSAL_FORMSET_FIELD_KEYS,
+    ExhibitionEmailQueue,
     ExhibitionProposal,
     ExhibitionProposalState,
     ExhibitionQuestion,
@@ -70,6 +74,27 @@ def partner_list_url(event, partner_type):
     return reverse(route, kwargs=event_kwargs(event))
 
 
+def send_proposal_confirmation(event, proposal, requestor):
+    """Send the submission confirmation email immediately, after the current
+    transaction commits (so the proposal and its links are persisted first)."""
+    transaction.on_commit(
+        lambda: mail_helpers.queue_proposal_email(
+            event,
+            proposal,
+            mail_helpers.PROPOSAL_NEW,
+            send_now=True,
+            requestor=requestor,
+        )
+    )
+
+
+def queue_exhibitor_access_mail(event, exhibitor, requestor):
+    """Queue the access-credentials email (unsent) for organiser review in the
+    outbox when lead scanning is enabled for an exhibitor. Returns the queued
+    row, or None if the exhibitor has no email / no template configured."""
+    return mail_helpers.queue_exhibitor_access_email(event, exhibitor, requestor=requestor)
+
+
 class PublicEventLoginRequiredMixin(LoginRequiredMixin):
     def get_login_url(self):
         return reverse("cfp:event.login", kwargs=event_kwargs(self.request.event))
@@ -102,7 +127,7 @@ class SettingsView(EventPermissionRequiredMixin, ListView):
 
     def get_active_tab(self):
         tab = self.request.GET.get("tab") or self.request.POST.get("tab") or self.active_tab
-        if tab not in {"exhibitors", "sponsors", "call"}:
+        if tab not in {"exhibitors", "sponsors", "call", "emails"}:
             return "exhibitors"
         return tab
 
@@ -110,6 +135,7 @@ class SettingsView(EventPermissionRequiredMixin, ListView):
         route_names = {
             "call": "plugins:exhibition:settings.call",
             "sponsors": "plugins:exhibition:settings.sponsors",
+            "emails": "plugins:exhibition:settings.emails",
         }
         route_name = route_names.get(tab, "plugins:exhibition:settings.exhibitors")
         return reverse(
@@ -147,6 +173,11 @@ class SettingsView(EventPermissionRequiredMixin, ListView):
             instance=settings,
             event=self.request.event,
         )
+        if ctx["active_tab"] == "emails":
+            ctx["email_templates_form"] = kwargs.get("email_templates_form") or ExhibitionMailTemplatesForm(
+                obj=self.request.event,
+            )
+            ctx["email_placeholders"] = mail_helpers.PLACEHOLDER_DOCS
         if ctx["active_tab"] == "call":
             # Server-render the saved Call text (per language, matching the
             # preview endpoint) so the preview tab is not blank on load.
@@ -188,6 +219,14 @@ class SettingsView(EventPermissionRequiredMixin, ListView):
                 messages.success(self.request, _("Call settings have been saved."))
                 return redirect(self.get_settings_url("call"))
             return self.render_to_response(self.get_context_data(call_settings_form=form))
+
+        if action == "save_email_templates":
+            form = ExhibitionMailTemplatesForm(request.POST, obj=request.event)
+            if form.is_valid():
+                form.save()
+                messages.success(self.request, _("Email templates have been saved."))
+                return redirect(self.get_settings_url("emails"))
+            return self.render_to_response(self.get_context_data(email_templates_form=form))
 
         if action == "add_group":
             form = SponsorGroupForm(
@@ -483,6 +522,8 @@ class UserProposalCreateView(
             form.instance.submitted = timezone.now()
         response = super().form_valid(form)
         self.save_link_formsets()
+        if form.instance.state == ExhibitionProposalState.SUBMITTED:
+            send_proposal_confirmation(self.request.event, self.object, self.request.user)
         messages.success(self.request, _("Your request has been saved."))
         return response
 
@@ -530,6 +571,7 @@ class UserProposalEditView(
 
     @transaction.atomic
     def form_valid(self, form):
+        previous_state = self.object.state
         if self.request.POST.get("action") == "draft":
             form.instance.state = ExhibitionProposalState.DRAFT
             form.instance.submitted = None
@@ -538,6 +580,13 @@ class UserProposalEditView(
             form.instance.submitted = form.instance.submitted or timezone.now()
         response = super().form_valid(form)
         self.save_link_formsets()
+        # Only send the confirmation on the transition into SUBMITTED, not on
+        # every re-save of an already-submitted request.
+        if (
+            form.instance.state == ExhibitionProposalState.SUBMITTED
+            and previous_state != ExhibitionProposalState.SUBMITTED
+        ):
+            send_proposal_confirmation(self.request.event, self.object, self.request.user)
         messages.success(self.request, _("Your request has been saved."))
         return response
 
@@ -765,9 +814,15 @@ class ProposalDetailView(EventPermissionRequiredMixin, UpdateView):
             raise PermissionDenied()
         if action == "approve":
             exhibitor = create_exhibitor_from_proposal(self.object)
+            mail_helpers.queue_proposal_email(
+                self.request.event,
+                self.object,
+                mail_helpers.PROPOSAL_ACCEPTED,
+                requestor=self.request.user,
+            )
             messages.success(
                 self.request,
-                _("Request approved and partner profile created."),
+                _("Request approved and partner profile created. An acceptance email was placed in the outbox."),
             )
             if self.can_edit_exhibitor():
                 return redirect(
@@ -785,7 +840,16 @@ class ProposalDetailView(EventPermissionRequiredMixin, UpdateView):
             else:
                 self.object.state = ExhibitionProposalState.REJECTED
                 self.object.save(update_fields=["state", "updated"])
-                messages.success(self.request, _("Request rejected."))
+                mail_helpers.queue_proposal_email(
+                    self.request.event,
+                    self.object,
+                    mail_helpers.PROPOSAL_REJECTED,
+                    requestor=self.request.user,
+                )
+                messages.success(
+                    self.request,
+                    _("Request rejected. A rejection email was placed in the outbox."),
+                )
             return redirect(self.get_success_url())
 
         messages.success(self.request, _("Review details saved."))
@@ -1066,6 +1130,11 @@ class ExhibitorCreateView(ExhibitorLinkFormsetMixin, EventPermissionRequiredMixi
 
         response = super().form_valid(form)
         self.save_link_formsets()
+        # New exhibitor created with lead scanning already on -> queue access mail.
+        if form.instance.lead_scanning_enabled and queue_exhibitor_access_mail(
+            self.request.event, self.object, self.request.user
+        ):
+            messages.info(self.request, _("An access-credentials email was placed in the outbox."))
         return response
 
     def get_context_data(self, **kwargs):
@@ -1099,6 +1168,14 @@ class ExhibitorEditView(ExhibitorLinkFormsetMixin, EventPermissionRequiredMixin,
 
     @transaction.atomic
     def form_valid(self, form):
+        # Capture the persisted value before saving so we can detect the
+        # False -> True lead-scanning transition.
+        was_lead_scanning_enabled = (
+            ExhibitorInfo.objects.filter(pk=self.object.pk)
+            .values_list("lead_scanning_enabled", flat=True)
+            .first()
+        )
+
         # Generate booth_id only for exhibitors if none exists.
         if (
             form.cleaned_data.get("is_exhibitor", True)
@@ -1109,6 +1186,14 @@ class ExhibitorEditView(ExhibitorLinkFormsetMixin, EventPermissionRequiredMixin,
 
         response = super().form_valid(form)
         self.save_link_formsets()
+        # Queue the access-credentials mail only on the False -> True transition,
+        # not on every save while it stays enabled.
+        if (
+            form.instance.lead_scanning_enabled
+            and not was_lead_scanning_enabled
+            and queue_exhibitor_access_mail(self.request.event, self.object, self.request.user)
+        ):
+            messages.info(self.request, _("An access-credentials email was placed in the outbox."))
         return response
 
     def get_context_data(self, **kwargs):
@@ -1150,3 +1235,93 @@ class ExhibitorCopyKeyView(EventPermissionRequiredMixin, View):
         response = HttpResponse(exhibitor.key)
         response["Content-Disposition"] = 'attachment; filename="password.txt"'
         return response
+
+
+# ---------------------------------------------------------------------------
+# Email outbox / sent
+# ---------------------------------------------------------------------------
+
+EMAIL_MANAGE_PERMISSION = (
+    "can_change_event_settings",
+    "can_change_exhibition_proposals",
+    "is_exhibition_reviewer",
+)
+
+
+class EmailOutboxListView(EventPermissionRequiredMixin, ListView):
+    """Unsent queued emails awaiting organiser review."""
+
+    model = ExhibitionEmailQueue
+    permission = EMAIL_MANAGE_PERMISSION
+    template_name = "exhibitors/email_outbox.html"
+    context_object_name = "emails"
+
+    def get_queryset(self):
+        return ExhibitionEmailQueue.objects.filter(
+            event=self.request.event, sent_at__isnull=True
+        ).order_by("-created")
+
+
+class EmailSentListView(EventPermissionRequiredMixin, ListView):
+    """Read-only list of already-sent emails."""
+
+    model = ExhibitionEmailQueue
+    permission = EMAIL_MANAGE_PERMISSION
+    template_name = "exhibitors/email_sent.html"
+    context_object_name = "emails"
+
+    def get_queryset(self):
+        return ExhibitionEmailQueue.objects.filter(
+            event=self.request.event, sent_at__isnull=False
+        ).order_by("-sent_at")
+
+
+class EmailEditView(EventPermissionRequiredMixin, UpdateView):
+    """Preview and edit a queued (unsent) email before sending."""
+
+    model = ExhibitionEmailQueue
+    form_class = ExhibitionEmailQueueForm
+    permission = EMAIL_MANAGE_PERMISSION
+    template_name = "exhibitors/email_edit.html"
+    context_object_name = "email"
+
+    def get_queryset(self):
+        return ExhibitionEmailQueue.objects.filter(event=self.request.event, sent_at__isnull=True)
+
+    def form_valid(self, form):
+        response = super().form_valid(form)
+        messages.success(self.request, _("The email has been saved."))
+        return response
+
+    def get_success_url(self):
+        return reverse("plugins:exhibition:email.outbox", kwargs=event_kwargs(self.request.event))
+
+
+class EmailSendView(EventPermissionRequiredMixin, View):
+    """Send a single queued email."""
+
+    permission = EMAIL_MANAGE_PERMISSION
+
+    def post(self, request, *args, **kwargs):
+        email = get_object_or_404(
+            ExhibitionEmailQueue, pk=kwargs["pk"], event=request.event, sent_at__isnull=True
+        )
+        email.send(requestor=request.user)
+        messages.success(request, _("The email has been sent."))
+        return redirect("plugins:exhibition:email.outbox", **event_kwargs(request.event))
+
+
+class EmailDeleteView(EventPermissionRequiredMixin, DeleteView):
+    """Discard a queued (unsent) email."""
+
+    model = ExhibitionEmailQueue
+    permission = EMAIL_MANAGE_PERMISSION
+    template_name = "exhibitors/email_delete.html"
+    context_object_name = "email"
+
+    def get_queryset(self):
+        return ExhibitionEmailQueue.objects.filter(event=self.request.event, sent_at__isnull=True)
+
+    def get_success_url(self):
+        messages.success(self.request, _("The email has been discarded."))
+        return reverse("plugins:exhibition:email.outbox", kwargs=event_kwargs(self.request.event))

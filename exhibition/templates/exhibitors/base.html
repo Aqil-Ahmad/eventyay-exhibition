@@ -45,6 +45,11 @@
             <span class="sidebar-text">{% trans "Exhibitor form" %}</span>
           </a>
         </li>
+        <li>
+          <a href="{% url 'plugins:exhibition:settings.emails' organizer=request.event.organizer.slug event=request.event.slug %}" {% if url_name == 'settings.emails' %}class="active"{% endif %}>
+            <span class="sidebar-text">{% trans "Email templates" %}</span>
+          </a>
+        </li>
       </ul>
     </li>
   {% endif %}
@@ -54,6 +59,27 @@
         <span class="fa fa-fw fa-inbox"></span>
         <span class="sidebar-text">{% trans "Exhibition requests" %}</span>
       </a>
+    </li>
+    <li>
+      <a href="{% url 'plugins:exhibition:email.outbox' organizer=request.event.organizer.slug event=request.event.slug %}" class="has-children">
+        <span class="fa fa-fw fa-envelope"></span>
+        <span class="sidebar-text">{% trans "Emails" %}</span>
+      </a>
+      <a href="#" class="arrow">
+        <span class="fa arrow"></span>
+      </a>
+      <ul class="nav nav-second-level">
+        <li>
+          <a href="{% url 'plugins:exhibition:email.outbox' organizer=request.event.organizer.slug event=request.event.slug %}" {% if url_name == 'email.outbox' or url_name == 'email.edit' or url_name == 'email.delete' %}class="active"{% endif %}>
+            <span class="sidebar-text">{% trans "Outbox" %}</span>
+          </a>
+        </li>
+        <li>
+          <a href="{% url 'plugins:exhibition:email.sent' organizer=request.event.organizer.slug event=request.event.slug %}" {% if url_name == 'email.sent' %}class="active"{% endif %}>
+            <span class="sidebar-text">{% trans "Sent" %}</span>
+          </a>
+        </li>
+      </ul>
     </li>
   {% endif %}
   {% if 'can_change_event_settings' in request.eventpermset or 'can_view_orders' in request.eventpermset %}

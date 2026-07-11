@@ -5,6 +5,8 @@ from django.templatetags.static import static
 from django.urls import reverse
 from django.utils.html import format_html, format_html_join
 from django.utils.translation import gettext_lazy as _
+from eventyay.base.email import SimpleFunctionalMailTextPlaceholder
+from eventyay.base.signals import register_mail_placeholders
 from eventyay.common.utils.language import localize_event_text
 from eventyay.control.signals import event_dashboard_components
 from eventyay.presale.signals import (
@@ -13,6 +15,7 @@ from eventyay.presale.signals import (
     html_head,
 )
 
+from .mail import proposal_public_url
 from .models import ExhibitorInfo, ExhibitorSettings, SponsorGroup
 from .utils import add_external_image_csp_sources, public_exhibitors_queryset
 
@@ -148,3 +151,63 @@ def presale_supported_by_styles(sender, request=None, **kwargs):
         '<link rel="stylesheet" type="text/css" href="{}">',
         static("exhibition/css/presale-supported-by.css"),
     )
+
+
+@receiver(register_mail_placeholders, dispatch_uid="exhibition_mail_placeholders")
+def exhibition_mail_placeholders(sender, **kwargs):
+    """Placeholders available in exhibition emails.
+
+    Resolved by ``eventyay.base.email.get_email_context`` when the matching
+    object (``proposal`` or ``exhibitor``) is present in the context. See
+    :mod:`exhibition.mail`.
+    """
+    return [
+        SimpleFunctionalMailTextPlaceholder(
+            "event_name",
+            ["event"],
+            lambda event: str(event.name),
+            lambda event: str(event.name),
+        ),
+        SimpleFunctionalMailTextPlaceholder(
+            "proposal_name",
+            ["proposal"],
+            lambda proposal: localize_event_text(proposal.name) or str(proposal.name),
+            _("Acme Corp"),
+        ),
+        SimpleFunctionalMailTextPlaceholder(
+            "proposal_code",
+            ["proposal"],
+            lambda proposal: proposal.code,
+            "ABCD1234EFGH",
+        ),
+        SimpleFunctionalMailTextPlaceholder(
+            "proposal_url",
+            ["proposal"],
+            lambda proposal: proposal_public_url(proposal),
+            "https://example.com/orga/event/exhibition/call/proposals/ABCD1234EFGH/",
+        ),
+        SimpleFunctionalMailTextPlaceholder(
+            "name",
+            ["proposal"],
+            lambda proposal: (proposal.user.get_display_name() if proposal.user_id else "") or "",
+            _("Jane Doe"),
+        ),
+        SimpleFunctionalMailTextPlaceholder(
+            "exhibitor_name",
+            ["exhibitor"],
+            lambda exhibitor: localize_event_text(exhibitor.name) or str(exhibitor.name),
+            _("Acme Corp"),
+        ),
+        SimpleFunctionalMailTextPlaceholder(
+            "booth_id",
+            ["exhibitor"],
+            lambda exhibitor: exhibitor.booth_id or "",
+            "A-12",
+        ),
+        SimpleFunctionalMailTextPlaceholder(
+            "access_key",
+            ["exhibitor"],
+            lambda exhibitor: exhibitor.key or "",
+            "a1b2c3d4",
+        ),
+    ]

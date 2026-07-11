@@ -5,7 +5,7 @@ from django.db import transaction
 from django.db.models import Max
 from django.forms import inlineformset_factory
 from django.utils.translation import gettext_lazy as _
-from eventyay.base.forms import I18nModelForm
+from eventyay.base.forms import I18nModelForm, SettingsForm
 from eventyay.common.forms.mixins import (
     EventLocalizedModelChoiceField,
     EventLocalizedModelMultipleChoiceField,
@@ -13,11 +13,15 @@ from eventyay.common.forms.mixins import (
 from eventyay.common.forms.widgets import HtmlDateTimeInput
 from eventyay.common.urls import normalize_url_scheme
 from eventyay.common.utils.language import localize_event_text
+from i18nfield.forms import I18nFormField, I18nTextarea, I18nTextInput
+
+from . import mail as mail_helpers
 
 from .models import (
     PROPOSAL_DEFAULT_FIELD_KEYS,
     PROPOSAL_FORMSET_FIELD_KEYS,
     ExhibitionAnswer,
+    ExhibitionEmailQueue,
     ExhibitionProposal,
     ExhibitionProposalExtraLink,
     ExhibitionProposalSocialLink,
@@ -1192,3 +1196,49 @@ ExhibitionProposalExtraLinkFormSet = inlineformset_factory(
 
 def social_link_prefixes() -> dict[str, str]:
     return {key: spec.prefix for key, spec in SOCIAL_LINK_SPECS.items()}
+
+
+class ExhibitionEmailQueueForm(forms.ModelForm):
+    """Edit a queued email's recipient / subject / body before sending."""
+
+    class Meta:
+        model = ExhibitionEmailQueue
+        fields = ("to_email", "subject", "body")
+        widgets = {
+            "body": forms.Textarea(attrs={"rows": 12}),
+        }
+
+
+class ExhibitionMailTemplatesForm(SettingsForm):
+    """Editable lifecycle email templates, stored in ``event.settings``.
+
+    Field names match the settings keys produced by
+    :mod:`exhibition.mail`, so ``SettingsForm`` round-trips them automatically.
+    Defaults are shown when a template has not been customised.
+    """
+
+    _ROLE_LABELS = {
+        mail_helpers.PROPOSAL_NEW: _("Proposal received (confirmation)"),
+        mail_helpers.PROPOSAL_ACCEPTED: _("Proposal accepted"),
+        mail_helpers.PROPOSAL_REJECTED: _("Proposal rejected"),
+    }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        for role in mail_helpers.LIFECYCLE_ROLES:
+            default_subject, default_body = mail_helpers.DEFAULT_TEMPLATES[role]
+            label = self._ROLE_LABELS[role]
+            self.fields[mail_helpers.subject_settings_key(role)] = I18nFormField(
+                label=_("%(role)s — subject") % {"role": label},
+                required=False,
+                widget=I18nTextInput,
+                initial=default_subject,
+                locales=self.locales,
+            )
+            self.fields[mail_helpers.body_settings_key(role)] = I18nFormField(
+                label=_("%(role)s — body") % {"role": label},
+                required=False,
+                widget=I18nTextarea,
+                initial=default_body,
+                locales=self.locales,
+            )
