@@ -789,16 +789,12 @@ class ExhibitionProposalReviewForm(I18nModelForm):
         model = ExhibitionProposal
         localized_fields = "__all__"
         fields = [
-            "is_exhibitor",
-            "is_sponsor",
             "sponsor_group",
             "booth_id",
             "booth_name",
             "review_notes",
         ]
         labels = {
-            "is_exhibitor": _("Approve as exhibitor"),
-            "is_sponsor": _("Approve as sponsor"),
             "booth_id": _("Booth ID"),
             "booth_name": _("Booth name"),
             "review_notes": _("Internal review notes"),
@@ -814,12 +810,17 @@ class ExhibitionProposalReviewForm(I18nModelForm):
         self.event = event or getattr(instance, "event", None)
         self.fields["sponsor_group"].queryset = SponsorGroup.objects.filter(event=self.event).order_by("level", "pk")
         self.fields["sponsor_group"].empty_label = _("No sponsor group")
+        if instance is not None and not instance.is_sponsor:
+            del self.fields["sponsor_group"]
+        if instance is not None and not instance.is_exhibitor:
+            del self.fields["booth_id"]
+            del self.fields["booth_name"]
 
     def clean(self):
         cleaned_data = super().clean()
-        if not cleaned_data.get("is_sponsor"):
+        if not self.instance.is_sponsor:
             cleaned_data["sponsor_group"] = None
-        if not cleaned_data.get("is_exhibitor"):
+        if not self.instance.is_exhibitor:
             cleaned_data["booth_id"] = None
             cleaned_data["booth_name"] = ""
         return cleaned_data

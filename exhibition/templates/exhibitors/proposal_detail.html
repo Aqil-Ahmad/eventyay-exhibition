@@ -118,11 +118,13 @@
         <fieldset>
             <legend>{% trans "Review" %}</legend>
             {% if can_manage %}
-                {% bootstrap_field form.is_exhibitor layout="control" %}
-                {% bootstrap_field form.is_sponsor layout="control" %}
-                {% bootstrap_field form.sponsor_group layout="control" %}
-                {% bootstrap_field form.booth_id layout="control" %}
-                {% bootstrap_field form.booth_name layout="control" %}
+                {% if proposal.is_sponsor %}
+                    {% bootstrap_field form.sponsor_group layout="control" %}
+                {% endif %}
+                {% if proposal.is_exhibitor %}
+                    {% bootstrap_field form.booth_id layout="control" %}
+                    {% bootstrap_field form.booth_name layout="control" %}
+                {% endif %}
             {% endif %}
             {% bootstrap_field form.review_notes layout="control" %}
         </fieldset>
@@ -132,7 +134,7 @@
             </button>
             {% if can_manage and not proposal.approved_exhibitor_id and proposal.state != "rejected" %}
                 <button type="submit" class="btn btn-primary" name="action" value="approve">
-                    {% trans "Approve and create partner" %}
+                    {% trans "Approve and create" %}
                 </button>
                 <button type="submit" class="btn btn-danger" name="action" value="reject">
                     {% trans "Reject" %}
@@ -140,7 +142,7 @@
             {% endif %}
             {% if can_edit_exhibitor and proposal.approved_exhibitor_id %}
                 <a class="btn btn-success" href="{% url 'plugins:exhibition:edit' organizer=request.event.organizer.slug event=request.event.slug pk=proposal.approved_exhibitor_id %}">
-                    {% trans "Open partner profile" %}
+                    {% trans "Open profile" %}
                 </a>
             {% endif %}
         </div>

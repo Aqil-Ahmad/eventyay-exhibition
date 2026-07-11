@@ -1,5 +1,11 @@
 {% extends "exhibitors/call_base.html" %}
 {% load i18n %}
+{% load static %}
+
+{% block custom_header %}
+    {{ block.super }}
+    <link rel="stylesheet" href="{% static 'exhibition/css/proposal-list-actions.css' %}">
+{% endblock %}
 
 {% block call_content %}
     <h2 id="exhibition-call-heading">{% trans "Your Exhibitor & Sponsor Proposals" %}</h2>
@@ -34,21 +40,25 @@
                 </tbody>
             </table>
         </div>
-        {% for call in open_calls %}
-            <p>
-                <a class="btn btn-success btn-lg" href="{% url 'plugins:exhibition:proposal.add' organizer=request.event.organizer.slug event=request.event.slug call_type=call.call_type %}">
-                    {% if call.is_sponsor_call %}{% trans "Submit a sponsor proposal" %}{% else %}{% trans "Submit an exhibitor proposal" %}{% endif %}
-                </a>
-            </p>
-        {% endfor %}
+        {% if open_calls %}
+            <div class="proposal-submit-actions">
+                {% for call in open_calls %}
+                    <a class="btn btn-success btn-lg" href="{% url 'plugins:exhibition:proposal.add' organizer=request.event.organizer.slug event=request.event.slug call_type=call.call_type %}">
+                        {% if call.is_sponsor_call %}{% trans "Submit a sponsor proposal" %}{% else %}{% trans "Submit an exhibitor proposal" %}{% endif %}
+                    </a>
+                {% endfor %}
+            </div>
+        {% endif %}
     {% else %}
         <p class="text-center">{% trans "You have not submitted an exhibitor or sponsor proposal yet." %}</p>
-        {% for call in open_calls %}
-            <p class="text-center">
-                <a class="btn btn-success btn-lg btn-block" href="{% url 'plugins:exhibition:proposal.add' organizer=request.event.organizer.slug event=request.event.slug call_type=call.call_type %}">
-                    {% if call.is_sponsor_call %}{% trans "Submit a sponsor proposal" %}{% else %}{% trans "Submit an exhibitor proposal" %}{% endif %}
-                </a>
-            </p>
-        {% endfor %}
+        {% if open_calls %}
+            <div class="proposal-submit-actions">
+                {% for call in open_calls %}
+                    <a class="btn btn-success btn-lg" href="{% url 'plugins:exhibition:proposal.add' organizer=request.event.organizer.slug event=request.event.slug call_type=call.call_type %}">
+                        {% if call.is_sponsor_call %}{% trans "Submit a sponsor proposal" %}{% else %}{% trans "Submit an exhibitor proposal" %}{% endif %}
+                    </a>
+                {% endfor %}
+            </div>
+        {% endif %}
     {% endif %}
 {% endblock %}
