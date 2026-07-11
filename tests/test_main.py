@@ -10,9 +10,9 @@ from rest_framework import serializers
 from exhibition.api import ExhibitorInfoSerializer
 from exhibition.forms import ExhibitionProposalForm, SponsorGroupForm
 from exhibition.models import (
-    PROPOSAL_DEFAULT_FIELD_KEYS,
+    CALL_DEFAULT_FIELD_KEYS,
+    ExhibitionCall,
     ExhibitorInfo,
-    ExhibitorSettings,
     SponsorGroup,
     get_next_sponsor_group_level,
 )
@@ -23,12 +23,8 @@ from exhibition.views import (
 )
 
 
-def make_exhibitor_settings(event):
-    return ExhibitorSettings.objects.create(
-        event=event,
-        exhibitors_access_mail_subject="",
-        exhibitors_access_mail_body="",
-    )
+def make_call(event, call_type=ExhibitionCall.EXHIBITOR):
+    return ExhibitionCall.objects.create(event=event, call_type=call_type)
 
 
 def _language_index(code):
@@ -236,8 +232,8 @@ def test_call_text_preview_renders_markdown_per_active_locale(event):
     request = factory.post(
         "/preview",
         data={
-            f"call_text_{_language_index('en')}": "# Hello",
-            f"call_text_{_language_index('de')}": "## Hallo",
+            f"text_{_language_index('en')}": "# Hello",
+            f"text_{_language_index('de')}": "## Hallo",
         },
     )
     request.event = event
@@ -259,8 +255,8 @@ def test_call_text_preview_ignores_inactive_locales_and_blank_text(event):
     request = factory.post(
         "/preview",
         data={
-            f"call_text_{_language_index('en')}": "",
-            f"call_text_{_language_index('de')}": "# Nope",
+            f"text_{_language_index('en')}": "",
+            f"text_{_language_index('de')}": "# Nope",
         },
     )
     request.event = event
@@ -274,22 +270,60 @@ def test_call_text_preview_ignores_inactive_locales_and_blank_text(event):
 
 @pytest.mark.django_db
 def test_save_field_order_persists_new_order(event):
-    settings = make_exhibitor_settings(event)
+    call = make_call(event)
     view = ExhibitionQuestionListView()
-    view.save_field_order(settings, "social_links,logo,header_image,name")
+    view.save_field_order(call, "social_links,logo,header_image,name")
 
-    settings.refresh_from_db()
-    assert settings.ordered_proposal_field_keys[:3] == ["logo", "header_image", "name"]
-    assert settings.ordered_proposal_field_keys[-2:] == ["social_links", "extra_links"]
-    assert set(settings.ordered_proposal_field_keys) == set(PROPOSAL_DEFAULT_FIELD_KEYS)
+    call.refresh_from_db()
+    assert call.ordered_field_keys[:3] == ["logo", "header_image", "name"]
+    assert call.ordered_field_keys[-2:] == ["social_links", "extra_links"]
+    assert set(call.ordered_field_keys) == set(CALL_DEFAULT_FIELD_KEYS)
 
 
 @pytest.mark.django_db
 def test_proposal_form_reflects_saved_field_order(event):
-    settings = make_exhibitor_settings(event)
+    call = make_call(event)
     view = ExhibitionQuestionListView()
-    view.save_field_order(settings, "description,name")
+    view.save_field_order(call, "description,name")
 
-    form = ExhibitionProposalForm(event=event)
+    form = ExhibitionProposalForm(event=event, call=call)
     field_names = list(form.fields.keys())
     assert field_names.index("description") < field_names.index("name")
+
+
+@pytest.mark.django_db
+def test_proposal_form_sets_exhibitor_type_from_call(event):
+    event.settings.locales = ["en"]
+    call = make_call(event, call_type=ExhibitionCall.EXHIBITOR)
+    form = ExhibitionProposalForm(data={f"name_{_language_index('en')}": "Acme"}, event=event, call=call)
+
+    assert form.is_valid(), form.errors
+    assert form.cleaned_data["is_exhibitor"] is True
+    assert form.cleaned_data["is_sponsor"] is False
+
+
+@pytest.mark.django_db
+def test_proposal_form_sets_sponsor_type_from_call(event):
+    event.settings.locales = ["en"]
+    call = make_call(event, call_type=ExhibitionCall.SPONSOR)
+    form = ExhibitionProposalForm(data={f"name_{_language_index('en')}": "Acme"}, event=event, call=call)
+
+    assert form.is_valid(), form.errors
+    assert form.cleaned_data["is_sponsor"] is True
+    assert form.cleaned_data["is_exhibitor"] is False
+
+
+@pytest.mark.django_db
+def test_calls_of_different_types_are_independent(event):
+    exhibitor_call = make_call(event, call_type=ExhibitionCall.EXHIBITOR)
+    sponsor_call = make_call(event, call_type=ExhibitionCall.SPONSOR)
+
+    exhibitor_call.enabled = True
+    exhibitor_call.headline = "Join as exhibitor"
+    exhibitor_call.save()
+
+    sponsor_call.refresh_from_db()
+    assert sponsor_call.enabled is False
+    assert str(sponsor_call.headline) == ""
+    assert sponsor_call.is_sponsor_call is True
+    assert exhibitor_call.is_sponsor_call is False

@@ -28,7 +28,6 @@ from .models import (
     ExhibitionQuestionVariant,
     ExhibitorExtraLink,
     ExhibitorInfo,
-    ExhibitorSettings,
     ExhibitorSocialLink,
     SponsorGroup,
     get_next_sponsor_group_level,
