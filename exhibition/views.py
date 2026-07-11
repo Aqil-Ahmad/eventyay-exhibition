@@ -857,20 +857,68 @@ class ExhibitionQuestionListView(EventPermissionRequiredMixin, ListView):
         field_settings = call.normalized_field_settings
         answer_counts = self.get_default_field_answer_counts(call)
         field_definitions = {field["key"]: field for field in CALL_DEFAULT_FIELDS}
-        ordered_keys = [
-            key for key in call.ordered_field_keys if key not in PROPOSAL_FORMSET_FIELD_KEYS
-        ] + [key for key in CALL_DEFAULT_FIELD_KEYS if key in PROPOSAL_FORMSET_FIELD_KEYS]
-        context["default_fields"] = [
+        formset_keys = set(PROPOSAL_FORMSET_FIELD_KEYS)
+
+        orderable_rows = []
+        for key in CALL_DEFAULT_FIELD_KEYS:
+            if key in formset_keys:
+                continue
+            definition = field_definitions[key]
+            orderable_rows.append(
+                {
+                    "sort_position": field_settings[key]["position"],
+                    "sort_kind": 0,
+                    "dragsort_id": key,
+                    "input_prefix": key,
+                    "label": definition["label"],
+                    "active": field_settings[key]["active"],
+                    "required": field_settings[key]["required"],
+                    "supports_required": definition.get("supports_required", True),
+                    "active_locked": definition.get("active_locked", False),
+                    "required_locked": definition.get("required_locked", False),
+                    "answer_count": answer_counts.get(key, 0),
+                    "orderable": True,
+                    "is_custom": False,
+                }
+            )
+        for question in context["questions"]:
+            orderable_rows.append(
+                {
+                    "sort_position": question.position,
+                    "sort_kind": 1,
+                    "dragsort_id": question.pk,
+                    "input_prefix": f"question_{question.pk}",
+                    "label": question.localized_question,
+                    "active": question.active,
+                    "required": question.required,
+                    "supports_required": True,
+                    "active_locked": False,
+                    "required_locked": False,
+                    "answer_count": question.answer_count,
+                    "orderable": True,
+                    "is_custom": True,
+                    "pk": question.pk,
+                }
+            )
+        orderable_rows.sort(key=lambda row: (row["sort_position"], row["sort_kind"]))
+
+        formset_rows = [
             {
-                **field_definitions[key],
+                "dragsort_id": key,
+                "input_prefix": key,
+                "label": field_definitions[key]["label"],
                 "active": field_settings[key]["active"],
                 "required": field_settings[key]["required"],
                 "supports_required": field_definitions[key].get("supports_required", True),
-                "orderable": key not in PROPOSAL_FORMSET_FIELD_KEYS,
+                "active_locked": field_definitions[key].get("active_locked", False),
+                "required_locked": field_definitions[key].get("required_locked", False),
                 "answer_count": answer_counts.get(key, 0),
+                "orderable": False,
+                "is_custom": False,
             }
-            for key in ordered_keys
+            for key in PROPOSAL_FORMSET_FIELD_KEYS
         ]
+        context["proposal_fields"] = orderable_rows + formset_rows
         context["call"] = call
         context["call_type"] = call.call_type
         context["call_types"] = ExhibitionCall.TYPE_CHOICES
@@ -951,22 +999,41 @@ class ExhibitionQuestionListView(EventPermissionRequiredMixin, ListView):
         field_settings = call.normalized_field_settings
         orderable_keys = [key for key in CALL_DEFAULT_FIELD_KEYS if key not in PROPOSAL_FORMSET_FIELD_KEYS]
         orderable_key_set = set(orderable_keys)
-        seen = set()
+        questions = {question.pk: question for question in ExhibitionQuestion.objects.filter(event=call.event)}
+        seen_keys = set()
+        seen_question_pks = set()
+        reordered_questions = []
         position = 0
-        for key in order_str.split(","):
-            if key in orderable_key_set and key not in seen:
-                seen.add(key)
-                field_settings[key]["position"] = position
+        for token in (raw_token.strip() for raw_token in order_str.split(",")):
+            if token in orderable_key_set and token not in seen_keys:
+                seen_keys.add(token)
+                field_settings[token]["position"] = position
+                position += 1
+            elif token.isdigit() and int(token) in questions and int(token) not in seen_question_pks:
+                question = questions[int(token)]
+                question.position = position
+                seen_question_pks.add(question.pk)
+                reordered_questions.append(question)
                 position += 1
         for key in orderable_keys:
-            if key not in seen:
+            if key not in seen_keys:
                 field_settings[key]["position"] = position
                 position += 1
+        remaining_questions = sorted(
+            (question for pk, question in questions.items() if pk not in seen_question_pks),
+            key=lambda question: (question.position, question.pk),
+        )
+        for question in remaining_questions:
+            question.position = position
+            reordered_questions.append(question)
+            position += 1
         for key in PROPOSAL_FORMSET_FIELD_KEYS:
             field_settings[key]["position"] = position
             position += 1
         call.field_settings = field_settings
         call.save(update_fields=["field_settings"])
+        if reordered_questions:
+            ExhibitionQuestion.objects.bulk_update(reordered_questions, ["position"])
 
 
 class CallQuestionRedirectMixin:

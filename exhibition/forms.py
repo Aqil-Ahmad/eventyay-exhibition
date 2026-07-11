@@ -15,6 +15,9 @@ from eventyay.common.urls import normalize_url_scheme
 from eventyay.common.utils.language import localize_event_text
 
 from .models import (
+    CALL_DEFAULT_FIELD_KEYS,
+    PROPOSAL_DEFAULT_FIELD_KEYS,
+    PROPOSAL_FORMSET_FIELD_KEYS,
     ExhibitionAnswer,
     ExhibitionCall,
     ExhibitionProposal,
@@ -610,13 +613,14 @@ class ExhibitionProposalForm(ExhibitionQuestionFieldsMixin, I18nModelForm):
                 widget.attrs.setdefault("rows", 4)
         if self.call:
             self.apply_proposal_field_settings()
-            self.apply_proposal_field_order()
         if self.event:
             self.inject_exhibition_questions(
                 event=self.event,
                 proposal=instance,
                 readonly=self.read_only,
             )
+        if self.call:
+            self.apply_proposal_field_order()
         if self.read_only:
             for field in self.fields.values():
                 field.disabled = True
@@ -641,9 +645,21 @@ class ExhibitionProposalForm(ExhibitionQuestionFieldsMixin, I18nModelForm):
     def apply_proposal_field_order(self):
         if not self.call:
             return
+        field_settings = self.call.normalized_field_settings
+        formset_keys = set(PROPOSAL_FORMSET_FIELD_KEYS)
+        entries = []
+        for key in CALL_DEFAULT_FIELD_KEYS:
+            if key in formset_keys:
+                continue
+            entries.append((field_settings[key]["position"], 0, self.setting_field_map.get(key, ())))
+        for field_name, field in self.fields.items():
+            question = getattr(field, "question", None)
+            if question is not None:
+                entries.append((question.position, 1, (field_name,)))
+        entries.sort(key=lambda entry: (entry[0], entry[1]))
         ordered_field_names = []
-        for key in self.call.ordered_field_keys:
-            for field_name in self.setting_field_map.get(key, ()):
+        for _position, _kind, field_names in entries:
+            for field_name in field_names:
                 if field_name in self.fields:
                     ordered_field_names.append(field_name)
         self.order_fields(ordered_field_names)
@@ -866,7 +882,7 @@ class ExhibitionQuestionForm(I18nModelForm):
             max_position = ExhibitionQuestion.objects.filter(event=self.event).aggregate(Max("position"))[
                 "position__max"
             ]
-            self.initial["position"] = (max_position or -1) + 1
+            self.initial["position"] = max((max_position or -1) + 1, len(PROPOSAL_DEFAULT_FIELD_KEYS))
 
     def clean(self):
         cleaned_data = super().clean()

@@ -25,7 +25,7 @@ def create_exhibitor_calls(apps, schema_editor):
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('exhibition', '0006_exhibitorsettings_proposal_field_settings'),
+        ('exhibition', '0007_offset_exhibition_question_positions'),
     ]
 
     operations = [
