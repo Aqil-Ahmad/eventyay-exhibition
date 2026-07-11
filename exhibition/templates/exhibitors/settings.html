@@ -48,6 +48,8 @@ Best regards, Your {event} team{% endblocktrans %}
                     </li>
                 {% endfor %}
             </ul>
+            <div class="tab-content">
+            <div class="tab-pane active">
             <form action="" method="post" class="form-horizontal">
                 {% csrf_token %}
                 <input type="hidden" name="action" value="save_call_settings">
@@ -109,6 +111,8 @@ Best regards, Your {event} team{% endblocktrans %}
                     </div>
                 </div>
             </form>
+            </div>
+            </div>
     {% elif active_tab == "exhibitors" %}
             <form action="" method="post" class="form-horizontal">
                 {% csrf_token %}

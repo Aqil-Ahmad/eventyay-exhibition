@@ -25,6 +25,8 @@
             </li>
         {% endfor %}
     </ul>
+    <div class="tab-content">
+    <div class="tab-pane active">
     <form action="" method="post">
         {% csrf_token %}
         <fieldset>
@@ -100,4 +102,6 @@
             <button type="submit" class="btn btn-primary btn-save">{% trans "Save" %}</button>
         </div>
     </form>
+    </div>
+    </div>
 {% endblock %}
