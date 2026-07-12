@@ -30,8 +30,6 @@
             var blocks = previewGroup.querySelectorAll('.email-template-preview')
 
             function renderPreview() {
-                // Collect every field for this role's subject + body (one input
-                // per locale, as produced by the I18n widgets).
                 var params = new URLSearchParams()
                 params.append('role', role)
                 panel.querySelectorAll('input[name], textarea[name]').forEach(function (input) {
@@ -60,12 +58,15 @@
                             var subjectEl = block.querySelector('.email-template-preview-subject')
                             var bodyEl = block.querySelector('.email-template-preview-body')
                             if (subjectEl) {
-                                subjectEl.textContent = preview.subject || ''
+                                subjectEl.innerHTML = preview.subject || ''
                             }
                             if (bodyEl) {
-                                bodyEl.textContent = preview.body || ''
+                                bodyEl.innerHTML = preview.body || ''
                             }
                         })
+                        if (window.$) {
+                            $(previewGroup).find('.placeholder').tooltip()
+                        }
                     })
                     .catch(function () {
                         blocks.forEach(function (block) {

@@ -123,6 +123,8 @@
     margin-bottom: 6px;
 }
 .email-template-preview-body {
-    white-space: pre-wrap;
     word-wrap: break-word;
+}
+.email-template-preview-body > :last-child {
+    margin-bottom: 0;
 }

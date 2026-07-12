@@ -11,6 +11,7 @@ recipient's locale, so the outbox shows the final text an organiser can edit
 before sending.
 """
 
+import re
 from collections import defaultdict
 from urllib.parse import urljoin
 
@@ -105,24 +106,32 @@ def get_email_template(event, role):
     return subject, body
 
 
-def build_sample_context(event):
-    """Sample placeholder values for template previews (event-only context)."""
+class _SafeDict(dict):
+    def __missing__(self, key):
+        return "{" + key + "}"
+
+
+_PREVIEW_URL_RE = re.compile(r"^(https?://|www\.)[^\s]+$")
+
+
+def build_preview_placeholders(event):
+    """Sample placeholder values for previews, wrapped like the tickets preview."""
+    from django.utils.translation import gettext
     from eventyay.base.email import get_available_placeholders
 
     context = {}
-    placeholders = get_available_placeholders(event, ["event", "proposal", "exhibitor"])
-    for identifier, placeholder in placeholders.items():
-        try:
-            context[identifier] = placeholder.render_sample(event)
-        except Exception:
-            context[identifier] = ""
-    context.setdefault("event_name", str(event.name))
-    return context
-
-
-def render_sample_text(text, context, locale):
-    """Localise and substitute sample values into a template string for preview."""
-    return _render(text, context, locale)
+    for placeholder in get_available_placeholders(event, ["event", "proposal", "exhibitor"]).values():
+        sample = str(placeholder.render_sample(event)).strip()
+        if _PREVIEW_URL_RE.match(sample):
+            context[placeholder.identifier] = (
+                f'<a href="{sample}" target="_blank" rel="noopener noreferrer">{sample}</a>'
+            )
+        else:
+            context[placeholder.identifier] = '<span class="placeholder" title="{}">{}</span>'.format(
+                gettext("This value will be replaced based on dynamic parameters."),
+                sample,
+            )
+    return _SafeDict(context)
 
 
 def recipient_locale(event, user=None):

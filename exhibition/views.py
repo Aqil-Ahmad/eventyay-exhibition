@@ -1356,9 +1356,13 @@ class EmailTemplatePreviewView(EventPermissionRequiredMixin, View):
         if role not in mail_helpers.LIFECYCLE_ROLES:
             return JsonResponse({"detail": _("Unknown template.")}, status=400)
 
+        from eventyay.base.i18n import language
+        from eventyay.base.templatetags.rich_text import markdown_compile_email
+
         form = ExhibitionMailTemplatesForm(obj=request.event)
-        sample_context = mail_helpers.build_sample_context(request.event)
+        placeholders = mail_helpers.build_preview_placeholders(request.event)
         event_locales = set(request.event.settings.locales)
+        region = request.event.settings.region
 
         def values_by_locale(field_name):
             widget = form.fields[field_name].widget
@@ -1374,10 +1378,23 @@ class EmailTemplatePreviewView(EventPermissionRequiredMixin, View):
         subjects = values_by_locale(mail_helpers.subject_settings_key(role))
         bodies = values_by_locale(mail_helpers.body_settings_key(role))
 
+        def render(text):
+            try:
+                return markdown_compile_email(text.format_map(placeholders))
+            except (KeyError, IndexError, ValueError):
+                return markdown_compile_email(text)
+
+        def render_subject(text):
+            try:
+                return text.format_map(placeholders)
+            except (KeyError, IndexError, ValueError):
+                return text
+
         previews = {}
         for locale in event_locales:
-            previews[locale] = {
-                "subject": mail_helpers.render_sample_text(subjects.get(locale, ""), sample_context, locale),
-                "body": mail_helpers.render_sample_text(bodies.get(locale, ""), sample_context, locale),
-            }
+            with language(locale, region):
+                previews[locale] = {
+                    "subject": render_subject(subjects.get(locale, "")),
+                    "body": render(bodies.get(locale, "")),
+                }
         return JsonResponse({"previews": previews})
