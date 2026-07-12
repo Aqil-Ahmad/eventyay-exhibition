@@ -105,6 +105,26 @@ def get_email_template(event, role):
     return subject, body
 
 
+def build_sample_context(event):
+    """Sample placeholder values for template previews (event-only context)."""
+    from eventyay.base.email import get_available_placeholders
+
+    context = {}
+    placeholders = get_available_placeholders(event, ["event", "proposal", "exhibitor"])
+    for identifier, placeholder in placeholders.items():
+        try:
+            context[identifier] = placeholder.render_sample(event)
+        except Exception:
+            context[identifier] = ""
+    context.setdefault("event_name", str(event.name))
+    return context
+
+
+def render_sample_text(text, context, locale):
+    """Localise and substitute sample values into a template string for preview."""
+    return _render(text, context, locale)
+
+
 def recipient_locale(event, user=None):
     locale = getattr(user, "locale", None) if user else None
     return locale or event.settings.locale

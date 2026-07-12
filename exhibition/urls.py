@@ -17,6 +17,8 @@ from .views import (
     EmailOutboxListView,
     EmailSendView,
     EmailSentListView,
+    EmailTemplatePreviewView,
+    EmailTemplatesView,
     ExhibitionQuestionCreateView,
     ExhibitionQuestionDeleteView,
     ExhibitionQuestionEditView,
@@ -94,11 +96,6 @@ urlpatterns = [
         "exhibitors/event/<orgslug:organizer>/<slug:event>/settings/call/preview",
         CallTextPreviewView.as_view(),
         name="settings.call.preview",
-    ),
-    path(
-        "exhibitors/event/<orgslug:organizer>/<slug:event>/settings/emails",
-        SettingsView.as_view(active_tab="emails"),
-        name="settings.emails",
     ),
     path(
         "exhibitors/event/<orgslug:organizer>/<slug:event>/settings/sponsors/groups/<int:pk>/toggle-front-page",
@@ -194,6 +191,16 @@ urlpatterns = [
         "exhibitors/event/<orgslug:organizer>/<slug:event>/emails/sent",
         EmailSentListView.as_view(),
         name="email.sent",
+    ),
+    path(
+        "exhibitors/event/<orgslug:organizer>/<slug:event>/emails/templates",
+        EmailTemplatesView.as_view(),
+        name="email.templates",
+    ),
+    path(
+        "exhibitors/event/<orgslug:organizer>/<slug:event>/emails/templates/preview",
+        EmailTemplatePreviewView.as_view(),
+        name="email.templates.preview",
     ),
     path(
         "exhibitors/event/<orgslug:organizer>/<slug:event>/emails/<int:pk>/edit",

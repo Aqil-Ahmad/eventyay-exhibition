@@ -127,7 +127,7 @@ class SettingsView(EventPermissionRequiredMixin, ListView):
 
     def get_active_tab(self):
         tab = self.request.GET.get("tab") or self.request.POST.get("tab") or self.active_tab
-        if tab not in {"exhibitors", "sponsors", "call", "emails"}:
+        if tab not in {"exhibitors", "sponsors", "call"}:
             return "exhibitors"
         return tab
 
@@ -135,7 +135,6 @@ class SettingsView(EventPermissionRequiredMixin, ListView):
         route_names = {
             "call": "plugins:exhibition:settings.call",
             "sponsors": "plugins:exhibition:settings.sponsors",
-            "emails": "plugins:exhibition:settings.emails",
         }
         route_name = route_names.get(tab, "plugins:exhibition:settings.exhibitors")
         return reverse(
@@ -173,11 +172,6 @@ class SettingsView(EventPermissionRequiredMixin, ListView):
             instance=settings,
             event=self.request.event,
         )
-        if ctx["active_tab"] == "emails":
-            ctx["email_templates_form"] = kwargs.get("email_templates_form") or ExhibitionMailTemplatesForm(
-                obj=self.request.event,
-            )
-            ctx["email_placeholders"] = mail_helpers.PLACEHOLDER_DOCS
         if ctx["active_tab"] == "call":
             # Server-render the saved Call text (per language, matching the
             # preview endpoint) so the preview tab is not blank on load.
@@ -219,14 +213,6 @@ class SettingsView(EventPermissionRequiredMixin, ListView):
                 messages.success(self.request, _("Call settings have been saved."))
                 return redirect(self.get_settings_url("call"))
             return self.render_to_response(self.get_context_data(call_settings_form=form))
-
-        if action == "save_email_templates":
-            form = ExhibitionMailTemplatesForm(request.POST, obj=request.event)
-            if form.is_valid():
-                form.save()
-                messages.success(self.request, _("Email templates have been saved."))
-                return redirect(self.get_settings_url("emails"))
-            return self.render_to_response(self.get_context_data(email_templates_form=form))
 
         if action == "add_group":
             form = SponsorGroupForm(
@@ -1317,3 +1303,81 @@ class EmailDeleteView(EventPermissionRequiredMixin, DeleteView):
     def get_success_url(self):
         messages.success(self.request, _("The email has been discarded."))
         return reverse("plugins:exhibition:email.outbox", kwargs=event_kwargs(self.request.event))
+
+
+class EmailTemplatesView(EventPermissionRequiredMixin, TemplateView):
+    """Edit the lifecycle email templates as an accordion, styled like the
+    tickets Message center templates page."""
+
+    permission = "can_change_event_settings"
+    template_name = "exhibitors/email_templates.html"
+
+    def get_form(self, data=None):
+        return ExhibitionMailTemplatesForm(data=data, obj=self.request.event)
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        form = kwargs.get("form") or self.get_form()
+        context["form"] = form
+        context["template_panels"] = [
+            {
+                "role": role,
+                "label": label,
+                "subject_field": form[mail_helpers.subject_settings_key(role)],
+                "body_field": form[mail_helpers.body_settings_key(role)],
+            }
+            for role, label in (
+                (mail_helpers.PROPOSAL_NEW, _("Proposal received (confirmation)")),
+                (mail_helpers.PROPOSAL_ACCEPTED, _("Proposal accepted")),
+                (mail_helpers.PROPOSAL_REJECTED, _("Proposal rejected")),
+            )
+        ]
+        context["email_placeholders"] = mail_helpers.PLACEHOLDER_DOCS
+        context["locales"] = self.request.event.settings.locales
+        return context
+
+    def post(self, request, *args, **kwargs):
+        form = self.get_form(data=request.POST)
+        if form.is_valid():
+            form.save()
+            messages.success(request, _("Email templates have been saved."))
+            return redirect("plugins:exhibition:email.templates", **event_kwargs(request.event))
+        return self.render_to_response(self.get_context_data(form=form))
+
+
+class EmailTemplatePreviewView(EventPermissionRequiredMixin, View):
+    """Render draft template text (subject + body) with sample placeholder
+    values, per locale, mirroring the Call text preview endpoint."""
+
+    permission = "can_change_event_settings"
+
+    def post(self, request, *args, **kwargs):
+        role = request.POST.get("role")
+        if role not in mail_helpers.LIFECYCLE_ROLES:
+            return JsonResponse({"detail": _("Unknown template.")}, status=400)
+
+        form = ExhibitionMailTemplatesForm(obj=request.event)
+        sample_context = mail_helpers.build_sample_context(request.event)
+        event_locales = set(request.event.settings.locales)
+
+        def values_by_locale(field_name):
+            widget = form.fields[field_name].widget
+            raw = widget.value_from_datadict(request.POST, request.FILES, field_name)
+            if not isinstance(raw, (list, tuple)):
+                raw = [raw]
+            by_locale = {}
+            for index, (code, _name) in enumerate(django_settings.LANGUAGES):
+                if code in event_locales and index < len(raw):
+                    by_locale[code] = raw[index] or ""
+            return by_locale
+
+        subjects = values_by_locale(mail_helpers.subject_settings_key(role))
+        bodies = values_by_locale(mail_helpers.body_settings_key(role))
+
+        previews = {}
+        for locale in event_locales:
+            previews[locale] = {
+                "subject": mail_helpers.render_sample_text(subjects.get(locale, ""), sample_context, locale),
+                "body": mail_helpers.render_sample_text(bodies.get(locale, ""), sample_context, locale),
+            }
+        return JsonResponse({"previews": previews})

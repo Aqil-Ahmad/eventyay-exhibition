@@ -1200,6 +1200,10 @@ def social_link_prefixes() -> dict[str, str]:
 class ExhibitionEmailQueueForm(forms.ModelForm):
     """Edit a queued email's recipient / subject / body before sending."""
 
+    def __init__(self, *args, **kwargs):
+        kwargs.pop("event", None)
+        super().__init__(*args, **kwargs)
+
     class Meta:
         model = ExhibitionEmailQueue
         fields = ("to_email", "subject", "body")

@@ -1,0 +1,88 @@
+{% extends "exhibitors/base.html" %}
+{% load i18n %}
+{% load static %}
+{% load bootstrap3 %}
+
+{% block title %}{{ request.event.name }} - {% trans "Email templates" %}{% endblock %}
+
+{% block custom_header %}
+    {{ block.super }}
+    <link rel="stylesheet" href="{% static 'pretixcontrol/css/order-form-toggles.css' %}">
+    <link rel="stylesheet" href="{% static 'exhibition/css/exhibitors-settings.css' %}">
+{% endblock %}
+
+{% block exhibitors_header %}
+    <h1>{% trans "Email templates" %}</h1>
+{% endblock %}
+
+{% block exhibitors_content %}
+    <p class="text-muted">
+        {% trans "These templates are used for the confirmation email sent when an applicant submits a proposal, and for the accept/reject emails you send from the outbox." %}
+    </p>
+
+    <form action="" method="post" class="form-horizontal"
+          data-preview-url="{% url 'plugins:exhibition:email.templates.preview' organizer=request.event.organizer.slug event=request.event.slug %}">
+        {% csrf_token %}
+        {% bootstrap_form_errors form %}
+        <div class="panel-group" id="email_templates_group">
+            {% for panel in template_panels %}
+                <details class="panel panel-default email-template-panel" data-role="{{ panel.role }}">
+                    <summary class="panel-heading">
+                        <h4 class="panel-title">
+                            <strong>{{ panel.label }}</strong>
+                            <i class="fa fa-angle-down collapse-indicator"></i>
+                        </h4>
+                    </summary>
+                    <div class="panel-body">
+                        {% bootstrap_field panel.subject_field layout="control" %}
+                        <div class="form-group email-template-body" data-role="{{ panel.role }}">
+                            <label class="col-md-3 control-label">{{ panel.body_field.label }}</label>
+                            <div class="col-md-9">
+                                <ul class="nav nav-tabs" role="tablist">
+                                    <li role="presentation" class="active">
+                                        <a data-toggle="tab" href="#{{ panel.role }}_edit"><i class="fa fa-pencil-square-o fa-fw"></i> {% trans "Edit" %}</a>
+                                    </li>
+                                    <li role="presentation">
+                                        <a data-toggle="tab" href="#{{ panel.role }}_preview" data-template-preview-tab><i class="fa fa-tv fa-fw"></i> {% trans "Preview" %}</a>
+                                    </li>
+                                </ul>
+                                <div class="tab-content">
+                                    <div id="{{ panel.role }}_edit" class="tab-pane fade in active">
+                                        {% bootstrap_field panel.body_field show_label=False form_group_class="" %}
+                                    </div>
+                                    <div id="{{ panel.role }}_preview" class="tab-pane email-template-preview-group">
+                                        {% for locale in locales %}
+                                            <div lang="{{ locale }}" class="email-template-preview">
+                                                <div class="email-template-preview-subject"></div>
+                                                <div class="email-template-preview-body"></div>
+                                            </div>
+                                        {% endfor %}
+                                        <div class="alert alert-info">
+                                            {% trans "Preview uses sample values for placeholders and renders your unsaved draft text." %}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </details>
+            {% endfor %}
+        </div>
+
+        <fieldset>
+            <legend>{% trans "Available placeholders" %}</legend>
+            <dl class="dl-horizontal">
+                {% for token, description in email_placeholders %}
+                    <dt><code>{{ token }}</code></dt>
+                    <dd>{{ description }}</dd>
+                {% endfor %}
+            </dl>
+        </fieldset>
+
+        <div class="form-group submit-group">
+            <button type="submit" class="btn btn-primary btn-save">{% trans "Save" %}</button>
+        </div>
+    </form>
+
+    <script type="text/javascript" src="{% static 'exhibition/js/email-templates.js' %}"></script>
+{% endblock %}
