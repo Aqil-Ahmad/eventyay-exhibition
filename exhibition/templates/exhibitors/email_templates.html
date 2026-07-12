@@ -35,7 +35,7 @@
                     </summary>
                     <div class="panel-body">
                         {% bootstrap_field panel.subject_field layout="control" %}
-                        <div class="form-group email-template-body" data-role="{{ panel.role }}">
+                        <div class="form-group preview-panel" data-role="{{ panel.role }}">
                             <label class="col-md-3 control-label">{{ panel.body_field.label }}</label>
                             <div class="col-md-9">
                                 <ul class="nav nav-tabs" role="tablist">
@@ -50,16 +50,10 @@
                                     <div id="{{ panel.role }}_edit" class="tab-pane fade in active">
                                         {% bootstrap_field panel.body_field show_label=False form_group_class="" %}
                                     </div>
-                                    <div id="{{ panel.role }}_preview" class="tab-pane email-template-preview-group">
+                                    <div id="{{ panel.role }}_preview" class="tab-pane mail-preview-group">
                                         {% for locale in locales %}
-                                            <div lang="{{ locale }}" class="email-template-preview">
-                                                <div class="email-template-preview-subject"></div>
-                                                <div class="email-template-preview-body"></div>
-                                            </div>
+                                            <div lang="{{ locale }}" class="mail-preview"></div>
                                         {% endfor %}
-                                        <div class="alert alert-info">
-                                            {% trans "Preview uses sample values for placeholders and renders your unsaved draft text." %}
-                                        </div>
                                     </div>
                                 </div>
                             </div>

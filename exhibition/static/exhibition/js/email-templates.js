@@ -20,14 +20,14 @@
             return
         }
 
-        form.querySelectorAll('.email-template-panel').forEach(function (panel) {
+        form.querySelectorAll('.preview-panel').forEach(function (panel) {
             var role = panel.getAttribute('data-role')
             var previewTab = panel.querySelector('[data-template-preview-tab]')
-            var previewGroup = panel.querySelector('.email-template-preview-group')
-            if (!previewTab || !previewGroup) {
+            var previewGroup = panel.querySelector('.mail-preview-group')
+            if (!role || !previewTab || !previewGroup) {
                 return
             }
-            var blocks = previewGroup.querySelectorAll('.email-template-preview')
+            var blocks = previewGroup.querySelectorAll('.mail-preview')
 
             function renderPreview() {
                 var params = new URLSearchParams()
@@ -53,16 +53,7 @@
                     .then(function (data) {
                         var previews = data.previews || {}
                         blocks.forEach(function (block) {
-                            var locale = block.getAttribute('lang')
-                            var preview = previews[locale] || {}
-                            var subjectEl = block.querySelector('.email-template-preview-subject')
-                            var bodyEl = block.querySelector('.email-template-preview-body')
-                            if (subjectEl) {
-                                subjectEl.innerHTML = preview.subject || ''
-                            }
-                            if (bodyEl) {
-                                bodyEl.innerHTML = preview.body || ''
-                            }
+                            block.innerHTML = previews[block.getAttribute('lang')] || ''
                         })
                         if (window.$) {
                             $(previewGroup).find('.placeholder').tooltip()
@@ -70,10 +61,7 @@
                     })
                     .catch(function () {
                         blocks.forEach(function (block) {
-                            var bodyEl = block.querySelector('.email-template-preview-body')
-                            if (bodyEl) {
-                                bodyEl.textContent = gettext('The preview could not be loaded. Please try again.')
-                            }
+                            block.textContent = gettext('The preview could not be loaded. Please try again.')
                         })
                     })
             }

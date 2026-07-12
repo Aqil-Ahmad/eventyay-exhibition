@@ -1375,7 +1375,6 @@ class EmailTemplatePreviewView(EventPermissionRequiredMixin, View):
                     by_locale[code] = raw[index] or ""
             return by_locale
 
-        subjects = values_by_locale(mail_helpers.subject_settings_key(role))
         bodies = values_by_locale(mail_helpers.body_settings_key(role))
 
         def render(text):
@@ -1384,17 +1383,8 @@ class EmailTemplatePreviewView(EventPermissionRequiredMixin, View):
             except (KeyError, IndexError, ValueError):
                 return markdown_compile_email(text)
 
-        def render_subject(text):
-            try:
-                return text.format_map(placeholders)
-            except (KeyError, IndexError, ValueError):
-                return text
-
         previews = {}
         for locale in event_locales:
             with language(locale, region):
-                previews[locale] = {
-                    "subject": render_subject(subjects.get(locale, "")),
-                    "body": render(bodies.get(locale, "")),
-                }
+                previews[locale] = render(bodies.get(locale, ""))
         return JsonResponse({"previews": previews})
