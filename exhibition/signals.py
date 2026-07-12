@@ -183,7 +183,7 @@ def exhibition_mail_placeholders(sender, **kwargs):
         SimpleFunctionalMailTextPlaceholder(
             "proposal_url",
             ["proposal"],
-            lambda proposal: proposal_public_url(proposal),
+            proposal_public_url,
             "https://example.com/orga/event/exhibition/call/proposals/ABCD1234EFGH/",
         ),
         SimpleFunctionalMailTextPlaceholder(

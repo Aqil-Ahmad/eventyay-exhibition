@@ -1171,9 +1171,7 @@ class ExhibitorEditView(ExhibitorLinkFormsetMixin, EventPermissionRequiredMixin,
         # Capture the persisted value before saving so we can detect the
         # False -> True lead-scanning transition.
         was_lead_scanning_enabled = (
-            ExhibitorInfo.objects.filter(pk=self.object.pk)
-            .values_list("lead_scanning_enabled", flat=True)
-            .first()
+            ExhibitorInfo.objects.filter(pk=self.object.pk).values_list("lead_scanning_enabled", flat=True).first()
         )
 
         # Generate booth_id only for exhibitors if none exists.
@@ -1257,9 +1255,7 @@ class EmailOutboxListView(EventPermissionRequiredMixin, ListView):
     context_object_name = "emails"
 
     def get_queryset(self):
-        return ExhibitionEmailQueue.objects.filter(
-            event=self.request.event, sent_at__isnull=True
-        ).order_by("-created")
+        return ExhibitionEmailQueue.objects.filter(event=self.request.event, sent_at__isnull=True).order_by("-created")
 
 
 class EmailSentListView(EventPermissionRequiredMixin, ListView):
@@ -1271,9 +1267,7 @@ class EmailSentListView(EventPermissionRequiredMixin, ListView):
     context_object_name = "emails"
 
     def get_queryset(self):
-        return ExhibitionEmailQueue.objects.filter(
-            event=self.request.event, sent_at__isnull=False
-        ).order_by("-sent_at")
+        return ExhibitionEmailQueue.objects.filter(event=self.request.event, sent_at__isnull=False).order_by("-sent_at")
 
 
 class EmailEditView(EventPermissionRequiredMixin, UpdateView):
@@ -1303,9 +1297,7 @@ class EmailSendView(EventPermissionRequiredMixin, View):
     permission = EMAIL_MANAGE_PERMISSION
 
     def post(self, request, *args, **kwargs):
-        email = get_object_or_404(
-            ExhibitionEmailQueue, pk=kwargs["pk"], event=request.event, sent_at__isnull=True
-        )
+        email = get_object_or_404(ExhibitionEmailQueue, pk=kwargs["pk"], event=request.event, sent_at__isnull=True)
         email.send(requestor=request.user)
         messages.success(request, _("The email has been sent."))
         return redirect("plugins:exhibition:email.outbox", **event_kwargs(request.event))

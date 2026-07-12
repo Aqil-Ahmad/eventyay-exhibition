@@ -16,7 +16,6 @@ from eventyay.common.utils.language import localize_event_text
 from i18nfield.forms import I18nFormField, I18nTextarea, I18nTextInput
 
 from . import mail as mail_helpers
-
 from .models import (
     PROPOSAL_DEFAULT_FIELD_KEYS,
     PROPOSAL_FORMSET_FIELD_KEYS,

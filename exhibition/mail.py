@@ -16,8 +16,7 @@ from urllib.parse import urljoin
 
 from django.conf import settings as django_settings
 from django.urls import reverse
-from django.utils.translation import gettext_lazy as _lazy
-from django.utils.translation import gettext_noop
+from django.utils.translation import gettext_lazy as _lazy, gettext_noop
 from i18nfield.strings import LazyI18nString
 
 # Lifecycle template roles. These double as the ``event.settings`` key stems:
