@@ -53,7 +53,10 @@
                     .then(function (data) {
                         var previews = data.previews || {}
                         blocks.forEach(function (block) {
-                            block.innerHTML = previews[block.getAttribute('lang')] || ''
+                            var html = previews[block.getAttribute('lang')] || ''
+                            var parsed = new DOMParser().parseFromString(html, 'text/html')
+                            var nodes = Array.prototype.slice.call(parsed.body.childNodes)
+                            block.replaceChildren.apply(block, nodes)
                         })
                         if (window.$) {
                             $(previewGroup).find('.placeholder').tooltip()
