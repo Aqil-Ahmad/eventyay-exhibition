@@ -19,16 +19,14 @@
         {% csrf_token %}
         {% bootstrap_form form layout="control" %}
         <div class="form-group submit-group">
-            <button type="submit" class="btn btn-default" name="_save" value="save">
-                {% trans "Save changes" %}
-            </button>
+            <div class="col-md-9 col-md-offset-3">
+                <button type="submit" class="btn btn-default" name="_save" value="save">
+                    {% trans "Save changes" %}
+                </button>
+                <button type="submit" class="btn btn-primary" name="_send" value="send">
+                    <i class="fa fa-paper-plane"></i> {% trans "Save & send" %}
+                </button>
+            </div>
         </div>
-    </form>
-
-    <form action="{% url 'plugins:exhibition:email.send' organizer=request.event.organizer.slug event=request.event.slug pk=email.pk %}" method="post">
-        {% csrf_token %}
-        <button type="submit" class="btn btn-primary">
-            <i class="fa fa-paper-plane"></i> {% trans "Send now" %}
-        </button>
     </form>
 {% endblock %}

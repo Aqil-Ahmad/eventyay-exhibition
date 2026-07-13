@@ -1269,9 +1269,13 @@ class EmailEditView(EventPermissionRequiredMixin, UpdateView):
         return ExhibitionEmailQueue.objects.filter(event=self.request.event, sent_at__isnull=True)
 
     def form_valid(self, form):
-        response = super().form_valid(form)
-        messages.success(self.request, _("The email has been saved."))
-        return response
+        self.object = form.save()
+        if "_send" in self.request.POST:
+            self.object.send(requestor=self.request.user)
+            messages.success(self.request, _("The email has been saved and sent."))
+        else:
+            messages.success(self.request, _("The email has been saved."))
+        return redirect(self.get_success_url())
 
     def get_success_url(self):
         return reverse("plugins:exhibition:email.outbox", kwargs=event_kwargs(self.request.event))

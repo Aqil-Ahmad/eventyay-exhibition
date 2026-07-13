@@ -210,4 +210,10 @@ def exhibition_mail_placeholders(sender, **kwargs):
             lambda exhibitor: exhibitor.key or "",
             "a1b2c3d4",
         ),
+        SimpleFunctionalMailTextPlaceholder(
+            "exhibitor_access_code",
+            ["exhibitor"],
+            lambda exhibitor: exhibitor.key or "",
+            "a1b2c3d4",
+        ),
     ]
