@@ -176,9 +176,11 @@
                 return
             }
             var hideExhibitorFields = notExhibitorCheckbox.checked
-            boothNameWrapper.classList.toggle('hidden', hideExhibitorFields)
-            boothIdWrapper.classList.toggle('hidden', hideExhibitorFields)
-            leadScanningSection.classList.toggle('hidden', hideExhibitorFields)
+            ;[boothNameWrapper, boothIdWrapper, leadScanningSection].forEach(function (element) {
+                if (element) {
+                    element.classList.toggle('hidden', hideExhibitorFields)
+                }
+            })
         }
 
         toggleSponsorGroup()

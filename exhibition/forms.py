@@ -153,9 +153,24 @@ class ExhibitorInfoForm(I18nModelForm):
             "header_image": _("Header Image"),
             "url": _("Organization Website"),
             "is_sponsor": _("Mark this partner as an event sponsor"),
-            "booth_name": _("Booth name"),
+            "booth_name": _("Preferred booth name"),
             "lead_scanning_enabled": _("Allow lead scanning"),
         }
+
+    PROFILE_SETTING_FIELD_MAP = {
+        "name": ("name",),
+        "description": ("description",),
+        "email": ("email",),
+        "url": ("url",),
+        "contact_url": ("contact_url",),
+        "video_url": ("video_url",),
+        "slides": ("slides", "slides_url"),
+        "logo": ("logo", "logo_url"),
+        "header_image": ("header_image", "header_image_url"),
+        "booth_name": ("booth_name",),
+    }
+    PROFILE_FORMSET_KEYS = ("social_links", "extra_links")
+    PROFILE_COMPOSITE_KEYS = ("slides", "logo", "header_image")
 
     SPONSOR_ONLY_FIELDS = ("sponsor_group",)
     EXHIBITOR_ONLY_FIELDS = (
@@ -195,6 +210,55 @@ class ExhibitorInfoForm(I18nModelForm):
                     sub_widget.attrs.setdefault("rows", 4)
             else:
                 widget.attrs.setdefault("rows", 4)
+        self.profile_field_settings = {}
+        self.ordered_profile_keys = []
+        if self.event:
+            settings = ExhibitorSettings.objects.get_or_create(event=self.event)[0]
+            self.profile_field_settings = settings.normalized_proposal_field_settings
+            self._apply_profile_field_settings()
+            self.ordered_profile_keys = [
+                key for key in settings.ordered_proposal_field_keys if self.profile_key_is_active(key)
+            ]
+            self._apply_profile_field_order()
+
+    def _apply_profile_field_settings(self):
+        for key, field_names in self.PROFILE_SETTING_FIELD_MAP.items():
+            if self.profile_key_is_active(key):
+                if key in self.PROFILE_COMPOSITE_KEYS:
+                    continue
+                for field_name in field_names:
+                    if field_name in self.fields:
+                        self.fields[field_name].required = self.profile_field_settings[key]["required"]
+            else:
+                self._drop_fields(field_names)
+
+    def _apply_profile_field_order(self):
+        ordered_field_names = []
+        for key in self.ordered_profile_keys:
+            for field_name in self.PROFILE_SETTING_FIELD_MAP.get(key, ()):
+                if field_name in self.fields:
+                    ordered_field_names.append(field_name)
+        self.order_fields(ordered_field_names)
+
+    def profile_key_is_active(self, key):
+        setting = self.profile_field_settings.get(key)
+        return bool(setting["active"]) if setting else False
+
+    @property
+    def profile_items(self):
+        items = []
+        for key in self.ordered_profile_keys:
+            if key in self.PROFILE_FORMSET_KEYS:
+                items.append({"kind": key, "key": key})
+                continue
+            field_names = [name for name in self.PROFILE_SETTING_FIELD_MAP.get(key, ()) if name in self.fields]
+            if not field_names:
+                continue
+            if key in self.PROFILE_COMPOSITE_KEYS:
+                items.append({"kind": key, "key": key})
+            else:
+                items.append({"kind": "field", "key": key, "field": self[field_names[0]]})
+        return items
 
     def _drop_fields(self, names):
         for name in names:
