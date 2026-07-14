@@ -6,6 +6,10 @@
 {% block title %}
     {% if action == 'edit' %}
         {% trans "Edit Exhibitor or Sponsor" %}
+    {% elif partner_type == 'sponsor' %}
+        {% trans "Add a Sponsor" %}
+    {% elif partner_type == 'exhibitor' %}
+        {% trans "Add an Exhibitor" %}
     {% else %}
         {% trans "Add an Exhibitor or Sponsor" %}
     {% endif %}
@@ -20,6 +24,10 @@
 <h1>
     {% if action == 'edit' %}
         {% trans "Edit Exhibitor or Sponsor" %}
+    {% elif partner_type == 'sponsor' %}
+        {% trans "Add a Sponsor" %}
+    {% elif partner_type == 'exhibitor' %}
+        {% trans "Add an Exhibitor" %}
     {% else %}
         {% trans "Add an Exhibitor or Sponsor" %}
     {% endif %}
@@ -190,23 +198,34 @@
             </div>
         </div>
         {% bootstrap_field form.url layout="control" %}
+        {% if form.is_sponsor %}
         <div id="is-sponsor-wrapper">
             {% bootstrap_field form.is_sponsor layout="control" %}
         </div>
+        {% endif %}
+        {% if form.sponsor_group %}
         <div id="sponsor-group-wrapper">
             {% bootstrap_field form.sponsor_group layout="control" %}
         </div>
+        {% endif %}
+        {% if form.not_an_exhibitor %}
         <div id="not-an-exhibitor-wrapper">
             {% bootstrap_field form.not_an_exhibitor layout="control" %}
         </div>
+        {% endif %}
+        {% if form.booth_name %}
         <div id="booth-name-wrapper">
             {% bootstrap_field form.booth_name layout="control" %}
         </div>
+        {% endif %}
+        {% if form.booth_id %}
         <div id="booth-id-wrapper">
             {% bootstrap_field form.booth_id layout="control" %}
         </div>
+        {% endif %}
     </fieldset>
 
+    {% if form.lead_scanning_enabled %}
     <fieldset id="lead-scanning-section">
         <legend>{% trans "Lead scanning" %}</legend>
         {% bootstrap_field form.allow_voucher_access layout="control" %}
@@ -214,6 +233,7 @@
         {% bootstrap_field form.allow_lead_access layout="control" %}
         {% bootstrap_field form.lead_scanning_scope_by_device layout="control" %}
     </fieldset>
+    {% endif %}
 
     <fieldset>
         <legend>{% trans "Internal notes" %}</legend>
@@ -228,8 +248,12 @@
                 {% trans "Save" %}
             {% endif %}
         </button>
-        <a class="btn btn-default btn-lg"
-           href="{% url 'plugins:exhibition:info' organizer=request.event.organizer.slug event=request.event.slug %}">
+        {% if partner_type == 'sponsor' or request.GET.type == 'sponsor' %}
+            {% url 'plugins:exhibition:sponsors' organizer=request.event.organizer.slug event=request.event.slug as cancel_url %}
+        {% else %}
+            {% url 'plugins:exhibition:exhibitors' organizer=request.event.organizer.slug event=request.event.slug as cancel_url %}
+        {% endif %}
+        <a class="btn btn-default btn-lg" href="{{ cancel_url }}">
             {% trans "Cancel" %}
         </a>
     </div>

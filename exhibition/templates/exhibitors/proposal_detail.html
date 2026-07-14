@@ -42,13 +42,15 @@
                 <dd>{{ proposal.get_state_display }}</dd>
                 <dt>{% trans "Type" %}</dt>
                 <dd>
-                    {% if proposal.is_exhibitor and proposal.is_sponsor %}
-                        {% trans "Exhibitor and sponsor" %}
-                    {% elif proposal.is_sponsor %}
-                        {% trans "Sponsor" %}
-                    {% else %}
-                        {% trans "Exhibitor" %}
-                    {% endif %}
+                    {% with partner=proposal.approved_exhibitor|default:proposal %}
+                        {% if partner.is_exhibitor and partner.is_sponsor %}
+                            {% trans "Exhibitor and sponsor" %}
+                        {% elif partner.is_sponsor %}
+                            {% trans "Sponsor" %}
+                        {% else %}
+                            {% trans "Exhibitor" %}
+                        {% endif %}
+                    {% endwith %}
                 </dd>
                 <dt>{% trans "URL" %}</dt>
                 <dd>{% if proposal.url %}<a href="{{ proposal.url }}">{{ proposal.url }}</a>{% else %}-{% endif %}</dd>

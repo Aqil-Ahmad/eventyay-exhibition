@@ -61,6 +61,15 @@ def event_kwargs(event):
     }
 
 
+def partner_list_url(event, partner_type):
+    """URL of the Sponsors or Exhibitors list, defaulting to Exhibitors."""
+    route = {
+        "sponsor": "plugins:exhibition:sponsors",
+        "exhibitor": "plugins:exhibition:exhibitors",
+    }.get(partner_type, "plugins:exhibition:exhibitors")
+    return reverse(route, kwargs=event_kwargs(event))
+
+
 class PublicEventLoginRequiredMixin(LoginRequiredMixin):
     def get_login_url(self):
         return reverse("cfp:event.login", kwargs=event_kwargs(self.request.event))
@@ -241,18 +250,20 @@ class ExhibitorListView(EventPermissionRequiredMixin, ListView):
     permission = ("can_change_event_settings", "can_view_orders")
     template_name = "exhibitors/exhibitor_info.html"
     context_object_name = "exhibitors"
+    partner_type = None
 
     def get_queryset(self):
-        return ExhibitorInfo.objects.filter(event=self.request.event).select_related("sponsor_group")
+        queryset = ExhibitorInfo.objects.filter(event=self.request.event).select_related("sponsor_group")
+        if self.partner_type == "sponsor":
+            queryset = queryset.filter(is_sponsor=True)
+        elif self.partner_type == "exhibitor":
+            queryset = queryset.filter(is_exhibitor=True)
+        return queryset
 
-    def get_success_url(self) -> str:
-        return reverse(
-            "plugins:exhibition:info",
-            kwargs={
-                "organizer": self.request.event.organizer.slug,
-                "event": self.request.event.slug,
-            },
-        )
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["partner_type"] = self.partner_type
+        return context
 
 
 class PublicExhibitorListView(ListView):
@@ -1034,6 +1045,12 @@ class ExhibitorCreateView(ExhibitorLinkFormsetMixin, EventPermissionRequiredMixi
     form_class = ExhibitorInfoForm
     template_name = "exhibitors/add.html"
     permission = "can_change_event_settings"
+    partner_type = None
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs["partner_type"] = self.partner_type
+        return kwargs
 
     def post(self, request, *args, **kwargs):
         self.object = None
@@ -1054,16 +1071,11 @@ class ExhibitorCreateView(ExhibitorLinkFormsetMixin, EventPermissionRequiredMixi
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context["action"] = "create"
+        context["partner_type"] = self.partner_type
         return context
 
     def get_success_url(self):
-        return reverse(
-            "plugins:exhibition:info",
-            kwargs={
-                "organizer": self.request.event.organizer.slug,
-                "event": self.request.event.slug,
-            },
-        )
+        return partner_list_url(self.request.event, self.partner_type)
 
 
 class ExhibitorEditView(ExhibitorLinkFormsetMixin, EventPermissionRequiredMixin, UpdateView):
@@ -1105,13 +1117,11 @@ class ExhibitorEditView(ExhibitorLinkFormsetMixin, EventPermissionRequiredMixin,
         return context
 
     def get_success_url(self):
-        return reverse(
-            "plugins:exhibition:info",
-            kwargs={
-                "organizer": self.request.event.organizer.slug,
-                "event": self.request.event.slug,
-            },
-        )
+        # Return to the list the partner was edited from; fall back to its type.
+        partner_type = self.request.GET.get("type")
+        if partner_type not in ("sponsor", "exhibitor"):
+            partner_type = "sponsor" if self.object.is_sponsor and not self.object.is_exhibitor else "exhibitor"
+        return partner_list_url(self.request.event, partner_type)
 
 
 class ExhibitorDeleteView(EventPermissionRequiredMixin, DeleteView):

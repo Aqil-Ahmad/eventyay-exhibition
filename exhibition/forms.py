@@ -154,13 +154,30 @@ class ExhibitorInfoForm(I18nModelForm):
             "lead_scanning_enabled": _("Allow lead scanning"),
         }
 
+    SPONSOR_ONLY_FIELDS = ("sponsor_group",)
+    EXHIBITOR_ONLY_FIELDS = (
+        "booth_id",
+        "booth_name",
+        "lead_scanning_enabled",
+        "allow_voucher_access",
+        "allow_lead_access",
+        "lead_scanning_scope_by_device",
+    )
+    TYPE_TOGGLE_FIELDS = ("is_sponsor", "not_an_exhibitor")
+
     def __init__(self, *args, **kwargs):
+        self.partner_type = kwargs.pop("partner_type", None)
         event = kwargs.get("event")
         instance = kwargs.get("instance")
         super().__init__(*args, **kwargs)
         self.event = event or getattr(instance, "event", None)
-        self.fields["sponsor_group"].queryset = SponsorGroup.objects.filter(event=self.event).order_by("pk")
-        self.fields["sponsor_group"].empty_label = _("No sponsor group")
+        if self.partner_type == "sponsor":
+            self._drop_fields(self.EXHIBITOR_ONLY_FIELDS + self.TYPE_TOGGLE_FIELDS)
+        elif self.partner_type == "exhibitor":
+            self._drop_fields(self.SPONSOR_ONLY_FIELDS + self.TYPE_TOGGLE_FIELDS)
+        if "sponsor_group" in self.fields:
+            self.fields["sponsor_group"].queryset = SponsorGroup.objects.filter(event=self.event).order_by("pk")
+            self.fields["sponsor_group"].empty_label = _("No sponsor group")
         for field_name in ("logo", "header_image"):
             self.fields[field_name].widget.attrs.setdefault("accept", "image/*")
         self.fields["slides"].widget.attrs.setdefault("accept", ".pdf,application/pdf")
@@ -175,6 +192,10 @@ class ExhibitorInfoForm(I18nModelForm):
                     sub_widget.attrs.setdefault("rows", 4)
             else:
                 widget.attrs.setdefault("rows", 4)
+
+    def _drop_fields(self, names):
+        for name in names:
+            self.fields.pop(name, None)
 
     def clean(self):
         cleaned_data = super().clean()
@@ -234,18 +255,33 @@ class ExhibitorInfoForm(I18nModelForm):
             if image_url:
                 cleaned_data[url_field] = normalize_url_scheme(image_url)
 
-        cleaned_data["is_exhibitor"] = not cleaned_data.get("not_an_exhibitor", False)
+        editing_existing = bool(self.instance and self.instance.pk)
+        if self.partner_type == "sponsor":
+            is_sponsor = True
+            is_exhibitor = self.instance.is_exhibitor if editing_existing else False
+        elif self.partner_type == "exhibitor":
+            is_sponsor = self.instance.is_sponsor if editing_existing else False
+            is_exhibitor = True
+        else:
+            is_sponsor = bool(cleaned_data.get("is_sponsor"))
+            is_exhibitor = not cleaned_data.get("not_an_exhibitor", False)
+        self._resolved_is_sponsor = is_sponsor
+        cleaned_data["is_exhibitor"] = is_exhibitor
 
-        if not cleaned_data.get("is_sponsor"):
+        if not is_sponsor:
             cleaned_data["sponsor_group"] = None
 
-        if not cleaned_data["is_exhibitor"]:
+        if not is_exhibitor:
             cleaned_data["booth_name"] = ""
             cleaned_data["booth_id"] = None
             cleaned_data["lead_scanning_enabled"] = False
             cleaned_data["allow_voucher_access"] = False
             cleaned_data["allow_lead_access"] = False
             cleaned_data["lead_scanning_scope_by_device"] = False
+
+        for name in self.TYPE_TOGGLE_FIELDS + self.SPONSOR_ONLY_FIELDS + self.EXHIBITOR_ONLY_FIELDS:
+            if name not in self.fields:
+                cleaned_data.pop(name, None)
 
         return cleaned_data
 
@@ -256,6 +292,7 @@ class ExhibitorInfoForm(I18nModelForm):
 
         instance = super().save(commit=False)
         instance.is_exhibitor = self.cleaned_data.get("is_exhibitor", True)
+        instance.is_sponsor = getattr(self, "_resolved_is_sponsor", instance.is_sponsor)
         files_to_delete: set[str] = set()
 
         for image_field, url_field in self.file_url_fields.items():
@@ -829,6 +866,9 @@ class ExhibitionProposalReviewForm(I18nModelForm):
         self.event = event or getattr(instance, "event", None)
         self.fields["sponsor_group"].queryset = SponsorGroup.objects.filter(event=self.event).order_by("level", "pk")
         self.fields["sponsor_group"].empty_label = _("No sponsor group")
+        if instance and instance.pk and instance.approved_exhibitor_id:
+            for field_name in ("is_exhibitor", "is_sponsor", "sponsor_group", "booth_id", "booth_name"):
+                self.fields[field_name].disabled = True
 
     def clean(self):
         cleaned_data = super().clean()

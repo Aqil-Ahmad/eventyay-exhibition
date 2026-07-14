@@ -8,7 +8,7 @@ from django.test import RequestFactory
 from rest_framework import serializers
 
 from exhibition.api import ExhibitorInfoSerializer
-from exhibition.forms import ExhibitionProposalForm, SponsorGroupForm
+from exhibition.forms import ExhibitionProposalForm, ExhibitorInfoForm, SponsorGroupForm
 from exhibition.models import (
     PROPOSAL_DEFAULT_FIELD_KEYS,
     ExhibitorInfo,
@@ -19,6 +19,7 @@ from exhibition.models import (
 from exhibition.views import (
     CallTextPreviewView,
     ExhibitionQuestionListView,
+    ExhibitorListView,
     SponsorGroupReorderView,
 )
 
@@ -293,3 +294,57 @@ def test_proposal_form_reflects_saved_field_order(event):
     form = ExhibitionProposalForm(event=event)
     field_names = list(form.fields.keys())
     assert field_names.index("description") < field_names.index("name")
+
+
+@pytest.mark.django_db
+def test_sponsor_form_hides_exhibitor_fields(event):
+    form = ExhibitorInfoForm(event=event, partner_type="sponsor")
+    assert "sponsor_group" in form.fields
+    for name in ("booth_id", "booth_name", "lead_scanning_enabled", "is_sponsor", "not_an_exhibitor"):
+        assert name not in form.fields
+
+
+@pytest.mark.django_db
+def test_exhibitor_form_hides_sponsor_fields(event):
+    form = ExhibitorInfoForm(event=event, partner_type="exhibitor")
+    assert "booth_id" in form.fields
+    for name in ("sponsor_group", "is_sponsor", "not_an_exhibitor"):
+        assert name not in form.fields
+
+
+@pytest.mark.django_db
+def test_scoped_forms_set_type_flags(event):
+    sponsor_form = ExhibitorInfoForm(data={"name_0": "Acme Sponsor"}, event=event, partner_type="sponsor")
+    assert sponsor_form.is_valid(), sponsor_form.errors
+    sponsor = sponsor_form.save(commit=False)
+    sponsor.event = event
+    sponsor.save()
+    assert sponsor.is_sponsor is True
+    assert sponsor.is_exhibitor is False
+
+    exhibitor_form = ExhibitorInfoForm(data={"name_0": "Acme Exhibitor"}, event=event, partner_type="exhibitor")
+    assert exhibitor_form.is_valid(), exhibitor_form.errors
+    exhibitor = exhibitor_form.save(commit=False)
+    exhibitor.event = event
+    exhibitor.save()
+    assert exhibitor.is_sponsor is False
+    assert exhibitor.is_exhibitor is True
+
+
+@pytest.mark.django_db
+def test_partner_lists_filter_by_type_and_show_both(event):
+    sponsor = ExhibitorInfo.objects.create(event=event, name="S", is_sponsor=True, is_exhibitor=False)
+    exhibitor = ExhibitorInfo.objects.create(event=event, name="E", is_sponsor=False, is_exhibitor=True)
+    both = ExhibitorInfo.objects.create(event=event, name="B", is_sponsor=True, is_exhibitor=True)
+
+    factory = RequestFactory()
+
+    def ids_for(partner_type):
+        view = ExhibitorListView(partner_type=partner_type)
+        request = factory.get("/")
+        request.event = event
+        view.request = request
+        return set(view.get_queryset().values_list("id", flat=True))
+
+    assert ids_for("sponsor") == {sponsor.id, both.id}
+    assert ids_for("exhibitor") == {exhibitor.id, both.id}
