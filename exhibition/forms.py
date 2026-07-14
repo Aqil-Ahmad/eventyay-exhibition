@@ -13,6 +13,7 @@ from eventyay.common.forms.mixins import (
 from eventyay.common.forms.widgets import HtmlDateTimeInput
 from eventyay.common.urls import normalize_url_scheme
 from eventyay.common.utils.language import localize_event_text
+from i18nfield.forms import I18nFormField
 
 from .models import (
     PROPOSAL_DEFAULT_FIELD_KEYS,
@@ -689,12 +690,17 @@ class ExhibitionProposalForm(ExhibitionQuestionFieldsMixin, I18nModelForm):
                     self.fields.pop(field_name, None)
                 continue
 
-            if key in file_field_keys or key == "booth_name":
-                continue
-
             for field_name in form_fields:
-                if field_name in self.fields:
-                    self.fields[field_name].required = is_required
+                field = self.fields.get(field_name)
+                if field is None:
+                    continue
+                field._required = is_required
+                if key in file_field_keys or key == "booth_name":
+                    continue
+                if isinstance(field, I18nFormField):
+                    field.one_required = is_required
+                else:
+                    field.required = is_required
 
     def apply_proposal_field_order(self):
         if not self.exhibition_settings:
