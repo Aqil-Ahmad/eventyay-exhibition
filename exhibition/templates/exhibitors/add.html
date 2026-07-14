@@ -3,17 +3,7 @@
 {% load bootstrap3 %}
 {% load static %}
 {% load escapejson %}
-{% block title %}
-    {% if action == 'edit' %}
-        {% trans "Edit Exhibitor or Sponsor" %}
-    {% elif partner_type == 'sponsor' %}
-        {% trans "Add a Sponsor" %}
-    {% elif partner_type == 'exhibitor' %}
-        {% trans "Add an Exhibitor" %}
-    {% else %}
-        {% trans "Add an Exhibitor or Sponsor" %}
-    {% endif %}
-{% endblock %}
+{% block title %}{{ page_title }}{% endblock %}
 
 {% block custom_header %}
     {{ block.super }}
@@ -21,17 +11,7 @@
 {% endblock %}
 
 {% block exhibitors_header %}
-<h1>
-    {% if action == 'edit' %}
-        {% trans "Edit Exhibitor or Sponsor" %}
-    {% elif partner_type == 'sponsor' %}
-        {% trans "Add a Sponsor" %}
-    {% elif partner_type == 'exhibitor' %}
-        {% trans "Add an Exhibitor" %}
-    {% else %}
-        {% trans "Add an Exhibitor or Sponsor" %}
-    {% endif %}
-</h1>
+<h1>{{ page_title }}</h1>
 {% endblock %}
 
 {% block exhibitors_content %}

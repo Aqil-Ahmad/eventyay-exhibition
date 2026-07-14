@@ -99,6 +99,16 @@ def queue_exhibitor_access_mail(event, exhibitor, requestor):
     return mail_helpers.queue_exhibitor_access_email(event, exhibitor, requestor=requestor)
 
 
+def partner_type_of(exhibitor):
+    if exhibitor.is_sponsor and exhibitor.is_exhibitor:
+        return "both"
+    if exhibitor.is_sponsor:
+        return "sponsor"
+    if exhibitor.is_exhibitor:
+        return "exhibitor"
+    return None
+
+
 class PublicEventLoginRequiredMixin(LoginRequiredMixin):
     def get_login_url(self):
         return reverse("cfp:event.login", kwargs=event_kwargs(self.request.event))
@@ -1401,6 +1411,10 @@ class ExhibitorCreateView(ExhibitorLinkFormsetMixin, EventPermissionRequiredMixi
         context = super().get_context_data(**kwargs)
         context["action"] = "create"
         context["partner_type"] = self.partner_type
+        context["page_title"] = {
+            "sponsor": _("Add a Sponsor"),
+            "exhibitor": _("Add an Exhibitor"),
+        }.get(self.partner_type, _("Add an Exhibitor or Sponsor"))
         return context
 
     def get_success_url(self):
@@ -1453,6 +1467,11 @@ class ExhibitorEditView(ExhibitorLinkFormsetMixin, EventPermissionRequiredMixin,
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context["action"] = "edit"
+        context["page_title"] = {
+            "sponsor": _("Edit Sponsor"),
+            "exhibitor": _("Edit Exhibitor"),
+            "both": _("Edit Exhibitor & Sponsor"),
+        }.get(partner_type_of(self.object), _("Edit Exhibitor or Sponsor"))
         return context
 
     def get_success_url(self):
@@ -1470,6 +1489,15 @@ class ExhibitorDeleteView(EventPermissionRequiredMixin, DeleteView):
 
     def get_queryset(self):
         return ExhibitorInfo.objects.filter(event=self.request.event)
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["page_title"] = {
+            "sponsor": _("Delete Sponsor"),
+            "exhibitor": _("Delete Exhibitor"),
+            "both": _("Delete Exhibitor & Sponsor"),
+        }.get(partner_type_of(self.object), _("Delete Exhibitor or Sponsor"))
+        return context
 
     def get_success_url(self) -> str:
         return reverse(
