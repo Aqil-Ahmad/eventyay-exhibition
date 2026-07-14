@@ -272,11 +272,13 @@ class ExhibitorInfoForm(I18nModelForm):
             cleaned_data["video_url"] = normalize_url_scheme(video_url)
 
         slides_url = cleaned_data.get("slides_url") or ""
-        submitted_slides = self.fields["slides"].widget.value_from_datadict(
-            self.data,
-            self.files,
-            self.add_prefix("slides"),
-        )
+        submitted_slides = None
+        if "slides" in self.fields:
+            submitted_slides = self.fields["slides"].widget.value_from_datadict(
+                self.data,
+                self.files,
+                self.add_prefix("slides"),
+            )
         has_new_slides_upload = isinstance(submitted_slides, UploadedFile)
         if slides_url and has_new_slides_upload:
             message = _("Either upload a PDF or enter an external PDF URL, not both.")
@@ -305,12 +307,16 @@ class ExhibitorInfoForm(I18nModelForm):
         for image_field, url_field in self.file_url_fields.items():
             if image_field == "slides":
                 continue
+            if image_field not in self.fields and url_field not in self.fields:
+                continue
             image_url = cleaned_data.get(url_field) or ""
-            submitted_image = self.fields[image_field].widget.value_from_datadict(
-                self.data,
-                self.files,
-                self.add_prefix(image_field),
-            )
+            submitted_image = None
+            if image_field in self.fields:
+                submitted_image = self.fields[image_field].widget.value_from_datadict(
+                    self.data,
+                    self.files,
+                    self.add_prefix(image_field),
+                )
             has_new_upload = isinstance(submitted_image, UploadedFile)
 
             if image_url and has_new_upload:
