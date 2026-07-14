@@ -2,7 +2,6 @@ import json
 from unittest.mock import patch
 
 import pytest
-from django.conf import settings as django_settings
 from django.test import RequestFactory
 from django_scopes import scopes_disabled
 from eventyay.base.models.auth import User
@@ -19,12 +18,15 @@ from exhibition.models import (
 from exhibition.views import EmailTemplatePreviewView
 
 
-def _language_index(code):
-    """Global LANGUAGES index used to name the i18n input (e.g. ``..._body_0``)."""
-    for index, (candidate, _name) in enumerate(django_settings.LANGUAGES):
-        if candidate == code:
-            return index
-    raise AssertionError(f"language {code!r} not configured")
+def _locale_index(event, field_name, locale):
+    """Index of an i18n sub-input (e.g. ``..._body_0``).
+
+    The I18n widget builds one input per entry in ``widget.locales`` (the
+    event's locales), so the suffix is the position there, not the global
+    LANGUAGES index.
+    """
+    widget = ExhibitionMailTemplatesForm(obj=event).fields[field_name].widget
+    return widget.locales.index(locale)
 
 
 @pytest.fixture
@@ -82,10 +84,12 @@ def test_get_email_template_uses_saved_override(mail_event):
 
 @pytest.mark.django_db
 def test_templates_form_saves_to_event_settings(mail_event):
+    subject_key = mail_helpers.subject_settings_key(mail_helpers.PROPOSAL_NEW)
+    body_key = mail_helpers.body_settings_key(mail_helpers.PROPOSAL_NEW)
     form = ExhibitionMailTemplatesForm(
         data={
-            f"{mail_helpers.subject_settings_key(mail_helpers.PROPOSAL_NEW)}_{_language_index('en')}": "Saved subject",
-            f"{mail_helpers.body_settings_key(mail_helpers.PROPOSAL_NEW)}_{_language_index('en')}": "Saved body",
+            f"{subject_key}_{_locale_index(mail_event, subject_key, 'en')}": "Saved subject",
+            f"{body_key}_{_locale_index(mail_event, body_key, 'en')}": "Saved body",
         },
         obj=mail_event,
     )
@@ -119,9 +123,7 @@ def test_queue_proposal_email_is_unsent_by_default(mail_event, proposal):
 @pytest.mark.django_db
 def test_queue_proposal_email_send_now_sends_immediately(mail_event, proposal):
     with patch("eventyay.base.services.mail.mail") as mocked_mail:
-        queued = mail_helpers.queue_proposal_email(
-            mail_event, proposal, mail_helpers.PROPOSAL_NEW, send_now=True
-        )
+        queued = mail_helpers.queue_proposal_email(mail_event, proposal, mail_helpers.PROPOSAL_NEW, send_now=True)
 
     assert queued.sent_at is not None
     assert mocked_mail.call_count == 1
@@ -235,9 +237,16 @@ def test_access_email_returns_none_without_exhibitor_email(mail_event):
 
 
 def _preview(event, role, body_by_locale):
+    """POST draft body text to the preview endpoint.
+
+    The I18n widget names its inputs by position in ``widget.locales`` (the
+    event's locales), not by the global LANGUAGES index, so derive the index
+    from the form itself.
+    """
+    field_name = mail_helpers.body_settings_key(role)
     data = {"role": role}
     for locale, text in body_by_locale.items():
-        data[f"{mail_helpers.body_settings_key(role)}_{_language_index(locale)}"] = text
+        data[f"{field_name}_{_locale_index(event, field_name, locale)}"] = text
     request = RequestFactory().post("/preview", data=data)
     request.event = event
     return EmailTemplatePreviewView().post(request)
@@ -281,5 +290,8 @@ def test_preview_sanitises_html(mail_event):
 
 @pytest.mark.django_db
 def test_preview_rejects_unknown_role(mail_event):
-    response = _preview(mail_event, "not_a_role", {"en": "Hi"})
+    request = RequestFactory().post("/preview", data={"role": "not_a_role"})
+    request.event = mail_event
+    response = EmailTemplatePreviewView().post(request)
+
     assert response.status_code == 400

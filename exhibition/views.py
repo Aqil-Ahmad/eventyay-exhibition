@@ -1373,8 +1373,10 @@ class EmailTemplatePreviewView(EventPermissionRequiredMixin, View):
             raw = widget.value_from_datadict(request.POST, request.FILES, field_name)
             if not isinstance(raw, (list, tuple)):
                 raw = [raw]
+            # Posted values are indexed by widget.locales, not by settings.LANGUAGES.
+            locales = getattr(widget, "locales", None) or [code for code, _name in django_settings.LANGUAGES]
             by_locale = {}
-            for index, (code, _name) in enumerate(django_settings.LANGUAGES):
+            for index, code in enumerate(locales):
                 if code in event_locales and index < len(raw):
                     by_locale[code] = raw[index] or ""
             return by_locale
