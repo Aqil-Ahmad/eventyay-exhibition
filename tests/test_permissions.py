@@ -6,8 +6,14 @@ from django_scopes import scopes_disabled
 from eventyay.base.models.auth import User
 
 from exhibition.forms import ExhibitionProposalReviewForm, ExhibitionProposalReviewNotesForm
+from exhibition.models import ExhibitionProposal, ExhibitionProposalState
 from exhibition.utils import should_hide_applicant_emails
 from exhibition.views import ProposalDetailView
+
+
+def _proposal(event, email, state=ExhibitionProposalState.SUBMITTED):
+    submitter = User.objects.create_user(email=email, password="pw")
+    return ExhibitionProposal.objects.create(event=event, user=submitter, name="Org", state=state)
 
 
 def _member(event, email, **flags):
@@ -74,6 +80,21 @@ def test_reviewer_gets_notes_only_form(event):
 def test_manager_gets_full_review_form(event):
     with scopes_disabled():
         user = _member(event, "mg-form@e.com", can_change_exhibition_proposals=True)
+        proposal = _proposal(event, "sub-form@e.com", state=ExhibitionProposalState.SUBMITTED)
         view = _detail_view(event, user)
+        view.object = proposal
         assert view.can_manage() is True
+        assert view.can_review() is True
         assert view.get_form_class() is ExhibitionProposalReviewForm
+
+
+@pytest.mark.django_db
+def test_manager_gets_notes_form_for_non_submitted_proposal(event):
+    with scopes_disabled():
+        user = _member(event, "mg-terminal@e.com", can_change_exhibition_proposals=True)
+        proposal = _proposal(event, "sub-terminal@e.com", state=ExhibitionProposalState.REJECTED)
+        view = _detail_view(event, user)
+        view.object = proposal
+        assert view.can_manage() is True
+        assert view.can_review() is False
+        assert view.get_form_class() is ExhibitionProposalReviewNotesForm
