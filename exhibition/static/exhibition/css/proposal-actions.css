@@ -1,0 +1,59 @@
+.proposal-bulk-bar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-bottom: 12px;
+}
+
+.proposal-bulk-buttons {
+    display: inline-flex;
+    gap: 6px;
+    margin-left: auto;
+}
+
+.proposal-bulk-count {
+    min-width: 70px;
+}
+
+.proposal-select-col {
+    width: 32px;
+}
+
+.proposal-select-col .batch-select-label {
+    margin-bottom: 0;
+}
+
+.proposal-row-actions .btn + .btn {
+    margin-left: 4px;
+}
+
+.proposal-action-btn {
+    background: #fff;
+    border: 1px solid transparent;
+}
+
+.proposal-action-approve {
+    color: #21ba45;
+    border-color: #21ba45;
+}
+
+.proposal-action-reject {
+    color: #db2828;
+    border-color: #db2828;
+}
+
+.proposal-action-withdraw {
+    color: #767676;
+    border-color: #767676;
+}
+
+.proposal-action-withdraw:hover,
+.proposal-action-withdraw:focus {
+    background: #767676;
+    color: #fff;
+}
+
+.proposal-action-feedback:not(:empty) {
+    margin-bottom: 12px;
+}

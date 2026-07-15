@@ -119,7 +119,7 @@
         {% bootstrap_form_errors form %}
         <fieldset>
             <legend>{% trans "Review" %}</legend>
-            {% if can_manage %}
+            {% if can_review %}
                 {% bootstrap_field form.is_exhibitor layout="control" %}
                 {% bootstrap_field form.is_sponsor layout="control" %}
                 {% bootstrap_field form.sponsor_group layout="control" %}
@@ -132,7 +132,7 @@
             <button type="submit" class="btn btn-default" name="action" value="save">
                 {% trans "Save review notes" %}
             </button>
-            {% if can_manage and not proposal.approved_exhibitor_id and proposal.state != "rejected" %}
+            {% if can_review %}
                 <button type="submit" class="btn btn-primary" name="action" value="approve">
                     {% trans "Approve and create partner" %}
                 </button>

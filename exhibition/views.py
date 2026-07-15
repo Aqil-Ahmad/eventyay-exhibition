@@ -10,7 +10,7 @@ from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse
 from django.utils import timezone
-from django.utils.translation import gettext_lazy as _
+from django.utils.translation import gettext_lazy as _, ngettext
 from django.views import View
 from django.views.generic import DeleteView, DetailView, ListView, TemplateView
 from eventyay.base.templatetags.rich_text import rich_text
@@ -724,11 +724,21 @@ class ProposalListView(EventPermissionRequiredMixin, ListView):
             .order_by("-updated", "-created")
         )
 
+    def can_manage(self):
+        return self.request.user.has_event_permission(
+            self.request.event.organizer,
+            self.request.event,
+            ("can_change_event_settings", "can_change_exhibition_proposals"),
+            request=self.request,
+        )
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context["hide_applicant_emails"] = should_hide_applicant_emails(
             self.request.user, self.request.event, request=self.request
         )
+        context["can_manage"] = self.can_manage()
+        context["actionable_state"] = ExhibitionProposalState.SUBMITTED
         return context
 
 
@@ -756,8 +766,11 @@ class ProposalDetailView(EventPermissionRequiredMixin, UpdateView):
             request=self.request,
         )
 
+    def can_review(self):
+        return self.can_manage() and self.object.state == ExhibitionProposalState.SUBMITTED
+
     def get_form_class(self):
-        if self.can_manage():
+        if self.can_review():
             return ExhibitionProposalReviewForm
         return ExhibitionProposalReviewNotesForm
 
@@ -783,6 +796,7 @@ class ProposalDetailView(EventPermissionRequiredMixin, UpdateView):
         context = super().get_context_data(**kwargs)
         context["answers"] = self.object.answers.select_related("question").prefetch_related("options")
         context["can_manage"] = self.can_manage()
+        context["can_review"] = self.can_review()
         context["can_edit_exhibitor"] = self.can_edit_exhibitor()
         context["hide_applicant_emails"] = should_hide_applicant_emails(
             self.request.user, self.request.event, request=self.request
@@ -793,8 +807,12 @@ class ProposalDetailView(EventPermissionRequiredMixin, UpdateView):
     def form_valid(self, form):
         self.object = form.save()
         action = self.request.POST.get("action", "save")
-        if action in ("approve", "reject") and not self.can_manage():
-            raise PermissionDenied()
+        if action in ("approve", "reject"):
+            if not self.can_manage():
+                raise PermissionDenied()
+            if self.object.state != ExhibitionProposalState.SUBMITTED:
+                messages.error(self.request, _("This proposal can no longer be changed."))
+                return redirect(self.get_success_url())
         if action == "approve":
             exhibitor = create_exhibitor_from_proposal(self.object)
             mail_helpers.queue_proposal_email(
@@ -843,6 +861,78 @@ class ProposalDetailView(EventPermissionRequiredMixin, UpdateView):
             "plugins:exhibition:proposal.detail",
             kwargs={**event_kwargs(self.request.event), "code": self.object.code},
         )
+
+
+class ProposalActionView(EventPermissionRequiredMixin, View):
+    permission = ("can_change_event_settings", "can_change_exhibition_proposals")
+    valid_actions = {"approve", "reject", "withdraw"}
+
+    def post(self, request, *args, **kwargs):
+        action = request.POST.get("action")
+        codes = request.POST.getlist("proposal")
+        if action not in self.valid_actions or not codes:
+            return self.respond(request, False, _("No valid action was selected."), [], 0)
+
+        proposals = ExhibitionProposal.objects.filter(event=request.event, code__in=codes).select_related(
+            "approved_exhibitor"
+        )
+        results = []
+        skipped = 0
+        with transaction.atomic():
+            for proposal in proposals:
+                if proposal.state != ExhibitionProposalState.SUBMITTED:
+                    skipped += 1
+                    continue
+                self.apply_action(proposal, action)
+                results.append(
+                    {
+                        "code": proposal.code,
+                        "state": proposal.state,
+                        "state_display": proposal.get_state_display(),
+                    }
+                )
+        return self.respond(request, True, self.build_message(action, len(results), skipped), results, skipped)
+
+    def apply_action(self, proposal, action):
+        if action == "approve":
+            create_exhibitor_from_proposal(proposal)
+        elif action == "reject":
+            proposal.state = ExhibitionProposalState.REJECTED
+            proposal.save(update_fields=["state", "updated"])
+        elif action == "withdraw":
+            proposal.state = ExhibitionProposalState.WITHDRAWN
+            proposal.save(update_fields=["state", "updated"])
+
+    def build_message(self, action, count, skipped):
+        if count:
+            templates = {
+                "approve": ngettext("%(count)d proposal was approved.", "%(count)d proposals were approved.", count),
+                "reject": ngettext("%(count)d proposal was rejected.", "%(count)d proposals were rejected.", count),
+                "withdraw": ngettext("%(count)d proposal was withdrawn.", "%(count)d proposals were withdrawn.", count),
+            }
+            message = templates[action] % {"count": count}
+        else:
+            message = _("No proposals were updated.")
+        if skipped:
+            skipped_message = ngettext(
+                "%(skipped)d was skipped because it was already processed.",
+                "%(skipped)d were skipped because they were already processed.",
+                skipped,
+            ) % {"skipped": skipped}
+            message = f"{message} {skipped_message}"
+        return message
+
+    def respond(self, request, ok, message, results, skipped):
+        if request.headers.get("x-requested-with") == "XMLHttpRequest":
+            return JsonResponse(
+                {"ok": ok, "message": str(message), "results": results, "skipped": skipped},
+                status=200 if ok else 400,
+            )
+        if ok:
+            messages.success(request, message)
+        else:
+            messages.error(request, message)
+        return redirect("plugins:exhibition:proposal.list", **event_kwargs(request.event))
 
 
 class ExhibitionQuestionListView(EventPermissionRequiredMixin, ListView):

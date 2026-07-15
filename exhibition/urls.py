@@ -28,6 +28,7 @@ from .views import (
     ExhibitorDeleteView,
     ExhibitorEditView,
     ExhibitorListView,
+    ProposalActionView,
     ProposalDetailView,
     ProposalListView,
     PublicCallView,
@@ -136,6 +137,11 @@ urlpatterns = [
         "exhibitors/event/<orgslug:organizer>/<slug:event>/call",
         ProposalListView.as_view(),
         name="proposal.list",
+    ),
+    path(
+        "exhibitors/event/<orgslug:organizer>/<slug:event>/call/actions",
+        ProposalActionView.as_view(),
+        name="proposal.actions",
     ),
     path(
         "exhibitors/event/<orgslug:organizer>/<slug:event>/call/proposals/<str:code>",
