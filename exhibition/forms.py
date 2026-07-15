@@ -593,6 +593,7 @@ class ExhibitionProposalForm(ExhibitionQuestionFieldsMixin, I18nModelForm):
         "booth_name": ("booth_name",),
         "notes": ("notes",),
     }
+    DRAFT_REQUIRED_KEYS = ("name",)
 
     class Meta:
         model = ExhibitionProposal
@@ -633,6 +634,7 @@ class ExhibitionProposalForm(ExhibitionQuestionFieldsMixin, I18nModelForm):
     def __init__(self, *args, **kwargs):
         event = kwargs.get("event")
         self.read_only = kwargs.pop("read_only", False)
+        self.draft_save = kwargs.pop("draft_save", False)
         instance = kwargs.get("instance")
         super().__init__(*args, **kwargs)
         self.event = event or getattr(instance, "event", None)
@@ -730,6 +732,35 @@ class ExhibitionProposalForm(ExhibitionQuestionFieldsMixin, I18nModelForm):
     def field_setting_is_required(self, key):
         return self.required_proposal_fields.get(key, False)
 
+    def full_clean(self):
+        if not self.draft_save:
+            return super().full_clean()
+        keep_required = set()
+        for key in self.DRAFT_REQUIRED_KEYS:
+            keep_required.update(self.setting_field_map.get(key, ()))
+        original = {}
+        for field_name, field in self.fields.items():
+            if field_name in keep_required:
+                continue
+            original[field_name] = (field.required, getattr(field, "one_required", None))
+            field.required = False
+            if isinstance(field, I18nFormField):
+                field.one_required = False
+            if hasattr(field.widget, "is_required"):
+                field.widget.is_required = False
+        try:
+            super().full_clean()
+        finally:
+            for field_name, field in self.fields.items():
+                if field_name not in original:
+                    continue
+                required, one_required = original[field_name]
+                field.required = required
+                if one_required is not None:
+                    field.one_required = one_required
+                if hasattr(field.widget, "is_required"):
+                    field.widget.is_required = required
+
     def clean(self):
         cleaned_data = super().clean()
         applying_for = cleaned_data.get("applying_for")
@@ -799,7 +830,8 @@ class ExhibitionProposalForm(ExhibitionQuestionFieldsMixin, I18nModelForm):
         if not cleaned_data["is_exhibitor"]:
             cleaned_data["booth_name"] = ""
         elif (
-            self.field_setting_is_required("booth_name")
+            not self.draft_save
+            and self.field_setting_is_required("booth_name")
             and "booth_name" in self.fields
             and not cleaned_data.get("booth_name")
         ):
@@ -808,6 +840,8 @@ class ExhibitionProposalForm(ExhibitionQuestionFieldsMixin, I18nModelForm):
         return cleaned_data
 
     def validate_required_file_or_url(self, field_name, has_new_upload):
+        if self.draft_save:
+            return
         if not self.field_setting_is_active(field_name) or not self.field_setting_is_required(field_name):
             return
         file_field = self.fields.get(field_name)
