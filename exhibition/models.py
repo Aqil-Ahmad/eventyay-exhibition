@@ -279,6 +279,7 @@ class ExhibitorInfo(models.Model):
         related_name="partners",
     )
     is_exhibitor = models.BooleanField(default=True)
+    active = models.BooleanField(default=True)
     booth_id = models.CharField(
         max_length=100,
         null=True,
@@ -467,6 +468,20 @@ class ExhibitionProposal(models.Model):
             ExhibitionProposalState.DRAFT,
             ExhibitionProposalState.SUBMITTED,
         }
+
+    @property
+    def can_be_withdrawn(self):
+        return self.state in {
+            ExhibitionProposalState.SUBMITTED,
+            ExhibitionProposalState.ACCEPTED,
+        }
+
+    def withdraw(self):
+        self.state = ExhibitionProposalState.WITHDRAWN
+        self.save(update_fields=["state", "updated"])
+        if self.approved_exhibitor_id and self.approved_exhibitor.active:
+            self.approved_exhibitor.active = False
+            self.approved_exhibitor.save(update_fields=["active"])
 
     @property
     def localized_booth_name(self):

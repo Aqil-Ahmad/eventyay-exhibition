@@ -64,7 +64,7 @@ def presale_supported_by(sender, request=None, **kwargs):
         SponsorGroup.objects.filter(event=sender, show_on_front_page=True).prefetch_related(
             Prefetch(
                 "partners",
-                queryset=ExhibitorInfo.objects.filter(event=sender, is_sponsor=True).order_by("name"),
+                queryset=ExhibitorInfo.objects.filter(event=sender, is_sponsor=True, active=True).order_by("name"),
                 to_attr="front_page_partners",
             )
         )
