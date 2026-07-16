@@ -4,7 +4,7 @@
 {% load bootstrap3 %}
 {% block title %}
     {% if active_tab == "call" %}
-        {% trans "Call Settings" %}
+        {% trans "Call for Exhibitors" %}
     {% elif active_tab == "sponsors" %}
         {% trans "Sponsor Settings" %}
     {% else %}
@@ -20,7 +20,7 @@
 {% block exhibitors_header %}
     <h1>
         {% if active_tab == "call" %}
-            {% trans "Call Settings" %}
+            {% trans "Call for Exhibitors" %}
         {% elif active_tab == "sponsors" %}
             {% trans "Sponsor Settings" %}
         {% else %}
@@ -45,7 +45,7 @@ Best regards, Your {event} team{% endblocktrans %}
                 <input type="hidden" name="tab" value="call">
                 {% bootstrap_form_errors call_settings_form %}
                 <fieldset>
-                    <legend>{% trans "Call for Exhibitors" %}</legend>
+                    <legend>{% trans "Publish your call" %}</legend>
                     <p>{% trans "Publish a login-required application form for exhibitors and sponsors." %}</p>
                     {% bootstrap_field call_settings_form.call_enabled layout="control" %}
                     {% bootstrap_field call_settings_form.call_headline layout="control" %}

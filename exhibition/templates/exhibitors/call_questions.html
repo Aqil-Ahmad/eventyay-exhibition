@@ -2,7 +2,7 @@
 {% load i18n %}
 {% load static %}
 
-{% block title %}{{ request.event.name }} - {% trans "Proposal Form" %}{% endblock %}
+{% block title %}{{ request.event.name }} - {% trans "Exhibitor form" %}{% endblock %}
 
 {% block custom_header %}
     {{ block.super }}
@@ -12,15 +12,15 @@
 {% endblock %}
 
 {% block exhibitors_header %}
-    <h1>{% trans "Proposal Form" %}</h1>
+    <h1>{% trans "Exhibitor form" %}</h1>
 {% endblock %}
 
 {% block exhibitors_content %}
     <form action="" method="post">
         {% csrf_token %}
         <fieldset>
-            <legend>{% trans "Proposal information" %}</legend>
-            <p>{% trans "Choose which fields are shown on the exhibitor and sponsor proposal form. Custom fields can be reordered alongside the default fields." %}</p>
+            <legend>{% trans "Form fields" %}</legend>
+            <p>{% trans "Choose which fields are shown on the exhibitor and sponsor form. Custom fields can be reordered alongside the default fields." %}</p>
             <div class="table-responsive table-responsive-always mw-100">
                 <table class="table table-hover proposal-field-order">
                     <thead>

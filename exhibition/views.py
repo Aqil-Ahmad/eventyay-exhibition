@@ -483,7 +483,7 @@ class UserProposalCreateView(
             form.instance.submitted = timezone.now()
         response = super().form_valid(form)
         self.save_link_formsets()
-        messages.success(self.request, _("Your proposal has been saved."))
+        messages.success(self.request, _("Your request has been saved."))
         return response
 
     def get_success_url(self):
@@ -524,7 +524,7 @@ class UserProposalEditView(
     def post(self, request, *args, **kwargs):
         self.object = self.get_object()
         if not self.can_edit():
-            messages.error(request, _("This proposal can no longer be edited."))
+            messages.error(request, _("This request can no longer be edited."))
             return redirect(self.get_success_url())
         return self.post_with_formsets()
 
@@ -538,7 +538,7 @@ class UserProposalEditView(
             form.instance.submitted = form.instance.submitted or timezone.now()
         response = super().form_valid(form)
         self.save_link_formsets()
-        messages.success(self.request, _("Your proposal has been saved."))
+        messages.success(self.request, _("Your request has been saved."))
         return response
 
     def get_context_data(self, **kwargs):
@@ -767,7 +767,7 @@ class ProposalDetailView(EventPermissionRequiredMixin, UpdateView):
             exhibitor = create_exhibitor_from_proposal(self.object)
             messages.success(
                 self.request,
-                _("Proposal approved and partner profile created."),
+                _("Request approved and partner profile created."),
             )
             if self.can_edit_exhibitor():
                 return redirect(
@@ -780,12 +780,12 @@ class ProposalDetailView(EventPermissionRequiredMixin, UpdateView):
             if self.object.approved_exhibitor_id:
                 messages.error(
                     self.request,
-                    _("This proposal has already been approved and cannot be rejected."),
+                    _("This request has already been approved and cannot be rejected."),
                 )
             else:
                 self.object.state = ExhibitionProposalState.REJECTED
                 self.object.save(update_fields=["state", "updated"])
-                messages.success(self.request, _("Proposal rejected."))
+                messages.success(self.request, _("Request rejected."))
             return redirect(self.get_success_url())
 
         messages.success(self.request, _("Review details saved."))
@@ -942,7 +942,7 @@ class ExhibitionQuestionListView(EventPermissionRequiredMixin, ListView):
         if questions:
             ExhibitionQuestion.objects.bulk_update(questions, ["active", "required"])
 
-        messages.success(request, _("Proposal form settings have been saved."))
+        messages.success(request, _("Exhibitor form settings have been saved."))
         return redirect("plugins:exhibition:call.questions", **event_kwargs(request.event))
 
     def save_field_order(self, settings, order_str):
