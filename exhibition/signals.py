@@ -37,8 +37,8 @@ def exhibition_dashboard_component(sender, request=None, **kwargs):
     )
     if can_review and not can_view_exhibitors:
         url = reverse("plugins:exhibition:proposal.list", kwargs=kwargs_url)
-        description = _("Screen and evaluate exhibitor and sponsor proposals for the event.")
-        link_label = _("Proposal Review Dashboard")
+        description = _("Screen and evaluate exhibitor and sponsor requests for the event.")
+        link_label = _("Request Review Dashboard")
     else:
         url = reverse("plugins:exhibition:info", kwargs=kwargs_url)
         description = _(
@@ -169,19 +169,19 @@ def exhibition_mail_placeholders(sender, **kwargs):
             lambda event: str(event.name),
         ),
         SimpleFunctionalMailTextPlaceholder(
-            "proposal_name",
+            "request_name",
             ["proposal"],
             lambda proposal: localize_event_text(proposal.name) or str(proposal.name),
             _("Acme Corp"),
         ),
         SimpleFunctionalMailTextPlaceholder(
-            "proposal_code",
+            "request_code",
             ["proposal"],
             lambda proposal: proposal.code,
             "ABCD1234EFGH",
         ),
         SimpleFunctionalMailTextPlaceholder(
-            "proposal_url",
+            "request_url",
             ["proposal"],
             proposal_public_url,
             "https://example.com/orga/event/exhibition/call/proposals/ABCD1234EFGH/",

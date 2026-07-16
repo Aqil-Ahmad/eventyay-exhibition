@@ -1331,9 +1331,9 @@ class EmailTemplatesView(EventPermissionRequiredMixin, TemplateView):
                 "body_field": form[mail_helpers.body_settings_key(role)],
             }
             for role, label in (
-                (mail_helpers.PROPOSAL_NEW, _("Proposal received (confirmation)")),
-                (mail_helpers.PROPOSAL_ACCEPTED, _("Proposal accepted")),
-                (mail_helpers.PROPOSAL_REJECTED, _("Proposal rejected")),
+                (mail_helpers.PROPOSAL_NEW, _("Request received (confirmation)")),
+                (mail_helpers.PROPOSAL_ACCEPTED, _("Request accepted")),
+                (mail_helpers.PROPOSAL_REJECTED, _("Request rejected")),
             )
         ]
         context["email_placeholders"] = mail_helpers.PLACEHOLDER_DOCS

@@ -72,7 +72,7 @@ def exhibitor(mail_event):
 def test_get_email_template_falls_back_to_defaults(mail_event):
     subject, body = mail_helpers.get_email_template(mail_event, mail_helpers.PROPOSAL_NEW)
     assert "{event_name}" in str(subject)
-    assert "{proposal_name}" in str(body)
+    assert "{request_name}" in str(body)
 
 
 @pytest.mark.django_db
@@ -108,7 +108,7 @@ def test_queue_proposal_email_resolves_placeholders(mail_event, proposal):
     assert queued is not None
     assert queued.to_email == "applicant@example.com"
     # Placeholders are substituted at queue time, so no raw markers remain.
-    assert "{proposal_name}" not in queued.body
+    assert "{request_name}" not in queued.body
     assert "{event_name}" not in queued.subject
     assert "Acme Corp" in queued.body
     assert str(mail_event.name) in queued.subject
@@ -255,13 +255,13 @@ def _preview(event, role, body_by_locale):
 @pytest.mark.django_db
 def test_preview_renders_markdown_and_highlights_placeholders(mail_event):
     mail_event.settings.locales = ["en"]
-    response = _preview(mail_event, mail_helpers.PROPOSAL_NEW, {"en": "Hi {proposal_name}"})
+    response = _preview(mail_event, mail_helpers.PROPOSAL_NEW, {"en": "Hi {request_name}"})
 
     assert response.status_code == 200
     previews = json.loads(response.content)["previews"]
     assert "<p>" in previews["en"]
     assert 'class="placeholder"' in previews["en"]
-    assert "{proposal_name}" not in previews["en"]
+    assert "{request_name}" not in previews["en"]
 
 
 @pytest.mark.django_db

@@ -31,9 +31,9 @@ LIFECYCLE_ROLES = (PROPOSAL_NEW, PROPOSAL_ACCEPTED, PROPOSAL_REJECTED)
 # Placeholders documented in the settings UI. Descriptions are lazy-translated.
 PLACEHOLDER_DOCS = (
     ("{event_name}", _lazy("The event's name")),
-    ("{proposal_name}", _lazy("The proposal / organisation name")),
-    ("{proposal_code}", _lazy("The proposal's unique code")),
-    ("{proposal_url}", _lazy("Link for the applicant to view or edit the proposal")),
+    ("{request_name}", _lazy("The request / organisation name")),
+    ("{request_code}", _lazy("The request's unique code")),
+    ("{request_url}", _lazy("Link for the applicant to view or edit the request")),
     ("{name}", _lazy("The applicant's name")),
 )
 
@@ -52,25 +52,25 @@ def body_settings_key(role):
 # import time; wrapped in LazyI18nString so the settings store round-trips them.
 DEFAULT_TEMPLATES = {
     PROPOSAL_NEW: (
-        LazyI18nString.from_gettext(gettext_noop("We received your proposal for {event_name}")),
+        LazyI18nString.from_gettext(gettext_noop("We received your request for {event_name}")),
         LazyI18nString.from_gettext(
             gettext_noop(
                 "Hello,\n\n"
-                "thank you for submitting your proposal “{proposal_name}” to "
+                "thank you for submitting your request “{request_name}” to "
                 "{event_name}. We have received it and will get back to you once it has "
                 "been reviewed.\n\n"
-                "You can review or edit your proposal here:\n{proposal_url}\n\n"
+                "You can review or edit your request here:\n{request_url}\n\n"
                 "Best regards,\n"
                 "The {event_name} team"
             )
         ),
     ),
     PROPOSAL_ACCEPTED: (
-        LazyI18nString.from_gettext(gettext_noop("Your proposal for {event_name} has been accepted")),
+        LazyI18nString.from_gettext(gettext_noop("Your request for {event_name} has been accepted")),
         LazyI18nString.from_gettext(
             gettext_noop(
                 "Hello,\n\n"
-                "we are happy to let you know that your proposal “{proposal_name}” "
+                "we are happy to let you know that your request “{request_name}” "
                 "for {event_name} has been accepted. We will be in touch with the next "
                 "steps.\n\n"
                 "Best regards,\n"
@@ -79,12 +79,12 @@ DEFAULT_TEMPLATES = {
         ),
     ),
     PROPOSAL_REJECTED: (
-        LazyI18nString.from_gettext(gettext_noop("Update on your proposal for {event_name}")),
+        LazyI18nString.from_gettext(gettext_noop("Update on your request for {event_name}")),
         LazyI18nString.from_gettext(
             gettext_noop(
                 "Hello,\n\n"
                 "thank you for your interest in {event_name}. Unfortunately we are unable "
-                "to accept your proposal “{proposal_name}” this time.\n\n"
+                "to accept your request “{request_name}” this time.\n\n"
                 "We hope to see you at a future event.\n\n"
                 "Best regards,\n"
                 "The {event_name} team"

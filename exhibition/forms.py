@@ -1221,9 +1221,9 @@ class ExhibitionMailTemplatesForm(SettingsForm):
     """
 
     _ROLE_LABELS = {
-        mail_helpers.PROPOSAL_NEW: _("Proposal received (confirmation)"),
-        mail_helpers.PROPOSAL_ACCEPTED: _("Proposal accepted"),
-        mail_helpers.PROPOSAL_REJECTED: _("Proposal rejected"),
+        mail_helpers.PROPOSAL_NEW: _("Request received (confirmation)"),
+        mail_helpers.PROPOSAL_ACCEPTED: _("Request accepted"),
+        mail_helpers.PROPOSAL_REJECTED: _("Request rejected"),
     }
 
     def __init__(self, *args, **kwargs):
