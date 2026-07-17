@@ -153,11 +153,15 @@ def get_default_proposal_field_definition(key):
     return next(field for field in PROPOSAL_DEFAULT_FIELDS if field["key"] == key)
 
 
+def default_allowed_fields():
+    return ["attendee_name", "attendee_email"]
+
+
 class ExhibitorSettings(models.Model):
     event = models.ForeignKey("base.Event", on_delete=models.CASCADE)
     exhibitors_access_mail_subject = models.CharField(max_length=255)
     exhibitors_access_mail_body = models.TextField()
-    allowed_fields = models.JSONField(default=list)
+    allowed_fields = models.JSONField(default=default_allowed_fields)
     call_enabled = models.BooleanField(default=False)
     call_headline = I18nCharField(
         max_length=200,
@@ -176,11 +180,8 @@ class ExhibitorSettings(models.Model):
     call_hide_after_deadline = models.BooleanField(default=False)
     proposal_field_settings = models.JSONField(default=default_proposal_field_settings)
 
-    @property
-    def all_allowed_fields(self):
-        """Return all allowed fields, including required default fields"""
-        default_fields = ["attendee_name", "attendee_email"]
-        return list(set(default_fields + self.allowed_fields))
+    def is_field_allowed(self, identifier):
+        return identifier in (self.allowed_fields or [])
 
     @property
     def call_is_open(self):

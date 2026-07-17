@@ -13,6 +13,10 @@ from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 from django.views import View
 from django.views.generic import DeleteView, DetailView, ListView, TemplateView
+from eventyay.base.services.system_questions import (
+    STATE_REQUIRED,
+    get_system_question_base_state,
+)
 from eventyay.base.templatetags.rich_text import rich_text
 from eventyay.control.permissions import EventPermissionRequiredMixin
 from eventyay.control.views import CreateView, UpdateView
@@ -121,7 +125,7 @@ class SettingsView(EventPermissionRequiredMixin, ListView):
         ctx = super().get_context_data(**kwargs)
         settings = ExhibitorSettings.objects.get_or_create(event=self.request.event)[0]
         ctx["settings"] = settings
-        ctx["default_fields"] = ["attendee_name", "attendee_email"]
+        ctx["data_access_fields"] = self.get_data_access_fields(settings)
         ctx["active_tab"] = self.get_active_tab()
 
         edit_group_forms = kwargs.get("edit_group_forms", {})
@@ -160,6 +164,44 @@ class SettingsView(EventPermissionRequiredMixin, ListView):
         ctx["expanded_group_pk"] = kwargs.get("expanded_group_pk")
         return ctx
 
+    SYSTEM_QUESTION_FIELD_LABELS = {
+        "company": _("Company name"),
+        "job_title": _("Job title"),
+        "street": _("Address"),
+    }
+
+    def get_data_access_fields(self, settings):
+        fields = [
+            {
+                "value": "attendee_name",
+                "label": _("Attendee Name"),
+                "checked": settings.is_field_allowed("attendee_name"),
+            },
+            {
+                "value": "attendee_email",
+                "label": _("Attendee Email"),
+                "checked": settings.is_field_allowed("attendee_email"),
+            },
+        ]
+        event = self.request.event
+        for field_id, label in self.SYSTEM_QUESTION_FIELD_LABELS.items():
+            if get_system_question_base_state(event, field_id) != STATE_REQUIRED:
+                continue
+            value = f"system_{field_id}"
+            fields.append({"value": value, "label": label, "checked": settings.is_field_allowed(value)})
+
+        required_questions = self.request.event.questions.filter(required=True, active=True).order_by("position", "id")
+        for question in required_questions:
+            value = f"question_{question.pk}"
+            fields.append(
+                {
+                    "value": value,
+                    "label": str(question.question),
+                    "checked": settings.is_field_allowed(value),
+                }
+            )
+        return fields
+
     def get_next_sponsor_group_level(self):
         return get_next_sponsor_group_level(self.request.event)
 
@@ -169,8 +211,7 @@ class SettingsView(EventPermissionRequiredMixin, ListView):
         active_tab = self.get_active_tab()
 
         if action == "save_exhibitor_settings":
-            allowed_fields = request.POST.getlist("exhibitors_access_voucher")
-            settings.allowed_fields = allowed_fields
+            settings.allowed_fields = request.POST.getlist("exhibitors_access_voucher")
             settings.exhibitors_access_mail_subject = request.POST.get("exhibitors_access_mail_subject", "")
             settings.exhibitors_access_mail_body = request.POST.get("exhibitors_access_mail_body", "")
             settings.save()

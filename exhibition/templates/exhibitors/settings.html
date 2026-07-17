@@ -108,39 +108,15 @@ Best regards, Your {event} team{% endblocktrans %}
                     <div class="form-group">
                         <label class="col-md-3 control-label">{% trans "Exhibitor vouchers" %}</label>
                         <div class="col-md-9">
-                            <div class="checkbox">
-                                <label>
-                                    <input type="checkbox" checked disabled>
-                                    {% trans "Attendee Name" %} ({% trans "Required" %})
-                                </label>
-                            </div>
-                            <div class="checkbox">
-                                <label>
-                                    <input type="checkbox" checked disabled>
-                                    {% trans "Attendee Email" %} ({% trans "Required" %})
-                                </label>
-                            </div>
-                            <div class="checkbox">
-                                <label>
-                                    <input type="checkbox" name="exhibitors_access_voucher" value="attendee_company"
-                                           {% if 'attendee_company' in settings.allowed_fields %}checked{% endif %}>
-                                    {% trans "Attendee Company" %}
-                                </label>
-                            </div>
-                            <div class="checkbox">
-                                <label>
-                                    <input type="checkbox" name="exhibitors_access_voucher" value="attendee_city"
-                                           {% if 'attendee_city' in settings.allowed_fields %}checked{% endif %}>
-                                    {% trans "Attendee City" %}
-                                </label>
-                            </div>
-                            <div class="checkbox">
-                                <label>
-                                    <input type="checkbox" name="exhibitors_access_voucher" value="attendee_country"
-                                           {% if 'attendee_country' in settings.allowed_fields %}checked{% endif %}>
-                                    {% trans "Attendee Country" %}
-                                </label>
-                            </div>
+                            {% for field in data_access_fields %}
+                                <div class="checkbox">
+                                    <label>
+                                        <input type="checkbox" name="exhibitors_access_voucher" value="{{ field.value }}"
+                                               {% if field.checked %}checked{% endif %}>
+                                        {{ field.label }}
+                                    </label>
+                                </div>
+                            {% endfor %}
                         </div>
                     </div>
                 </fieldset>
