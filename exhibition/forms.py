@@ -891,7 +891,6 @@ class ExhibitionQuestionForm(I18nModelForm):
             "help_text",
             "required",
             "active",
-            "position",
         ]
         labels = {
             "variant": _("Field type"),
@@ -899,7 +898,6 @@ class ExhibitionQuestionForm(I18nModelForm):
             "help_text": _("Help text"),
             "required": _("Required"),
             "active": _("Active"),
-            "position": _("Position"),
         }
 
     choice_variants = {
@@ -913,11 +911,6 @@ class ExhibitionQuestionForm(I18nModelForm):
         super().__init__(*args, **kwargs)
         if self.instance and self.instance.pk:
             self.fields["options_text"].initial = "\n".join(str(option) for option in self.instance.options.all())
-        elif not self.initial.get("position") and self.event:
-            max_position = ExhibitionQuestion.objects.filter(event=self.event).aggregate(Max("position"))[
-                "position__max"
-            ]
-            self.initial["position"] = max((max_position or -1) + 1, len(PROPOSAL_DEFAULT_FIELD_KEYS))
 
     def clean(self):
         cleaned_data = super().clean()
@@ -934,6 +927,11 @@ class ExhibitionQuestionForm(I18nModelForm):
         instance = super().save(commit=False)
         if self.event:
             instance.event = self.event
+        if not instance.pk and self.event:
+            max_position = ExhibitionQuestion.objects.filter(event=self.event).aggregate(Max("position"))[
+                "position__max"
+            ]
+            instance.position = max((max_position or -1) + 1, len(PROPOSAL_DEFAULT_FIELD_KEYS))
         if commit:
             instance.save()
             self.save_options(instance)
