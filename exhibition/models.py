@@ -663,13 +663,7 @@ class ExhibitorTag(models.Model):
 
 
 class ExhibitionEmailQueue(models.Model):
-    """A single email queued for one recipient.
-
-    Placeholders are already rendered into ``subject``/``body`` for the
-    recipient's ``locale`` when the row is created. Confirmation emails are sent
-    immediately; accept/reject and access-credentials emails stay unsent so an
-    organiser can review, edit, and send them from the outbox.
-    """
+    """A single email queued for one recipient, with placeholders already rendered."""
 
     event = models.ForeignKey(
         Event,
@@ -715,9 +709,6 @@ class ExhibitionEmailQueue(models.Model):
         if self.sent_at:
             return
 
-        # Body is pre-rendered plain text; wrap as LazyI18nString because
-        # render_mail() treats a plain str as a template path. With an empty
-        # context no further substitution happens.
         mail(
             email=self.to_email,
             subject=self.subject,

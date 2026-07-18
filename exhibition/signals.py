@@ -155,12 +155,7 @@ def presale_supported_by_styles(sender, request=None, **kwargs):
 
 @receiver(register_mail_placeholders, dispatch_uid="exhibition_mail_placeholders")
 def exhibition_mail_placeholders(sender, **kwargs):
-    """Placeholders available in exhibition emails.
-
-    Resolved by ``eventyay.base.email.get_email_context`` when the matching
-    object (``proposal`` or ``exhibitor``) is present in the context. See
-    :mod:`exhibition.mail`.
-    """
+    """Placeholders available in exhibition emails."""
     return [
         SimpleFunctionalMailTextPlaceholder(
             "event_name",

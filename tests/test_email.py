@@ -19,23 +19,14 @@ from exhibition.views import EmailTemplatePreviewView
 
 
 def _locale_index(event, field_name, locale):
-    """Index of an i18n sub-input (e.g. ``..._body_0``).
-
-    The I18n widget builds one input per entry in ``widget.locales`` (the
-    event's locales), so the suffix is the position there, not the global
-    LANGUAGES index.
-    """
+    """Index of an i18n sub-input, positioned by ``widget.locales``."""
     widget = ExhibitionMailTemplatesForm(obj=event).fields[field_name].widget
     return widget.locales.index(locale)
 
 
 @pytest.fixture
 def mail_event(event):
-    """Event with the plugin enabled, so the placeholder signal is dispatched.
-
-    ``register_mail_placeholders`` is an EventPluginSignal: it only reaches the
-    plugin's receiver when the plugin is active for the event.
-    """
+    """Event with the plugin enabled, so the placeholder signal is dispatched."""
     event.plugins = "exhibition"
     event.save(update_fields=["plugins"])
     return event
@@ -107,7 +98,6 @@ def test_queue_proposal_email_resolves_placeholders(mail_event, proposal):
 
     assert queued is not None
     assert queued.to_email == "applicant@example.com"
-    # Placeholders are substituted at queue time, so no raw markers remain.
     assert "{request_name}" not in queued.body
     assert "{event_name}" not in queued.subject
     assert "Acme Corp" in queued.body
@@ -237,12 +227,7 @@ def test_access_email_returns_none_without_exhibitor_email(mail_event):
 
 
 def _preview(event, role, body_by_locale):
-    """POST draft body text to the preview endpoint.
-
-    The I18n widget names its inputs by position in ``widget.locales`` (the
-    event's locales), not by the global LANGUAGES index, so derive the index
-    from the form itself.
-    """
+    """POST draft body text to the preview endpoint."""
     field_name = mail_helpers.body_settings_key(role)
     data = {"role": role}
     for locale, text in body_by_locale.items():

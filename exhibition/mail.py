@@ -1,16 +1,6 @@
-"""Email helpers for the exhibition plugin.
+"""Email helpers for the exhibition plugin."""
 
-The plugin reuses the core email stack (``eventyay.base.services.mail.mail`` for
-sending and ``eventyay.base.email.get_email_context`` /
-``register_mail_placeholders`` for placeholders) and only owns a thin
-per-recipient queue (:class:`~exhibition.models.ExhibitionEmailQueue`) plus the
-editable templates stored in ``event.settings``.
-
-Placeholders are rendered into the queued email at *queue* time, for the
-recipient's locale, so the outbox shows the final text an organiser can edit
-before sending.
-"""
-
+import logging
 import re
 from collections import defaultdict
 from urllib.parse import urljoin
@@ -20,15 +10,14 @@ from django.urls import reverse
 from django.utils.translation import gettext_lazy as _lazy, gettext_noop
 from i18nfield.strings import LazyI18nString
 
-# Lifecycle template roles. These double as the ``event.settings`` key stems:
-# e.g. PROPOSAL_NEW -> exhibition_mail_proposal_new_subject / _body.
+logger = logging.getLogger(__name__)
+
 PROPOSAL_NEW = "proposal_new"
 PROPOSAL_ACCEPTED = "proposal_accepted"
 PROPOSAL_REJECTED = "proposal_rejected"
 
 LIFECYCLE_ROLES = (PROPOSAL_NEW, PROPOSAL_ACCEPTED, PROPOSAL_REJECTED)
 
-# Placeholders documented in the settings UI. Descriptions are lazy-translated.
 PLACEHOLDER_DOCS = (
     ("{event_name}", _lazy("The event's name")),
     ("{request_name}", _lazy("The request / organisation name")),
@@ -48,8 +37,6 @@ def body_settings_key(role):
     return f"{_SETTINGS_PREFIX}{role}_body"
 
 
-# Default templates. gettext_noop keeps them translatable without evaluating at
-# import time; wrapped in LazyI18nString so the settings store round-trips them.
 DEFAULT_TEMPLATES = {
     PROPOSAL_NEW: (
         LazyI18nString.from_gettext(gettext_noop("We received your request for {event_name}")),
@@ -95,11 +82,7 @@ DEFAULT_TEMPLATES = {
 
 
 def get_email_template(event, role):
-    """Return ``(subject, body)`` as LazyI18nStrings for a lifecycle role.
-
-    Falls back to the built-in defaults when the organiser has not customised
-    the template in the settings store.
-    """
+    """Return ``(subject, body)`` for a role, falling back to the defaults."""
     default_subject, default_body = DEFAULT_TEMPLATES[role]
     subject = event.settings.get(subject_settings_key(role), as_type=LazyI18nString) or default_subject
     body = event.settings.get(body_settings_key(role), as_type=LazyI18nString) or default_body
@@ -142,7 +125,11 @@ def recipient_locale(event, user=None):
 def _render(text, context, locale):
     """Localise ``text`` and substitute ``{placeholder}`` values."""
     localized = str(LazyI18nString(text).localize(locale)) if locale else str(text)
-    return localized.format_map(defaultdict(str, context))
+    try:
+        return localized.format_map(defaultdict(str, context))
+    except (ValueError, IndexError):
+        logger.warning("Could not render exhibition email template: %r", localized)
+        return localized
 
 
 def build_proposal_context(event, proposal):
@@ -174,11 +161,7 @@ def proposal_public_url(proposal):
 
 
 def queue_proposal_email(event, proposal, role, *, send_now=False, requestor=None):
-    """Create an ExhibitionEmailQueue row for a proposal lifecycle email.
-
-    :param send_now: send immediately (used for the submission confirmation);
-        otherwise the row stays unsent in the outbox for organiser review.
-    """
+    """Queue a lifecycle email; ``send_now`` sends it instead of leaving it in the outbox."""
     from .models import ExhibitionEmailQueue
 
     to_email = (proposal.email or "").strip() or (proposal.user.email if proposal.user_id else "")
@@ -204,11 +187,7 @@ def queue_proposal_email(event, proposal, role, *, send_now=False, requestor=Non
 
 
 def queue_exhibitor_access_email(event, exhibitor, *, requestor=None):
-    """Queue the access-credentials email for an exhibitor.
-
-    Uses the existing ``ExhibitorSettings.exhibitors_access_mail_subject/body``
-    fields as the template. Returns ``None`` if the exhibitor has no email.
-    """
+    """Queue the access-credentials email; ``None`` if no recipient or template."""
     from .models import ExhibitionEmailQueue, ExhibitorSettings
 
     to_email = (exhibitor.email or "").strip()

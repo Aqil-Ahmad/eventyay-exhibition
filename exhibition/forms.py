@@ -1213,12 +1213,7 @@ class ExhibitionEmailQueueForm(forms.ModelForm):
 
 
 class ExhibitionMailTemplatesForm(SettingsForm):
-    """Editable lifecycle email templates, stored in ``event.settings``.
-
-    Field names match the settings keys produced by
-    :mod:`exhibition.mail`, so ``SettingsForm`` round-trips them automatically.
-    Defaults are shown when a template has not been customised.
-    """
+    """Editable lifecycle email templates, stored in ``event.settings``."""
 
     _ROLE_LABELS = {
         mail_helpers.PROPOSAL_NEW: _("Request received (confirmation)"),

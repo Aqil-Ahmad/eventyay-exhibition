@@ -75,8 +75,7 @@ def partner_list_url(event, partner_type):
 
 
 def send_proposal_confirmation(event, proposal, requestor):
-    """Send the submission confirmation email immediately, after the current
-    transaction commits (so the proposal and its links are persisted first)."""
+    """Send the submission confirmation email once the transaction commits."""
     transaction.on_commit(
         lambda: mail_helpers.queue_proposal_email(
             event,
@@ -89,9 +88,7 @@ def send_proposal_confirmation(event, proposal, requestor):
 
 
 def queue_exhibitor_access_mail(event, exhibitor, requestor):
-    """Queue the access-credentials email (unsent) for organiser review in the
-    outbox when lead scanning is enabled for an exhibitor. Returns the queued
-    row, or None if the exhibitor has no email / no template configured."""
+    """Queue the access-credentials email for organiser review in the outbox."""
     return mail_helpers.queue_exhibitor_access_email(event, exhibitor, requestor=requestor)
 
 
@@ -566,8 +563,6 @@ class UserProposalEditView(
             form.instance.submitted = form.instance.submitted or timezone.now()
         response = super().form_valid(form)
         self.save_link_formsets()
-        # Only send the confirmation on the transition into SUBMITTED, not on
-        # every re-save of an already-submitted request.
         if (
             form.instance.state == ExhibitionProposalState.SUBMITTED
             and previous_state != ExhibitionProposalState.SUBMITTED
@@ -1116,7 +1111,6 @@ class ExhibitorCreateView(ExhibitorLinkFormsetMixin, EventPermissionRequiredMixi
 
         response = super().form_valid(form)
         self.save_link_formsets()
-        # New exhibitor created with lead scanning already on -> queue access mail.
         if form.instance.lead_scanning_enabled and queue_exhibitor_access_mail(
             self.request.event, self.object, self.request.user
         ):
@@ -1154,8 +1148,6 @@ class ExhibitorEditView(ExhibitorLinkFormsetMixin, EventPermissionRequiredMixin,
 
     @transaction.atomic
     def form_valid(self, form):
-        # Capture the persisted value before saving so we can detect the
-        # False -> True lead-scanning transition.
         was_lead_scanning_enabled = (
             ExhibitorInfo.objects.filter(pk=self.object.pk).values_list("lead_scanning_enabled", flat=True).first()
         )
@@ -1170,8 +1162,6 @@ class ExhibitorEditView(ExhibitorLinkFormsetMixin, EventPermissionRequiredMixin,
 
         response = super().form_valid(form)
         self.save_link_formsets()
-        # Queue the access-credentials mail only on the False -> True transition,
-        # not on every save while it stays enabled.
         if (
             form.instance.lead_scanning_enabled
             and not was_lead_scanning_enabled
@@ -1220,10 +1210,6 @@ class ExhibitorCopyKeyView(EventPermissionRequiredMixin, View):
         response["Content-Disposition"] = 'attachment; filename="password.txt"'
         return response
 
-
-# ---------------------------------------------------------------------------
-# Email outbox / sent
-# ---------------------------------------------------------------------------
 
 EMAIL_MANAGE_PERMISSION = (
     "can_change_event_settings",
@@ -1310,8 +1296,7 @@ class EmailDeleteView(EventPermissionRequiredMixin, DeleteView):
 
 
 class EmailTemplatesView(EventPermissionRequiredMixin, TemplateView):
-    """Edit the lifecycle email templates as an accordion, styled like the
-    tickets Message center templates page."""
+    """Edit the lifecycle email templates."""
 
     permission = "can_change_event_settings"
     template_name = "exhibitors/email_templates.html"
@@ -1350,8 +1335,7 @@ class EmailTemplatesView(EventPermissionRequiredMixin, TemplateView):
 
 
 class EmailTemplatePreviewView(EventPermissionRequiredMixin, View):
-    """Render draft template text (subject + body) with sample placeholder
-    values, per locale, mirroring the Call text preview endpoint."""
+    """Render draft template text with sample placeholder values, per locale."""
 
     permission = "can_change_event_settings"
 
@@ -1373,7 +1357,6 @@ class EmailTemplatePreviewView(EventPermissionRequiredMixin, View):
             raw = widget.value_from_datadict(request.POST, request.FILES, field_name)
             if not isinstance(raw, (list, tuple)):
                 raw = [raw]
-            # Posted values are indexed by widget.locales, not by settings.LANGUAGES.
             locales = getattr(widget, "locales", None) or [code for code, _name in django_settings.LANGUAGES]
             by_locale = {}
             for index, code in enumerate(locales):
