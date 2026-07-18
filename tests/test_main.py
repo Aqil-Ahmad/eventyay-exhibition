@@ -1,13 +1,16 @@
 import json
 import re
+from types import SimpleNamespace
 
 import pytest
 from django.conf import settings as django_settings
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import RequestFactory
+from django_scopes import scopes_disabled
+from eventyay.base.models import Question
 from rest_framework import serializers
 
-from exhibition.api import ExhibitorInfoSerializer
+from exhibition.api import ExhibitorInfoSerializer, LeadCreateView
 from exhibition.forms import ExhibitionProposalForm, ExhibitorInfoForm, SponsorGroupForm
 from exhibition.models import (
     PROPOSAL_DEFAULT_FIELD_KEYS,
@@ -20,6 +23,7 @@ from exhibition.views import (
     CallTextPreviewView,
     ExhibitionQuestionListView,
     ExhibitorListView,
+    SettingsView,
     SponsorGroupReorderView,
 )
 
@@ -348,3 +352,69 @@ def test_partner_lists_filter_by_type_and_show_both(event):
 
     assert ids_for("sponsor") == {sponsor.id, both.id}
     assert ids_for("exhibitor") == {exhibitor.id, both.id}
+
+
+@pytest.mark.django_db
+def test_new_settings_share_attendee_name_and_email_by_default(event):
+    settings = make_exhibitor_settings(event)
+
+    assert settings.is_field_allowed("attendee_name")
+    assert settings.is_field_allowed("attendee_email")
+    assert not settings.is_field_allowed("system_company")
+
+
+@pytest.mark.django_db
+def test_data_access_fields_reflect_required_ticket_configuration(event):
+    settings = make_exhibitor_settings(event)
+    event.settings.set("attendee_company_asked", True)
+    event.settings.set("attendee_company_required", True)
+    event.settings.set("attendee_job_title_asked", True)
+    event.settings.set("attendee_job_title_required", False)
+
+    with scopes_disabled():
+        required_question = Question.objects.create(
+            event=event, question="Job role", type="S", required=True, active=True, position=0
+        )
+        Question.objects.create(
+            event=event, question="Dietary needs", type="S", required=False, active=True, position=1
+        )
+
+        view = SettingsView()
+        view.request = RequestFactory().get("/")
+        view.request.event = event
+        values = [field["value"] for field in view.get_data_access_fields(settings)]
+
+    assert values[:2] == ["attendee_name", "attendee_email"]
+    assert "system_company" in values
+    assert "system_job_title" not in values
+    assert f"question_{required_question.pk}" in values
+    assert len(values) == 4
+
+
+@pytest.mark.django_db
+def test_lead_data_only_includes_allowed_fields(event):
+    settings = make_exhibitor_settings(event)
+    settings.allowed_fields = ["attendee_name", "system_company"]
+    settings.save()
+
+    order_position = SimpleNamespace(
+        attendee_name="Alice",
+        attendee_email="alice@example.com",
+        company="Acme",
+        job_title="Engineer",
+        street="Main St",
+        zipcode="12345",
+        city="Springfield",
+        country="US",
+        answers=SimpleNamespace(all=lambda: []),
+        order=SimpleNamespace(event=event),
+    )
+
+    with scopes_disabled():
+        data = LeadCreateView().get_allowed_attendee_data(order_position, settings, None)
+
+    assert data["name"] == "Alice"
+    assert data["company"] == "Acme"
+    assert "email" not in data
+    assert "job_title" not in data
+    assert "address" not in data
