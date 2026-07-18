@@ -224,7 +224,7 @@ class ExhibitorInfoForm(I18nModelForm):
     def _apply_profile_field_settings(self):
         for key, field_names in self.PROFILE_SETTING_FIELD_MAP.items():
             if self.profile_key_is_active(key):
-                if key in self.PROFILE_COMPOSITE_KEYS:
+                if key in self.PROFILE_COMPOSITE_KEYS or key == "booth_name":
                     continue
                 for field_name in field_names:
                     if field_name in self.fields:
@@ -243,6 +243,10 @@ class ExhibitorInfoForm(I18nModelForm):
     def profile_key_is_active(self, key):
         setting = self.profile_field_settings.get(key)
         return bool(setting["active"]) if setting else False
+
+    def profile_key_is_required(self, key):
+        setting = self.profile_field_settings.get(key)
+        return bool(setting["active"] and setting["required"]) if setting else False
 
     @property
     def profile_items(self):
@@ -344,7 +348,14 @@ class ExhibitorInfoForm(I18nModelForm):
         if not is_sponsor:
             cleaned_data["sponsor_group"] = None
 
-        if not is_exhibitor:
+        if is_exhibitor:
+            if (
+                self.profile_key_is_required("booth_name")
+                and "booth_name" in self.fields
+                and not cleaned_data.get("booth_name")
+            ):
+                self.add_error("booth_name", _("This field is required."))
+        else:
             cleaned_data["booth_name"] = ""
             cleaned_data["booth_id"] = None
             cleaned_data["lead_scanning_enabled"] = False
