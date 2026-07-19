@@ -228,10 +228,10 @@
     {% if form.lead_scanning_enabled %}
     <fieldset id="lead-scanning-section">
         <legend>{% trans "Lead scanning" %}</legend>
-        {% bootstrap_field form.allow_voucher_access layout="control" %}
         {% bootstrap_field form.lead_scanning_enabled layout="control" %}
         {% bootstrap_field form.allow_lead_access layout="control" %}
         {% bootstrap_field form.lead_scanning_scope_by_device layout="control" %}
+        {% bootstrap_field form.allow_voucher_access layout="control" %}
     </fieldset>
     {% endif %}
 
