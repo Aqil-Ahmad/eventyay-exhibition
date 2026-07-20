@@ -487,6 +487,7 @@ class UserProposalCreateView(
     def get_form_kwargs(self):
         kwargs = super().get_form_kwargs()
         kwargs["event"] = self.request.event
+        kwargs["draft_save"] = self.request.POST.get("action") == "draft"
         return kwargs
 
     def post(self, request, *args, **kwargs):
@@ -543,6 +544,7 @@ class UserProposalEditView(
         kwargs = super().get_form_kwargs()
         kwargs["event"] = self.request.event
         kwargs["read_only"] = not self.can_edit()
+        kwargs["draft_save"] = self.request.POST.get("action") == "draft"
         return kwargs
 
     def post(self, request, *args, **kwargs):
@@ -942,7 +944,6 @@ class ExhibitionQuestionListView(EventPermissionRequiredMixin, ListView):
             "notes",
         )
         counts = {
-            "applying_for": proposals.filter(Q(is_exhibitor=True) | Q(is_sponsor=True)).count(),
             "name": proposals.count(),
             "social_links": proposals.filter(social_links__isnull=False).distinct().count(),
             "extra_links": proposals.filter(extra_links__isnull=False).distinct().count(),

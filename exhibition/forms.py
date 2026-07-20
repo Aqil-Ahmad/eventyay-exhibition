@@ -550,16 +550,6 @@ class ExhibitionQuestionFieldsMixin:
 
 
 class ExhibitionProposalForm(ExhibitionQuestionFieldsMixin, I18nModelForm):
-    applying_for = forms.ChoiceField(
-        choices=(
-            ("exhibitor", _("Exhibitor")),
-            ("sponsor", _("Sponsor")),
-            ("both", _("Exhibitor and sponsor")),
-        ),
-        initial="exhibitor",
-        label=_("Application type"),
-        widget=forms.RadioSelect,
-    )
     slides_url = forms.URLField(
         required=False,
         label=_("Slides URL"),
@@ -582,7 +572,6 @@ class ExhibitionProposalForm(ExhibitionQuestionFieldsMixin, I18nModelForm):
         "header_image": "header_image_url",
     }
     setting_field_map = {
-        "applying_for": ("applying_for",),
         "name": ("name",),
         "description": ("description",),
         "email": ("email",),
@@ -595,6 +584,7 @@ class ExhibitionProposalForm(ExhibitionQuestionFieldsMixin, I18nModelForm):
         "booth_name": ("booth_name",),
         "notes": ("notes",),
     }
+    DRAFT_REQUIRED_KEYS = ("name",)
 
     class Meta:
         model = ExhibitionProposal
@@ -635,6 +625,7 @@ class ExhibitionProposalForm(ExhibitionQuestionFieldsMixin, I18nModelForm):
     def __init__(self, *args, **kwargs):
         event = kwargs.get("event")
         self.read_only = kwargs.pop("read_only", False)
+        self.draft_save = kwargs.pop("draft_save", False)
         instance = kwargs.get("instance")
         super().__init__(*args, **kwargs)
         self.event = event or getattr(instance, "event", None)
@@ -646,7 +637,6 @@ class ExhibitionProposalForm(ExhibitionQuestionFieldsMixin, I18nModelForm):
             proposal_field_settings = self.exhibition_settings.normalized_proposal_field_settings
             self.active_proposal_fields = {key: value["active"] for key, value in proposal_field_settings.items()}
             self.required_proposal_fields = {key: value["required"] for key, value in proposal_field_settings.items()}
-        self.fields["applying_for"].initial = self.get_applying_for_initial(instance)
         for field_name in ("logo", "header_image"):
             if field_name in self.fields:
                 self.fields[field_name].widget.attrs.setdefault("accept", "image/*")
@@ -672,16 +662,6 @@ class ExhibitionProposalForm(ExhibitionQuestionFieldsMixin, I18nModelForm):
             for field in self.fields.values():
                 field.disabled = True
 
-    @staticmethod
-    def get_applying_for_initial(instance):
-        if not instance:
-            return "exhibitor"
-        if instance.is_exhibitor and instance.is_sponsor:
-            return "both"
-        if instance.is_sponsor:
-            return "sponsor"
-        return "exhibitor"
-
     def apply_proposal_field_settings(self):
         file_field_keys = set(self.file_url_fields)
         for key, form_fields in self.setting_field_map.items():
@@ -692,12 +672,17 @@ class ExhibitionProposalForm(ExhibitionQuestionFieldsMixin, I18nModelForm):
                     self.fields.pop(field_name, None)
                 continue
 
-            if key in file_field_keys or key == "booth_name":
-                continue
-
             for field_name in form_fields:
-                if field_name in self.fields:
-                    self.fields[field_name].required = is_required
+                field = self.fields.get(field_name)
+                if field is None:
+                    continue
+                field._required = is_required
+                if key in file_field_keys or key == "booth_name":
+                    continue
+                if isinstance(field, I18nFormField):
+                    field.one_required = is_required
+                else:
+                    field.required = is_required
 
     def apply_proposal_field_order(self):
         if not self.exhibition_settings:
@@ -727,11 +712,43 @@ class ExhibitionProposalForm(ExhibitionQuestionFieldsMixin, I18nModelForm):
     def field_setting_is_required(self, key):
         return self.required_proposal_fields.get(key, False)
 
+    def full_clean(self):
+        if not self.draft_save:
+            return super().full_clean()
+        keep_required = set()
+        for key in self.DRAFT_REQUIRED_KEYS:
+            keep_required.update(self.setting_field_map.get(key, ()))
+        original = {}
+        for field_name, field in self.fields.items():
+            if field_name in keep_required:
+                continue
+            original[field_name] = (field.required, getattr(field, "one_required", None))
+            field.required = False
+            if isinstance(field, I18nFormField):
+                field.one_required = False
+            if hasattr(field.widget, "is_required"):
+                field.widget.is_required = False
+        try:
+            super().full_clean()
+        finally:
+            for field_name, field in self.fields.items():
+                if field_name not in original:
+                    continue
+                required, one_required = original[field_name]
+                field.required = required
+                if one_required is not None:
+                    field.one_required = one_required
+                if hasattr(field.widget, "is_required"):
+                    field.widget.is_required = required
+
     def clean(self):
         cleaned_data = super().clean()
-        applying_for = cleaned_data.get("applying_for")
-        cleaned_data["is_exhibitor"] = applying_for in {"exhibitor", "both"}
-        cleaned_data["is_sponsor"] = applying_for in {"sponsor", "both"}
+        if self.instance.pk:
+            cleaned_data["is_exhibitor"] = self.instance.is_exhibitor
+            cleaned_data["is_sponsor"] = self.instance.is_sponsor
+        else:
+            cleaned_data["is_exhibitor"] = True
+            cleaned_data["is_sponsor"] = False
 
         if "video_url" in self.fields and (video_url := cleaned_data.get("video_url")):
             cleaned_data["video_url"] = normalize_url_scheme(video_url)
@@ -796,7 +813,8 @@ class ExhibitionProposalForm(ExhibitionQuestionFieldsMixin, I18nModelForm):
         if not cleaned_data["is_exhibitor"]:
             cleaned_data["booth_name"] = ""
         elif (
-            self.field_setting_is_required("booth_name")
+            not self.draft_save
+            and self.field_setting_is_required("booth_name")
             and "booth_name" in self.fields
             and not cleaned_data.get("booth_name")
         ):
@@ -805,6 +823,8 @@ class ExhibitionProposalForm(ExhibitionQuestionFieldsMixin, I18nModelForm):
         return cleaned_data
 
     def validate_required_file_or_url(self, field_name, has_new_upload):
+        if self.draft_save:
+            return
         if not self.field_setting_is_active(field_name) or not self.field_setting_is_required(field_name):
             return
         file_field = self.fields.get(field_name)
@@ -913,7 +933,6 @@ class ExhibitionQuestionForm(I18nModelForm):
             "help_text",
             "required",
             "active",
-            "position",
         ]
         labels = {
             "variant": _("Field type"),
@@ -921,7 +940,6 @@ class ExhibitionQuestionForm(I18nModelForm):
             "help_text": _("Help text"),
             "required": _("Required"),
             "active": _("Active"),
-            "position": _("Position"),
         }
 
     choice_variants = {
@@ -935,11 +953,6 @@ class ExhibitionQuestionForm(I18nModelForm):
         super().__init__(*args, **kwargs)
         if self.instance and self.instance.pk:
             self.fields["options_text"].initial = "\n".join(str(option) for option in self.instance.options.all())
-        elif not self.initial.get("position") and self.event:
-            max_position = ExhibitionQuestion.objects.filter(event=self.event).aggregate(Max("position"))[
-                "position__max"
-            ]
-            self.initial["position"] = max((max_position or -1) + 1, len(PROPOSAL_DEFAULT_FIELD_KEYS))
 
     def clean(self):
         cleaned_data = super().clean()
@@ -956,6 +969,11 @@ class ExhibitionQuestionForm(I18nModelForm):
         instance = super().save(commit=False)
         if self.event:
             instance.event = self.event
+        if not instance.pk and self.event:
+            max_position = ExhibitionQuestion.objects.filter(event=self.event).aggregate(Max("position"))[
+                "position__max"
+            ]
+            instance.position = max((max_position or -1) + 1, len(PROPOSAL_DEFAULT_FIELD_KEYS))
         if commit:
             instance.save()
             self.save_options(instance)

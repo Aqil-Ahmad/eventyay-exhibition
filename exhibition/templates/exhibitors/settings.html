@@ -49,7 +49,7 @@ The {event_name} team{% endblocktrans %}
                 {% bootstrap_form_errors call_settings_form %}
                 <fieldset>
                     <legend>{% trans "Publish your call" %}</legend>
-                    <p>{% trans "Publish a login-required application form for exhibitors and sponsors." %}</p>
+                    <p>{% trans "Publish a login-required application form for exhibitors." %}</p>
                     {% bootstrap_field call_settings_form.call_enabled layout="control" %}
                     {% bootstrap_field call_settings_form.call_headline layout="control" %}
                     <div id="call_text_panel" class="form-group call-text-group">
@@ -92,7 +92,7 @@ The {event_name} team{% endblocktrans %}
                             {% trans "Save" %}
                         </button>
                         {% if settings.call_enabled %}
-                            <a class="btn btn-default" href="{% url 'plugins:exhibition:public_call' organizer=request.event.organizer.slug event=request.event.slug %}">
+                            <a class="btn btn-default btn-lg" href="{% url 'plugins:exhibition:public_call' organizer=request.event.organizer.slug event=request.event.slug %}">
                                 {% trans "View call page" %}
                             </a>
                         {% endif %}
