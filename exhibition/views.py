@@ -465,6 +465,7 @@ class UserProposalCreateView(
     def get_form_kwargs(self):
         kwargs = super().get_form_kwargs()
         kwargs["event"] = self.request.event
+        kwargs["draft_save"] = self.request.POST.get("action") == "draft"
         return kwargs
 
     def post(self, request, *args, **kwargs):
@@ -519,6 +520,7 @@ class UserProposalEditView(
         kwargs = super().get_form_kwargs()
         kwargs["event"] = self.request.event
         kwargs["read_only"] = not self.can_edit()
+        kwargs["draft_save"] = self.request.POST.get("action") == "draft"
         return kwargs
 
     def post(self, request, *args, **kwargs):

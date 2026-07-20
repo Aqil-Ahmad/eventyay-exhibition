@@ -89,7 +89,7 @@ Best regards, Your {event} team{% endblocktrans %}
                             {% trans "Save" %}
                         </button>
                         {% if settings.call_enabled %}
-                            <a class="btn btn-default" href="{% url 'plugins:exhibition:public_call' organizer=request.event.organizer.slug event=request.event.slug %}">
+                            <a class="btn btn-default btn-lg" href="{% url 'plugins:exhibition:public_call' organizer=request.event.organizer.slug event=request.event.slug %}">
                                 {% trans "View call page" %}
                             </a>
                         {% endif %}
