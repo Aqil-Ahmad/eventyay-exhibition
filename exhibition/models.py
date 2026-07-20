@@ -652,3 +652,71 @@ class ExhibitorTag(models.Model):
 
     def __str__(self):
         return f"{self.name} ({self.exhibitor.name})"
+
+
+class ExhibitionEmailQueue(models.Model):
+    """A single email queued for one recipient, with placeholders already rendered."""
+
+    event = models.ForeignKey(
+        Event,
+        on_delete=models.CASCADE,
+        related_name="exhibition_email_queue",
+    )
+    proposal = models.ForeignKey(
+        ExhibitionProposal,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="emails",
+    )
+    exhibitor = models.ForeignKey(
+        ExhibitorInfo,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="emails",
+    )
+    to_email = models.EmailField(verbose_name=_("Recipient"))
+    subject = models.CharField(max_length=255, verbose_name=_("Subject"))
+    body = models.TextField(verbose_name=_("Body"))
+    reply_to = models.CharField(max_length=255, blank=True, default="")
+    locale = models.CharField(max_length=32, blank=True, default="")
+    sent_at = models.DateTimeField(null=True, blank=True)
+    created = models.DateTimeField(auto_now_add=True)
+    updated = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = _("Queued email")
+        verbose_name_plural = _("Queued emails")
+        ordering = ("-created",)
+
+    def __str__(self):
+        state = "sent" if self.sent_at else "pending"
+        return f"{self.to_email} · {state} · {self.subject}"
+
+    def send(self, requestor=None):
+        """Deliver the email via the core mail() service and mark it sent."""
+        from eventyay.base.services.mail import mail
+
+        if self.sent_at:
+            return
+
+        mail(
+            email=self.to_email,
+            subject=self.subject,
+            template=LazyI18nString(self.body),
+            context={},
+            event=self.event,
+            locale=self.locale or None,
+            auto_email=False,
+            event_reply_to=self.reply_to or None,
+        )
+        self.sent_at = timezone.now()
+        self.save(update_fields=["sent_at", "updated"])
+        self.event.log_action(
+            "eventyay.plugins.exhibition.email.sent",
+            user=requestor,
+            data={"queue_id": self.pk, "to": self.to_email, "subject": self.subject},
+        )
+
+    send.alters_data = True

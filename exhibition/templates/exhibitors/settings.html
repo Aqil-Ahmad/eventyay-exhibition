@@ -31,12 +31,15 @@
 
 {% block exhibitors_content %}
     {% trans "Your exhibitor access code" as default_subject %}
-    {% blocktrans trimmed asvar default_body %}Hello,
-Your exhibitor ticketing account for {event} has been created.
-You can access data associated to your account here:
-{exhibitor_login_url}
-Using the following access code: {exhibitor_access_code}
-Best regards, Your {event} team{% endblocktrans %}
+    {% blocktrans asvar default_body %}Hello {exhibitor_name},
+
+Your exhibitor account for {event_name} has been created.
+
+Booth: {booth_id}
+Access code: {exhibitor_access_code}
+
+Best regards,
+The {event_name} team{% endblocktrans %}
 
     {% if active_tab == "call" %}
             <form action="" method="post" class="form-horizontal">

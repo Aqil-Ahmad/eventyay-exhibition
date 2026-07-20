@@ -17,8 +17,11 @@ from eventyay.base.templatetags.rich_text import rich_text
 from eventyay.control.permissions import EventPermissionRequiredMixin
 from eventyay.control.views import CreateView, UpdateView
 
+from . import mail as mail_helpers
 from .forms import (
     CallSettingsForm,
+    ExhibitionEmailQueueForm,
+    ExhibitionMailTemplatesForm,
     ExhibitionProposalExtraLinkFormSet,
     ExhibitionProposalForm,
     ExhibitionProposalReviewForm,
@@ -35,6 +38,7 @@ from .models import (
     PROPOSAL_DEFAULT_FIELD_KEYS,
     PROPOSAL_DEFAULT_FIELDS,
     PROPOSAL_FORMSET_FIELD_KEYS,
+    ExhibitionEmailQueue,
     ExhibitionProposal,
     ExhibitionProposalState,
     ExhibitionQuestion,
@@ -68,6 +72,24 @@ def partner_list_url(event, partner_type):
         "exhibitor": "plugins:exhibition:exhibitors",
     }.get(partner_type, "plugins:exhibition:exhibitors")
     return reverse(route, kwargs=event_kwargs(event))
+
+
+def send_proposal_confirmation(event, proposal, requestor):
+    """Send the submission confirmation email once the transaction commits."""
+    transaction.on_commit(
+        lambda: mail_helpers.queue_proposal_email(
+            event,
+            proposal,
+            mail_helpers.PROPOSAL_NEW,
+            send_now=True,
+            requestor=requestor,
+        )
+    )
+
+
+def queue_exhibitor_access_mail(event, exhibitor, requestor):
+    """Queue the access-credentials email for organiser review in the outbox."""
+    return mail_helpers.queue_exhibitor_access_email(event, exhibitor, requestor=requestor)
 
 
 class PublicEventLoginRequiredMixin(LoginRequiredMixin):
@@ -484,6 +506,8 @@ class UserProposalCreateView(
             form.instance.submitted = timezone.now()
         response = super().form_valid(form)
         self.save_link_formsets()
+        if form.instance.state == ExhibitionProposalState.SUBMITTED:
+            send_proposal_confirmation(self.request.event, self.object, self.request.user)
         messages.success(self.request, _("Your request has been saved."))
         return response
 
@@ -532,6 +556,7 @@ class UserProposalEditView(
 
     @transaction.atomic
     def form_valid(self, form):
+        previous_state = self.object.state
         if self.request.POST.get("action") == "draft":
             form.instance.state = ExhibitionProposalState.DRAFT
             form.instance.submitted = None
@@ -540,6 +565,11 @@ class UserProposalEditView(
             form.instance.submitted = form.instance.submitted or timezone.now()
         response = super().form_valid(form)
         self.save_link_formsets()
+        if (
+            form.instance.state == ExhibitionProposalState.SUBMITTED
+            and previous_state != ExhibitionProposalState.SUBMITTED
+        ):
+            send_proposal_confirmation(self.request.event, self.object, self.request.user)
         messages.success(self.request, _("Your request has been saved."))
         return response
 
@@ -767,9 +797,15 @@ class ProposalDetailView(EventPermissionRequiredMixin, UpdateView):
             raise PermissionDenied()
         if action == "approve":
             exhibitor = create_exhibitor_from_proposal(self.object)
+            mail_helpers.queue_proposal_email(
+                self.request.event,
+                self.object,
+                mail_helpers.PROPOSAL_ACCEPTED,
+                requestor=self.request.user,
+            )
             messages.success(
                 self.request,
-                _("Request approved and partner profile created."),
+                _("Request approved and partner profile created. An acceptance email was placed in the outbox."),
             )
             if self.can_edit_exhibitor():
                 return redirect(
@@ -787,7 +823,16 @@ class ProposalDetailView(EventPermissionRequiredMixin, UpdateView):
             else:
                 self.object.state = ExhibitionProposalState.REJECTED
                 self.object.save(update_fields=["state", "updated"])
-                messages.success(self.request, _("Request rejected."))
+                mail_helpers.queue_proposal_email(
+                    self.request.event,
+                    self.object,
+                    mail_helpers.PROPOSAL_REJECTED,
+                    requestor=self.request.user,
+                )
+                messages.success(
+                    self.request,
+                    _("Request rejected. A rejection email was placed in the outbox."),
+                )
             return redirect(self.get_success_url())
 
         messages.success(self.request, _("Review details saved."))
@@ -1067,6 +1112,10 @@ class ExhibitorCreateView(ExhibitorLinkFormsetMixin, EventPermissionRequiredMixi
 
         response = super().form_valid(form)
         self.save_link_formsets()
+        if form.instance.lead_scanning_enabled and queue_exhibitor_access_mail(
+            self.request.event, self.object, self.request.user
+        ):
+            messages.info(self.request, _("An access-credentials email was placed in the outbox."))
         return response
 
     def get_context_data(self, **kwargs):
@@ -1100,6 +1149,10 @@ class ExhibitorEditView(ExhibitorLinkFormsetMixin, EventPermissionRequiredMixin,
 
     @transaction.atomic
     def form_valid(self, form):
+        was_lead_scanning_enabled = (
+            ExhibitorInfo.objects.filter(pk=self.object.pk).values_list("lead_scanning_enabled", flat=True).first()
+        )
+
         # Generate booth_id only for exhibitors if none exists.
         if (
             form.cleaned_data.get("is_exhibitor", True)
@@ -1110,6 +1163,12 @@ class ExhibitorEditView(ExhibitorLinkFormsetMixin, EventPermissionRequiredMixin,
 
         response = super().form_valid(form)
         self.save_link_formsets()
+        if (
+            form.instance.lead_scanning_enabled
+            and not was_lead_scanning_enabled
+            and queue_exhibitor_access_mail(self.request.event, self.object, self.request.user)
+        ):
+            messages.info(self.request, _("An access-credentials email was placed in the outbox."))
         return response
 
     def get_context_data(self, **kwargs):
@@ -1151,3 +1210,171 @@ class ExhibitorCopyKeyView(EventPermissionRequiredMixin, View):
         response = HttpResponse(exhibitor.key)
         response["Content-Disposition"] = 'attachment; filename="password.txt"'
         return response
+
+
+EMAIL_MANAGE_PERMISSION = (
+    "can_change_event_settings",
+    "can_change_exhibition_proposals",
+    "is_exhibition_reviewer",
+)
+
+
+class EmailOutboxListView(EventPermissionRequiredMixin, ListView):
+    """Unsent queued emails awaiting organiser review."""
+
+    model = ExhibitionEmailQueue
+    permission = EMAIL_MANAGE_PERMISSION
+    template_name = "exhibitors/email_outbox.html"
+    context_object_name = "emails"
+
+    def get_queryset(self):
+        return ExhibitionEmailQueue.objects.filter(event=self.request.event, sent_at__isnull=True).order_by("-created")
+
+
+class EmailSentListView(EventPermissionRequiredMixin, ListView):
+    """Read-only list of already-sent emails."""
+
+    model = ExhibitionEmailQueue
+    permission = EMAIL_MANAGE_PERMISSION
+    template_name = "exhibitors/email_sent.html"
+    context_object_name = "emails"
+
+    def get_queryset(self):
+        return ExhibitionEmailQueue.objects.filter(event=self.request.event, sent_at__isnull=False).order_by("-sent_at")
+
+
+class EmailEditView(EventPermissionRequiredMixin, UpdateView):
+    """Preview and edit a queued (unsent) email before sending."""
+
+    model = ExhibitionEmailQueue
+    form_class = ExhibitionEmailQueueForm
+    permission = EMAIL_MANAGE_PERMISSION
+    template_name = "exhibitors/email_edit.html"
+    context_object_name = "email"
+
+    def get_queryset(self):
+        return ExhibitionEmailQueue.objects.filter(event=self.request.event, sent_at__isnull=True)
+
+    def form_valid(self, form):
+        self.object = form.save()
+        if "_send" in self.request.POST:
+            self.object.send(requestor=self.request.user)
+            messages.success(self.request, _("The email has been saved and sent."))
+        else:
+            messages.success(self.request, _("The email has been saved."))
+        return redirect(self.get_success_url())
+
+    def get_success_url(self):
+        return reverse("plugins:exhibition:email.outbox", kwargs=event_kwargs(self.request.event))
+
+
+class EmailSendView(EventPermissionRequiredMixin, View):
+    """Send a single queued email."""
+
+    permission = EMAIL_MANAGE_PERMISSION
+
+    def post(self, request, *args, **kwargs):
+        email = get_object_or_404(ExhibitionEmailQueue, pk=kwargs["pk"], event=request.event, sent_at__isnull=True)
+        email.send(requestor=request.user)
+        messages.success(request, _("The email has been sent."))
+        return redirect("plugins:exhibition:email.outbox", **event_kwargs(request.event))
+
+
+class EmailDeleteView(EventPermissionRequiredMixin, DeleteView):
+    """Discard a queued (unsent) email."""
+
+    model = ExhibitionEmailQueue
+    permission = EMAIL_MANAGE_PERMISSION
+    template_name = "exhibitors/email_delete.html"
+    context_object_name = "email"
+
+    def get_queryset(self):
+        return ExhibitionEmailQueue.objects.filter(event=self.request.event, sent_at__isnull=True)
+
+    def get_success_url(self):
+        messages.success(self.request, _("The email has been discarded."))
+        return reverse("plugins:exhibition:email.outbox", kwargs=event_kwargs(self.request.event))
+
+
+class EmailTemplatesView(EventPermissionRequiredMixin, TemplateView):
+    """Edit the lifecycle email templates."""
+
+    permission = "can_change_event_settings"
+    template_name = "exhibitors/email_templates.html"
+
+    def get_form(self, data=None):
+        return ExhibitionMailTemplatesForm(data=data, obj=self.request.event)
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        form = kwargs.get("form") or self.get_form()
+        context["form"] = form
+        context["template_panels"] = [
+            {
+                "role": role,
+                "label": label,
+                "subject_field": form[mail_helpers.subject_settings_key(role)],
+                "body_field": form[mail_helpers.body_settings_key(role)],
+            }
+            for role, label in (
+                (mail_helpers.PROPOSAL_NEW, _("Request received (confirmation)")),
+                (mail_helpers.PROPOSAL_ACCEPTED, _("Request accepted")),
+                (mail_helpers.PROPOSAL_REJECTED, _("Request rejected")),
+            )
+        ]
+        context["email_placeholders"] = mail_helpers.PLACEHOLDER_DOCS
+        context["locales"] = self.request.event.settings.locales
+        return context
+
+    def post(self, request, *args, **kwargs):
+        form = self.get_form(data=request.POST)
+        if form.is_valid():
+            form.save()
+            messages.success(request, _("Email templates have been saved."))
+            return redirect("plugins:exhibition:email.templates", **event_kwargs(request.event))
+        return self.render_to_response(self.get_context_data(form=form))
+
+
+class EmailTemplatePreviewView(EventPermissionRequiredMixin, View):
+    """Render draft template text with sample placeholder values, per locale."""
+
+    permission = "can_change_event_settings"
+
+    def post(self, request, *args, **kwargs):
+        role = request.POST.get("role")
+        if role not in mail_helpers.LIFECYCLE_ROLES:
+            return JsonResponse({"detail": _("Unknown template.")}, status=400)
+
+        from eventyay.base.i18n import language
+        from eventyay.base.templatetags.rich_text import markdown_compile_email
+
+        form = ExhibitionMailTemplatesForm(obj=request.event)
+        placeholders = mail_helpers.build_preview_placeholders(request.event)
+        event_locales = set(request.event.settings.locales)
+        region = request.event.settings.region
+
+        def values_by_locale(field_name):
+            widget = form.fields[field_name].widget
+            raw = widget.value_from_datadict(request.POST, request.FILES, field_name)
+            if not isinstance(raw, (list, tuple)):
+                raw = [raw]
+            locales = getattr(widget, "locales", None) or [code for code, _name in django_settings.LANGUAGES]
+            by_locale = {}
+            for index, code in enumerate(locales):
+                if code in event_locales and index < len(raw):
+                    by_locale[code] = raw[index] or ""
+            return by_locale
+
+        bodies = values_by_locale(mail_helpers.body_settings_key(role))
+
+        def render(text):
+            try:
+                return markdown_compile_email(text.format_map(placeholders))
+            except (KeyError, IndexError, ValueError):
+                return markdown_compile_email(text)
+
+        previews = {}
+        for locale in event_locales:
+            with language(locale, region):
+                previews[locale] = render(bodies.get(locale, ""))
+        return JsonResponse({"previews": previews})

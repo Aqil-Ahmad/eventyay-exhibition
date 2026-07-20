@@ -12,6 +12,13 @@ from .api import (
 )
 from .views import (
     CallTextPreviewView,
+    EmailDeleteView,
+    EmailEditView,
+    EmailOutboxListView,
+    EmailSendView,
+    EmailSentListView,
+    EmailTemplatePreviewView,
+    EmailTemplatesView,
     ExhibitionQuestionCreateView,
     ExhibitionQuestionDeleteView,
     ExhibitionQuestionEditView,
@@ -174,6 +181,41 @@ urlpatterns = [
         "exhibitors/event/<orgslug:organizer>/<slug:event>/copy_key/<int:pk>",
         ExhibitorCopyKeyView.as_view(),
         name="copy_key",
+    ),
+    path(
+        "exhibitors/event/<orgslug:organizer>/<slug:event>/emails/outbox",
+        EmailOutboxListView.as_view(),
+        name="email.outbox",
+    ),
+    path(
+        "exhibitors/event/<orgslug:organizer>/<slug:event>/emails/sent",
+        EmailSentListView.as_view(),
+        name="email.sent",
+    ),
+    path(
+        "exhibitors/event/<orgslug:organizer>/<slug:event>/emails/templates",
+        EmailTemplatesView.as_view(),
+        name="email.templates",
+    ),
+    path(
+        "exhibitors/event/<orgslug:organizer>/<slug:event>/emails/templates/preview",
+        EmailTemplatePreviewView.as_view(),
+        name="email.templates.preview",
+    ),
+    path(
+        "exhibitors/event/<orgslug:organizer>/<slug:event>/emails/<int:pk>/edit",
+        EmailEditView.as_view(),
+        name="email.edit",
+    ),
+    path(
+        "exhibitors/event/<orgslug:organizer>/<slug:event>/emails/<int:pk>/send",
+        EmailSendView.as_view(),
+        name="email.send",
+    ),
+    path(
+        "exhibitors/event/<orgslug:organizer>/<slug:event>/emails/<int:pk>/delete",
+        EmailDeleteView.as_view(),
+        name="email.delete",
     ),
     path(
         "api/v1/event/<str:organizer>/<str:event>/exhibitors/auth",
