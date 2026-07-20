@@ -116,7 +116,10 @@
                  data-confirm-reject-one="{% trans 'Reject this proposal?' %}"
                  data-confirm-withdraw-one="{% trans 'Withdraw this proposal?' %}"
                  data-error="{% trans 'The action could not be completed. Please try again.' %}"
-                 data-selected="{% trans 'selected' %}"></div>
+                 data-selected="{% trans 'selected' %}"
+                 data-confirm-title="{% trans 'Please confirm' %}"
+                 data-confirm-label="{% trans 'Confirm' %}"
+                 data-cancel-label="{% trans 'Cancel' %}"></div>
             <script defer src="{% static 'exhibition/js/proposal-actions.js' %}"></script>
         {% endif %}
     {% else %}

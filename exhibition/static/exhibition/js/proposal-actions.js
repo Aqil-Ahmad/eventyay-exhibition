@@ -163,6 +163,27 @@
             return null
         }
 
+        function confirmClassFor(action) {
+            return action === 'approve' ? 'btn-success' : 'btn-danger'
+        }
+
+        function requestConfirmation(action, message) {
+            if (!message) {
+                return Promise.resolve(true)
+            }
+            var options = {
+                message: message,
+                title: i18n.confirmTitle,
+                confirmLabel: i18n.confirmLabel,
+                cancelLabel: i18n.cancelLabel,
+                confirmClass: confirmClassFor(action),
+            }
+            if (typeof window.showConfirmDialog === 'function') {
+                return window.showConfirmDialog(options)
+            }
+            return Promise.resolve(window.confirm(message))
+        }
+
         container.addEventListener('click', function (event) {
             var button = event.target.closest('[data-proposal-action]')
             if (!button) {
@@ -170,11 +191,11 @@
             }
             var action = button.dataset.proposalAction
             var code = button.dataset.proposalCode
-            var message = confirmFor(action, false)
-            if (message && !window.confirm(message)) {
-                return
-            }
-            submitAction(action, [code])
+            requestConfirmation(action, confirmFor(action, false)).then(function (confirmed) {
+                if (confirmed) {
+                    submitAction(action, [code])
+                }
+            })
         })
 
         bulkButtons.forEach(function (button) {
@@ -184,11 +205,11 @@
                 if (!codes.length) {
                     return
                 }
-                var message = confirmFor(action, true)
-                if (message && !window.confirm(message)) {
-                    return
-                }
-                submitAction(action, codes)
+                requestConfirmation(action, confirmFor(action, true)).then(function (confirmed) {
+                    if (confirmed) {
+                        submitAction(action, codes)
+                    }
+                })
             })
         })
 
