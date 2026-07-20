@@ -52,7 +52,6 @@ from .social_links import serialize_social_link
 from .utils import (
     add_external_image_csp_sources,
     build_exhibitor_video_embed,
-    create_exhibitor_from_proposal,
     public_exhibitors_queryset,
     should_hide_applicant_emails,
 )
@@ -814,13 +813,7 @@ class ProposalDetailView(EventPermissionRequiredMixin, UpdateView):
                 messages.error(self.request, _("This proposal can no longer be changed."))
                 return redirect(self.get_success_url())
         if action == "approve":
-            exhibitor = create_exhibitor_from_proposal(self.object)
-            mail_helpers.queue_proposal_email(
-                self.request.event,
-                self.object,
-                mail_helpers.PROPOSAL_ACCEPTED,
-                requestor=self.request.user,
-            )
+            exhibitor = self.object.approve(requestor=self.request.user)
             messages.success(
                 self.request,
                 _("Request approved and partner profile created. An acceptance email was placed in the outbox."),
@@ -839,14 +832,7 @@ class ProposalDetailView(EventPermissionRequiredMixin, UpdateView):
                     _("This request has already been approved and cannot be rejected."),
                 )
             else:
-                self.object.state = ExhibitionProposalState.REJECTED
-                self.object.save(update_fields=["state", "updated"])
-                mail_helpers.queue_proposal_email(
-                    self.request.event,
-                    self.object,
-                    mail_helpers.PROPOSAL_REJECTED,
-                    requestor=self.request.user,
-                )
+                self.object.reject(requestor=self.request.user)
                 messages.success(
                     self.request,
                     _("Request rejected. A rejection email was placed in the outbox."),
@@ -895,10 +881,9 @@ class ProposalActionView(EventPermissionRequiredMixin, View):
 
     def apply_action(self, proposal, action):
         if action == "approve":
-            create_exhibitor_from_proposal(proposal)
+            proposal.approve(requestor=self.request.user)
         elif action == "reject":
-            proposal.state = ExhibitionProposalState.REJECTED
-            proposal.save(update_fields=["state", "updated"])
+            proposal.reject(requestor=self.request.user)
         elif action == "withdraw":
             proposal.state = ExhibitionProposalState.WITHDRAWN
             proposal.save(update_fields=["state", "updated"])

@@ -468,6 +468,23 @@ class ExhibitionProposal(models.Model):
             ExhibitionProposalState.SUBMITTED,
         }
 
+    def approve(self, requestor=None):
+        """Accept the request, create its partner profile and queue the acceptance email."""
+        from .mail import PROPOSAL_ACCEPTED, queue_proposal_email
+        from .utils import create_exhibitor_from_proposal
+
+        exhibitor = create_exhibitor_from_proposal(self)
+        queue_proposal_email(self.event, self, PROPOSAL_ACCEPTED, requestor=requestor)
+        return exhibitor
+
+    def reject(self, requestor=None):
+        """Reject the request and queue the rejection email."""
+        from .mail import PROPOSAL_REJECTED, queue_proposal_email
+
+        self.state = ExhibitionProposalState.REJECTED
+        self.save(update_fields=["state", "updated"])
+        queue_proposal_email(self.event, self, PROPOSAL_REJECTED, requestor=requestor)
+
     @property
     def localized_booth_name(self):
         booth_name = self.booth_name
