@@ -676,6 +676,8 @@ class UserProposalEditView(
             else:
                 form.instance.state = ExhibitionProposalState.SUBMITTED
                 form.instance.submitted = form.instance.submitted or timezone.now()
+        else:
+            form.instance.profile_edited_at = timezone.now()
         response = super().form_valid(form)
         self.save_link_formsets()
         if (
