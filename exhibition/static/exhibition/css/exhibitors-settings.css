@@ -10,15 +10,6 @@
     font-weight: 600;
 }
 
-.sponsor-group-handle-column,
-.sponsor-group-handle-cell {
-    width: 48px;
-}
-
-.sponsor-group-handle-cell {
-    cursor: move;
-}
-
 .sponsor-group-drag-handle {
     cursor: move;
 }

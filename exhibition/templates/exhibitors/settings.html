@@ -204,7 +204,6 @@ The {event_name} team{% endblocktrans %}
                         <table class="table table-hover sponsor-groups-table" data-group-reorder-url="{% url 'plugins:exhibition:reorder_groups' organizer=request.event.organizer.slug event=request.event.slug %}">
                             <thead>
                             <tr>
-                                <th class="sponsor-group-handle-column"></th>
                                 <th>{% trans "Group Name" %}</th>
                                 <th>{% trans "Level" %}</th>
                                 <th>{% trans "Partners" %}</th>
@@ -215,11 +214,6 @@ The {event_name} team{% endblocktrans %}
                             <tbody data-sponsor-group-list>
                             {% for group in sponsor_groups %}
                                 <tr class="sponsor-group-row" data-group-id="{{ group.pk }}" data-editor-id="group-editor-{{ group.pk }}">
-                                    <td class="sponsor-group-handle-cell">
-                                        <button type="button" class="btn btn-default btn-sm sponsor-group-drag-handle" data-group-drag-handle aria-label="{% trans 'Reorder sponsor group' %}" title="{% trans 'Reorder sponsor group' %}">
-                                            <i class="fa fa-bars"></i>
-                                        </button>
-                                    </td>
                                     <td>
                                         <span class="sponsor-group-display-name">{{ group.localized_name }}</span>
                                     </td>
@@ -257,11 +251,14 @@ The {event_name} team{% endblocktrans %}
                                                 <input type="hidden" name="group_id" value="{{ group.pk }}">
                                                 <button type="submit" class="btn btn-delete btn-danger btn-sm"><i class="fa fa-trash"></i></button>
                                             </form>
+                                            <button type="button" class="btn btn-primary btn-sm sponsor-group-drag-handle" data-group-drag-handle aria-label="{% trans 'Reorder sponsor group' %}" title="{% trans 'Reorder sponsor group' %}">
+                                                <i class="fa fa-arrows"></i>
+                                            </button>
                                         </div>
                                     </td>
                                 </tr>
                                 <tr id="group-editor-{{ group.pk }}" class="sponsor-group-editor-row {% if expanded_group_pk != group.pk %}hidden{% endif %}">
-                                    <td colspan="6">
+                                    <td colspan="5">
                                         <form action="" method="post" class="form-horizontal sponsor-group-editor-form">
                                             {% csrf_token %}
                                             <input type="hidden" name="tab" value="sponsors">

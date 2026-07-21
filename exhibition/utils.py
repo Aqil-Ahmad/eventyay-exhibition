@@ -34,7 +34,7 @@ def public_exhibitors_queryset(event) -> QuerySet["ExhibitorInfo"]:
         ExhibitorInfo.objects.filter(event=event, is_exhibitor=True, active=True)
         .filter(has_logo, has_header)
         .prefetch_related("social_links", "extra_links")
-        .order_by("name", "pk")
+        .order_by("exhibitor_position", "name", "pk")
     )
 
 

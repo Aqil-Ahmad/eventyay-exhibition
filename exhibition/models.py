@@ -47,6 +47,28 @@ def get_next_sponsor_group_level(event):
     return (SponsorGroup.objects.filter(event=event).aggregate(max_level=Max("level")).get("max_level") or 0) + 1
 
 
+def get_next_exhibitor_position(event):
+    if not event:
+        return 0
+    max_position = (
+        ExhibitorInfo.objects.filter(event=event, is_exhibitor=True)
+        .aggregate(value=Max("exhibitor_position"))
+        .get("value")
+    )
+    return (max_position if max_position is not None else -1) + 1
+
+
+def get_next_sponsor_position(event, sponsor_group):
+    if not event:
+        return 0
+    max_position = (
+        ExhibitorInfo.objects.filter(event=event, is_sponsor=True, sponsor_group=sponsor_group)
+        .aggregate(value=Max("sponsor_position"))
+        .get("value")
+    )
+    return (max_position if max_position is not None else -1) + 1
+
+
 def exhibitor_logo_path(instance, filename):
     name = instance.name
     if isinstance(name, LazyI18nString):
@@ -294,6 +316,8 @@ class ExhibitorInfo(models.Model):
     allow_voucher_access = models.BooleanField(default=False)
     allow_lead_access = models.BooleanField(default=False)
     lead_scanning_scope_by_device = models.BooleanField(default=False)
+    exhibitor_position = models.IntegerField(default=0)
+    sponsor_position = models.IntegerField(default=0)
 
     class Meta:
         ordering = ("name",)

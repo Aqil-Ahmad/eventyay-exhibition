@@ -1,0 +1,29 @@
+.dragsort-table tr[dragsort-id].drag-indicator.insert-before th,
+.dragsort-table tr[dragsort-id].drag-indicator.insert-before td {
+    border-top: 2px solid rgba(0, 0, 0, 0.6);
+}
+
+.dragsort-table tr[dragsort-id].drag-indicator.insert-after th,
+.dragsort-table tr[dragsort-id].drag-indicator.insert-after td {
+    border-bottom: 2px solid rgba(0, 0, 0, 0.6);
+}
+
+.dragsort-table thead.drag-indicator.insert-after {
+    box-shadow: 0 2px rgba(0, 0, 0, 0.6);
+}
+
+.dragsort-table tr[dragsort-id].dragging td {
+    background-color: #eef0f2;
+}
+
+.dragsort-table .dragsort-button:not(:disabled) {
+    cursor: grab;
+}
+
+.dragsort-table .dragsort-button:not(:disabled):active {
+    cursor: grabbing;
+}
+
+body.dragging .dragsort-button {
+    transform: translate(-9999px);
+}

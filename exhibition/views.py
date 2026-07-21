@@ -46,7 +46,9 @@ from .models import (
     ExhibitorSettings,
     SponsorGroup,
     generate_booth_id,
+    get_next_exhibitor_position,
     get_next_sponsor_group_level,
+    get_next_sponsor_position,
 )
 from .social_links import serialize_social_link
 from .utils import (
@@ -276,15 +278,27 @@ class ExhibitorListView(EventPermissionRequiredMixin, ListView):
     def get_queryset(self):
         queryset = ExhibitorInfo.objects.filter(event=self.request.event).select_related("sponsor_group")
         if self.partner_type == "sponsor":
-            queryset = queryset.filter(is_sponsor=True)
+            return queryset.filter(is_sponsor=True).order_by("sponsor_position", "name", "pk")
         elif self.partner_type == "exhibitor":
-            queryset = queryset.filter(is_exhibitor=True)
+            return queryset.filter(is_exhibitor=True).order_by("exhibitor_position", "name", "pk")
         return queryset
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context["partner_type"] = self.partner_type
+        if self.partner_type == "sponsor":
+            context["sponsor_group_sections"] = self.build_sponsor_group_sections(context["exhibitors"])
         return context
+
+    def build_sponsor_group_sections(self, sponsors):
+        groups = list(SponsorGroup.objects.filter(event=self.request.event).order_by("level", "pk"))
+        sections = [{"group": group, "partners": []} for group in groups]
+        ungrouped = {"group": None, "partners": []}
+        section_by_group = {group.pk: section for group, section in zip(groups, sections)}
+        for sponsor in sponsors:
+            section = section_by_group.get(sponsor.sponsor_group_id, ungrouped)
+            section["partners"].append(sponsor)
+        return sections + [ungrouped]
 
 
 class PublicExhibitorListView(ListView):
@@ -724,6 +738,56 @@ class SponsorGroupReorderView(EventPermissionRequiredMixin, View):
             SponsorGroup.objects.bulk_update(ordered_groups, ["level"])
 
         return JsonResponse({"levels": [{"id": group.pk, "level": group.level} for group in ordered_groups]})
+
+
+class PartnerReorderMixin(EventPermissionRequiredMixin, View):
+    permission = "can_change_event_settings"
+    position_field = None
+
+    def get_scope_queryset(self, request):
+        raise NotImplementedError
+
+    def post(self, request, *args, **kwargs):
+        order_param = request.POST.get("order")
+        if not order_param:
+            return HttpResponse(status=400)
+
+        try:
+            ids = [int(token) for token in order_param.split(",") if token.strip()]
+        except ValueError:
+            return HttpResponse(status=400)
+        if len(ids) != len(set(ids)):
+            return HttpResponse(status=400)
+
+        partners = {partner.pk: partner for partner in self.get_scope_queryset(request)}
+        if set(ids) != set(partners):
+            return HttpResponse(status=400)
+
+        ordered = [partners[value] for value in ids]
+        with transaction.atomic():
+            for index, partner in enumerate(ordered):
+                setattr(partner, self.position_field, index)
+            ExhibitorInfo.objects.bulk_update(ordered, [self.position_field])
+
+        return HttpResponse(status=204)
+
+
+class ExhibitorReorderView(PartnerReorderMixin):
+    position_field = "exhibitor_position"
+
+    def get_scope_queryset(self, request):
+        return ExhibitorInfo.objects.filter(event=request.event, is_exhibitor=True)
+
+
+class SponsorReorderView(PartnerReorderMixin):
+    position_field = "sponsor_position"
+
+    def get_scope_queryset(self, request):
+        group_id = request.GET.get("group_id")
+        queryset = ExhibitorInfo.objects.filter(event=request.event, is_sponsor=True)
+        if group_id in (None, "", "none"):
+            return queryset.filter(sponsor_group__isnull=True)
+        return queryset.filter(sponsor_group_id=group_id)
 
 
 class CallTextPreviewView(EventPermissionRequiredMixin, View):
@@ -1220,6 +1284,13 @@ class ExhibitorCreateView(ExhibitorLinkFormsetMixin, EventPermissionRequiredMixi
         # Only generate booth_id for exhibitors if none was provided.
         if form.cleaned_data.get("is_exhibitor", True) and not form.cleaned_data.get("booth_id"):
             form.instance.booth_id = generate_booth_id(event=self.request.event)
+
+        if form.instance.is_exhibitor:
+            form.instance.exhibitor_position = get_next_exhibitor_position(self.request.event)
+        if form.instance.is_sponsor:
+            form.instance.sponsor_position = get_next_sponsor_position(
+                self.request.event, form.instance.sponsor_group
+            )
 
         response = super().form_valid(form)
         self.save_link_formsets()

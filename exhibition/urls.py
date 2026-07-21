@@ -29,6 +29,7 @@ from .views import (
     ExhibitorEditView,
     ExhibitorListView,
     ProposalActionView,
+    ExhibitorReorderView,
     ProposalDetailView,
     ProposalListView,
     PublicCallView,
@@ -37,6 +38,7 @@ from .views import (
     SettingsView,
     SponsorGroupFrontPageToggleView,
     SponsorGroupReorderView,
+    SponsorReorderView,
     UserProposalCreateView,
     UserProposalEditView,
     UserProposalListView,
@@ -125,9 +127,19 @@ urlpatterns = [
         name="exhibitors",
     ),
     path(
+        "exhibitors/event/<orgslug:organizer>/<slug:event>/exhibitors/reorder",
+        ExhibitorReorderView.as_view(),
+        name="exhibitors.reorder",
+    ),
+    path(
         "exhibitors/event/<orgslug:organizer>/<slug:event>/sponsors",
         ExhibitorListView.as_view(partner_type="sponsor"),
         name="sponsors",
+    ),
+    path(
+        "exhibitors/event/<orgslug:organizer>/<slug:event>/sponsors/reorder",
+        SponsorReorderView.as_view(),
+        name="sponsors.reorder",
     ),
     path(
         "exhibitors/event/<orgslug:organizer>/<slug:event>/exhibitors/add",
