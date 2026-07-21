@@ -1288,9 +1288,7 @@ class ExhibitorCreateView(ExhibitorLinkFormsetMixin, EventPermissionRequiredMixi
         if form.instance.is_exhibitor:
             form.instance.exhibitor_position = get_next_exhibitor_position(self.request.event)
         if form.instance.is_sponsor:
-            form.instance.sponsor_position = get_next_sponsor_position(
-                self.request.event, form.instance.sponsor_group
-            )
+            form.instance.sponsor_position = get_next_sponsor_position(self.request.event, form.instance.sponsor_group)
 
         response = super().form_valid(form)
         self.save_link_formsets()
