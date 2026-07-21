@@ -64,6 +64,10 @@ def event_kwargs(event):
     }
 
 
+def call_access_session_key(event):
+    return f"exhibition_call_access_{event.pk}"
+
+
 def partner_list_url(event, partner_type):
     """URL of the Sponsors or Exhibitors list, defaulting to Exhibitors."""
     route = {
@@ -98,15 +102,21 @@ class PublicEventLoginRequiredMixin(LoginRequiredMixin):
 
 class PublicCallEnabledMixin:
     hide_after_deadline = False
+    enforce_private = False
 
     def get_exhibition_settings(self):
         return ExhibitorSettings.objects.get_or_create(event=self.request.event)[0]
+
+    def has_private_call_access(self, settings):
+        return self.request.session.get(call_access_session_key(self.request.event)) == settings.call_secret
 
     def dispatch(self, request, *args, **kwargs):
         settings = self.get_exhibition_settings()
         if not settings.call_enabled:
             raise Http404()
         if self.hide_after_deadline and settings.call_hide_after_deadline and not settings.call_is_open:
+            raise Http404()
+        if self.enforce_private and settings.call_private and not self.has_private_call_access(settings):
             raise Http404()
         return super().dispatch(request, *args, **kwargs)
 
@@ -209,6 +219,14 @@ class SettingsView(EventPermissionRequiredMixin, ListView):
                 messages.success(self.request, _("Call settings have been saved."))
                 return redirect(self.get_settings_url("call"))
             return self.render_to_response(self.get_context_data(call_settings_form=form))
+
+        if action == "regenerate_call_secret":
+            settings.regenerate_call_secret()
+            messages.success(
+                self.request,
+                _("A new secret call link has been generated. The old link no longer works."),
+            )
+            return redirect(self.get_settings_url("call"))
 
         if action == "add_group":
             form = SponsorGroupForm(
@@ -357,6 +375,7 @@ class PublicExhibitorDetailView(DetailView):
 class PublicCallView(PublicCallEnabledMixin, TemplateView):
     template_name = "exhibitors/public_call.html"
     hide_after_deadline = True
+    enforce_private = True
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -368,6 +387,21 @@ class PublicCallView(PublicCallEnabledMixin, TemplateView):
                 user=self.request.user,
             )
         return context
+
+
+class PublicCallSecretView(PublicCallView):
+    enforce_private = False
+
+    def grant_secret_access(self, request, secret):
+        settings = self.get_exhibition_settings()
+        if not settings.call_enabled or not secret or secret != settings.call_secret:
+            raise Http404()
+        request.session[call_access_session_key(request.event)] = secret
+        return settings
+
+    def dispatch(self, request, *args, **kwargs):
+        self.grant_secret_access(request, kwargs.get("secret"))
+        return super().dispatch(request, *args, **kwargs)
 
 
 class UserProposalListView(PublicCallEnabledMixin, PublicEventLoginRequiredMixin, ListView):
@@ -475,6 +509,8 @@ class UserProposalCreateView(
     def dispatch(self, request, *args, **kwargs):
         settings = ExhibitorSettings.objects.get_or_create(event=request.event)[0]
         if not settings.call_enabled:
+            raise Http404()
+        if settings.call_private and not self.has_private_call_access(settings):
             raise Http404()
         if not settings.call_is_open:
             if settings.call_hide_after_deadline:

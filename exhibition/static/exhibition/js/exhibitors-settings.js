@@ -220,8 +220,37 @@
         $(previewTab).on('shown.bs.tab', renderPreview)
     }
 
+    function initSecretLinkCopy() {
+        var button = document.querySelector('[data-copy-button]')
+        var source = document.querySelector('[data-copy-source]')
+        if (!button || !source) {
+            return
+        }
+        button.addEventListener('click', function () {
+            source.select()
+            source.setSelectionRange(0, source.value.length)
+            var done = function () {
+                var original = button.innerHTML
+                button.innerHTML = '<i class="fa fa-check"></i> ' + (button.dataset.copiedLabel || 'Copied')
+                window.setTimeout(function () {
+                    button.innerHTML = original
+                }, 1500)
+            }
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(source.value).then(done, function () {
+                    document.execCommand('copy')
+                    done()
+                })
+            } else {
+                document.execCommand('copy')
+                done()
+            }
+        })
+    }
+
     document.addEventListener('DOMContentLoaded', function () {
         initCallTextPreview()
+        initSecretLinkCopy()
         var showButton = document.getElementById('show-add-group-form')
         var addForm = document.getElementById('add-group-form')
         var cancelButton = document.getElementById('cancel-add-group-form')

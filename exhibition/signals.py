@@ -125,7 +125,7 @@ def exhibition_presale_nav_tab(sender, request=None, **kwargs):
         event=sender,
         call_enabled=True,
     ).first()
-    if settings and (settings.call_is_open or not settings.call_hide_after_deadline):
+    if settings and not settings.call_private and (settings.call_is_open or not settings.call_hide_after_deadline):
         call_label = localize_event_text(settings.call_headline) or _("Call for Exhibitors")
         links.append(
             format_html(
