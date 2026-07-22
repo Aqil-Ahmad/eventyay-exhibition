@@ -408,6 +408,15 @@ class UserProposalListView(PublicCallEnabledMixin, PublicEventLoginRequiredMixin
     model = ExhibitionProposal
     template_name = "exhibitors/public_proposal_list.html"
     context_object_name = "proposals"
+    enforce_private = True
+
+    def has_private_call_access(self, settings):
+        if super().has_private_call_access(settings):
+            return True
+        user = self.request.user
+        if not user.is_authenticated:
+            return False
+        return ExhibitionProposal.objects.filter(event=self.request.event, user=user).exists()
 
     def get_queryset(self):
         return ExhibitionProposal.objects.filter(

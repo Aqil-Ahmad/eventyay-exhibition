@@ -102,3 +102,39 @@ def test_nav_tab_shown_for_public_call(event):
         make_call_settings(event, private=False)
         html = exhibition_presale_nav_tab(sender=event, request=RequestFactory().get("/x/"))
         assert "/exhibition/call/" in str(html)
+
+
+@pytest.mark.django_db
+def test_proposal_list_hidden_for_private_call_without_access(event):
+    from eventyay.base.models.auth import User
+
+    from exhibition.views import UserProposalListView
+
+    with scopes_disabled():
+        settings = make_call_settings(event, private=True)
+        view = UserProposalListView()
+        view.request = _request(event)
+        view.request.user = User.objects.create_user(email="stranger@e.com", password="pw")
+        assert view.has_private_call_access(settings) is False
+
+
+@pytest.mark.django_db
+def test_proposal_list_visible_to_existing_applicant(event):
+    from eventyay.base.models.auth import User
+
+    from exhibition.models import ExhibitionProposal, ExhibitionProposalState
+    from exhibition.views import UserProposalListView
+
+    with scopes_disabled():
+        settings = make_call_settings(event, private=True)
+        applicant = User.objects.create_user(email="applicant@e.com", password="pw")
+        ExhibitionProposal.objects.create(
+            event=event,
+            user=applicant,
+            name="Org",
+            state=ExhibitionProposalState.SUBMITTED,
+        )
+        view = UserProposalListView()
+        view.request = _request(event)
+        view.request.user = applicant
+        assert view.has_private_call_access(settings) is True
