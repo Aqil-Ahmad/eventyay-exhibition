@@ -6,7 +6,7 @@ from django.db import migrations, models
 
 class Migration(migrations.Migration):
     dependencies = [
-        ("exhibition", "0008_exhibitionemailqueue"),
+        ("exhibition", "0009_exhibitorinfo_active"),
     ]
 
     operations = [
