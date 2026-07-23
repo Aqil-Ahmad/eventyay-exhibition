@@ -332,6 +332,14 @@ class ExhibitorInfo(models.Model):
     def __str__(self):
         return str(self.name)
 
+    def save(self, *args, **kwargs):
+        if self._state.adding:
+            if self.is_exhibitor and not self.exhibitor_position:
+                self.exhibitor_position = get_next_exhibitor_position(self.event)
+            if self.is_sponsor and not self.sponsor_position:
+                self.sponsor_position = get_next_sponsor_position(self.event, self.sponsor_group)
+        super().save(*args, **kwargs)
+
     @property
     def localized_booth_name(self):
         booth_name = self.booth_name

@@ -46,9 +46,7 @@ from .models import (
     ExhibitorSettings,
     SponsorGroup,
     generate_booth_id,
-    get_next_exhibitor_position,
     get_next_sponsor_group_level,
-    get_next_sponsor_position,
 )
 from .social_links import serialize_social_link
 from .utils import (
@@ -748,7 +746,7 @@ class PartnerReorderMixin(EventPermissionRequiredMixin, View):
         raise NotImplementedError
 
     def post(self, request, *args, **kwargs):
-        order_param = request.POST.get("order")
+        order_param = (request.POST.get("order") or "").strip()
         if not order_param:
             return HttpResponse(status=400)
 
@@ -756,7 +754,7 @@ class PartnerReorderMixin(EventPermissionRequiredMixin, View):
             ids = [int(token) for token in order_param.split(",") if token.strip()]
         except ValueError:
             return HttpResponse(status=400)
-        if len(ids) != len(set(ids)):
+        if not ids or len(ids) != len(set(ids)):
             return HttpResponse(status=400)
 
         partners = {partner.pk: partner for partner in self.get_scope_queryset(request)}
@@ -787,6 +785,10 @@ class SponsorReorderView(PartnerReorderMixin):
         queryset = ExhibitorInfo.objects.filter(event=request.event, is_sponsor=True)
         if group_id in (None, "", "none"):
             return queryset.filter(sponsor_group__isnull=True)
+        try:
+            group_id = int(group_id)
+        except (TypeError, ValueError):
+            return queryset.none()
         return queryset.filter(sponsor_group_id=group_id)
 
 
@@ -1284,11 +1286,6 @@ class ExhibitorCreateView(ExhibitorLinkFormsetMixin, EventPermissionRequiredMixi
         # Only generate booth_id for exhibitors if none was provided.
         if form.cleaned_data.get("is_exhibitor", True) and not form.cleaned_data.get("booth_id"):
             form.instance.booth_id = generate_booth_id(event=self.request.event)
-
-        if form.instance.is_exhibitor:
-            form.instance.exhibitor_position = get_next_exhibitor_position(self.request.event)
-        if form.instance.is_sponsor:
-            form.instance.sponsor_position = get_next_sponsor_position(self.request.event, form.instance.sponsor_group)
 
         response = super().form_valid(form)
         self.save_link_formsets()
