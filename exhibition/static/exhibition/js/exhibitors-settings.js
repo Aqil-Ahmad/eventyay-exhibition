@@ -226,14 +226,27 @@
         if (!button || !source) {
             return
         }
+        var originalIcon = button.querySelector('i')
+        var originalIconClass = originalIcon ? originalIcon.className : 'fa fa-copy'
+        var originalLabel = button.textContent.trim()
+
+        function renderButton(iconClass, label) {
+            while (button.firstChild) {
+                button.removeChild(button.firstChild)
+            }
+            var icon = document.createElement('i')
+            icon.className = iconClass
+            button.appendChild(icon)
+            button.appendChild(document.createTextNode(' ' + label))
+        }
+
         button.addEventListener('click', function () {
             source.select()
             source.setSelectionRange(0, source.value.length)
             var done = function () {
-                var original = button.innerHTML
-                button.innerHTML = '<i class="fa fa-check"></i> ' + (button.dataset.copiedLabel || 'Copied')
+                renderButton('fa fa-check', button.dataset.copiedLabel || 'Copied')
                 window.setTimeout(function () {
-                    button.innerHTML = original
+                    renderButton(originalIconClass, originalLabel)
                 }, 1500)
             }
             if (navigator.clipboard && navigator.clipboard.writeText) {
