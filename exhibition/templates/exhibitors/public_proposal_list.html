@@ -18,7 +18,13 @@
                 {% for proposal in proposals %}
                     <tr>
                         <td>{{ proposal.name }}</td>
-                        <td>{{ proposal.get_state_display }}</td>
+                        <td>
+                            {% if proposal.state == "withdrawn" %}
+                                <span class="label label-default">{% trans "Withdrawn" %}</span>
+                            {% else %}
+                                {{ proposal.get_state_display }}
+                            {% endif %}
+                        </td>
                         <td>{{ proposal.updated|date:"SHORT_DATETIME_FORMAT" }}</td>
                         <td class="text-right">
                             <a class="btn btn-sm btn-info" href="{% url 'plugins:exhibition:proposal.user_edit' organizer=request.event.organizer.slug event=request.event.slug code=proposal.code %}">
@@ -28,6 +34,11 @@
                                     <i class="fa fa-eye"></i> {% trans "View" %}
                                 {% endif %}
                             </a>
+                            {% if proposal.can_be_withdrawn %}
+                                <a class="btn btn-sm btn-danger" href="{% url 'plugins:exhibition:proposal.user_withdraw' organizer=request.event.organizer.slug event=request.event.slug code=proposal.code %}">
+                                    <i class="fa fa-undo"></i> {% trans "Withdraw" %}
+                                </a>
+                            {% endif %}
                         </td>
                     </tr>
                 {% endfor %}

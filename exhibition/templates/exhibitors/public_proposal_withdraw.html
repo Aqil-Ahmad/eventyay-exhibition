@@ -1,0 +1,25 @@
+{% extends "exhibitors/call_base.html" %}
+{% load i18n %}
+
+{% block call_content %}
+    <h2 id="exhibition-call-heading">{% trans "Withdraw proposal" %}</h2>
+    <p>
+        {% blocktrans trimmed with name=proposal.name %}
+            Are you sure you want to withdraw your proposal “{{ name }}”?
+        {% endblocktrans %}
+    </p>
+    {% if proposal.approved_exhibitor_id %}
+        <div class="alert alert-warning" role="alert">
+            {% trans "This proposal has already been approved. Withdrawing it will hide the exhibitor or sponsor profile created from it from public listings." %}
+        </div>
+    {% endif %}
+    <form action="" method="post">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-danger">
+            {% trans "Withdraw proposal" %}
+        </button>
+        <a class="btn btn-default" href="{% url 'plugins:exhibition:proposal.user_list' organizer=request.event.organizer.slug event=request.event.slug %}">
+            {% trans "Cancel" %}
+        </a>
+    </form>
+{% endblock %}

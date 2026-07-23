@@ -585,6 +585,42 @@ class UserProposalEditView(
         )
 
 
+class UserProposalWithdrawView(PublicCallEnabledMixin, PublicEventLoginRequiredMixin, DetailView):
+    model = ExhibitionProposal
+    template_name = "exhibitors/public_proposal_withdraw.html"
+    context_object_name = "proposal"
+    slug_field = "code"
+    slug_url_kwarg = "code"
+
+    def get_queryset(self):
+        return ExhibitionProposal.objects.filter(
+            event=self.request.event,
+            user=self.request.user,
+        )
+
+    def get(self, request, *args, **kwargs):
+        self.object = self.get_object()
+        if not self.object.can_be_withdrawn:
+            messages.error(request, _("This proposal can no longer be withdrawn."))
+            return redirect(self.get_success_url())
+        return super().get(request, *args, **kwargs)
+
+    def post(self, request, *args, **kwargs):
+        self.object = self.get_object()
+        if self.object.can_be_withdrawn:
+            self.object.withdraw()
+            messages.success(request, _("Your proposal has been withdrawn."))
+        else:
+            messages.error(request, _("This proposal can no longer be withdrawn."))
+        return redirect(self.get_success_url())
+
+    def get_success_url(self):
+        return reverse(
+            "plugins:exhibition:proposal.user_list",
+            kwargs=event_kwargs(self.request.event),
+        )
+
+
 class ExhibitorLinkFormsetMixin:
     social_formset_prefix = "social_links"
     extra_formset_prefix = "extra_links"
