@@ -138,3 +138,12 @@ def test_proposal_list_visible_to_existing_applicant(event):
         view.request = _request(event)
         view.request.user = applicant
         assert view.has_private_call_access(settings) is True
+
+
+@pytest.mark.django_db
+def test_secret_view_rejects_public_call(event):
+    with scopes_disabled():
+        settings = make_call_settings(event, private=False)
+        view = _secret_view(event)
+        with pytest.raises(Http404):
+            view.grant_secret_access(view.request, settings.call_secret)

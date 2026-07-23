@@ -394,7 +394,7 @@ class PublicCallSecretView(PublicCallView):
 
     def grant_secret_access(self, request, secret):
         settings = self.get_exhibition_settings()
-        if not settings.call_enabled or not secret or secret != settings.call_secret:
+        if not settings.call_enabled or not settings.call_private or not secret or secret != settings.call_secret:
             raise Http404()
         request.session[call_access_session_key(request.event)] = secret
         return settings
