@@ -125,7 +125,14 @@ def create_exhibitor_from_proposal(proposal):
     )
 
     if proposal.approved_exhibitor_id:
-        return proposal.approved_exhibitor
+        exhibitor = proposal.approved_exhibitor
+        if not exhibitor.active:
+            exhibitor.active = True
+            exhibitor.save(update_fields=["active"])
+        proposal.state = ExhibitionProposalState.ACCEPTED
+        proposal.submitted = proposal.submitted or timezone.now()
+        proposal.save(update_fields=["state", "submitted", "updated"])
+        return exhibitor
 
     booth_id = proposal.booth_id
     if proposal.is_exhibitor and not booth_id:

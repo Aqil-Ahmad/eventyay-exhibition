@@ -420,6 +420,39 @@ class ExhibitionProposalState(models.TextChoices):
     WITHDRAWN = "withdrawn", _("withdrawn")
 
 
+PROPOSAL_STATE_TRANSITIONS = {
+    ExhibitionProposalState.DRAFT: frozenset({ExhibitionProposalState.SUBMITTED}),
+    ExhibitionProposalState.SUBMITTED: frozenset(
+        {
+            ExhibitionProposalState.ACCEPTED,
+            ExhibitionProposalState.REJECTED,
+            ExhibitionProposalState.WITHDRAWN,
+        }
+    ),
+    ExhibitionProposalState.ACCEPTED: frozenset(
+        {
+            ExhibitionProposalState.SUBMITTED,
+            ExhibitionProposalState.REJECTED,
+            ExhibitionProposalState.WITHDRAWN,
+        }
+    ),
+    ExhibitionProposalState.REJECTED: frozenset(
+        {
+            ExhibitionProposalState.SUBMITTED,
+            ExhibitionProposalState.ACCEPTED,
+        }
+    ),
+    ExhibitionProposalState.WITHDRAWN: frozenset({ExhibitionProposalState.SUBMITTED}),
+}
+
+PROPOSAL_REVIEW_ACTIONS = {
+    "approve": ExhibitionProposalState.ACCEPTED,
+    "reject": ExhibitionProposalState.REJECTED,
+    "withdraw": ExhibitionProposalState.WITHDRAWN,
+    "reopen": ExhibitionProposalState.SUBMITTED,
+}
+
+
 class ExhibitionProposal(models.Model):
     code = models.CharField(
         max_length=12,
@@ -512,8 +545,19 @@ class ExhibitionProposal(models.Model):
             ExhibitionProposalState.SUBMITTED,
         }
 
+    def can_transition_to(self, target_state):
+        return target_state in PROPOSAL_STATE_TRANSITIONS.get(self.state, frozenset())
+
+    def available_review_actions(self):
+        return [action for action, target in PROPOSAL_REVIEW_ACTIONS.items() if self.can_transition_to(target)]
+
+    def set_partner_active(self, active):
+        if self.approved_exhibitor_id and self.approved_exhibitor.active != active:
+            self.approved_exhibitor.active = active
+            self.approved_exhibitor.save(update_fields=["active"])
+
     def approve(self, requestor=None):
-        """Accept the request, create its partner profile and queue the acceptance email."""
+        """Accept the request, create or reactivate its partner profile and queue the acceptance email."""
         from .mail import PROPOSAL_ACCEPTED, queue_proposal_email
         from .utils import create_exhibitor_from_proposal
 
@@ -522,26 +566,33 @@ class ExhibitionProposal(models.Model):
         return exhibitor
 
     def reject(self, requestor=None):
-        """Reject the request and queue the rejection email."""
+        """Reject the request, hide any partner profile and queue the rejection email."""
         from .mail import PROPOSAL_REJECTED, queue_proposal_email
 
         self.state = ExhibitionProposalState.REJECTED
         self.save(update_fields=["state", "updated"])
+        self.set_partner_active(False)
         queue_proposal_email(self.event, self, PROPOSAL_REJECTED, requestor=requestor)
 
     @property
     def can_be_withdrawn(self):
-        return self.state in {
-            ExhibitionProposalState.SUBMITTED,
-            ExhibitionProposalState.ACCEPTED,
-        }
+        return self.can_transition_to(ExhibitionProposalState.WITHDRAWN)
+
+    @property
+    def can_be_reinstated(self):
+        return self.state == ExhibitionProposalState.WITHDRAWN
 
     def withdraw(self):
         self.state = ExhibitionProposalState.WITHDRAWN
         self.save(update_fields=["state", "updated"])
-        if self.approved_exhibitor_id and self.approved_exhibitor.active:
-            self.approved_exhibitor.active = False
-            self.approved_exhibitor.save(update_fields=["active"])
+        self.set_partner_active(False)
+
+    def reopen(self):
+        """Move the request back to submitted for a fresh decision; sends no decision email."""
+        self.state = ExhibitionProposalState.SUBMITTED
+        self.submitted = self.submitted or timezone.now()
+        self.save(update_fields=["state", "submitted", "updated"])
+        self.set_partner_active(False)
 
     @property
     def localized_booth_name(self):

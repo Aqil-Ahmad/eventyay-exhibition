@@ -54,6 +54,17 @@
     color: #fff;
 }
 
+.proposal-action-reopen {
+    color: #2185d0;
+    border-color: #2185d0;
+}
+
+.proposal-action-reopen:hover,
+.proposal-action-reopen:focus {
+    background: #2185d0;
+    color: #fff;
+}
+
 .proposal-action-feedback:not(:empty) {
     margin-bottom: 12px;
 }

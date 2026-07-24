@@ -1,3 +1,5 @@
+import json
+
 import pytest
 from django.test import RequestFactory
 from django_scopes import scopes_disabled
@@ -30,6 +32,18 @@ def _action_view(event, email="organizer@e.com"):
     view = ProposalActionView()
     view.request = request
     return view
+
+
+def _action_post_view(event, action, codes, email="organizer@e.com", ajax=True):
+    data = {"action": action, "proposal": codes}
+    request = RequestFactory().post("/", data=data)
+    request.user = User.objects.create_user(email=email, password="pw")
+    request.event = event
+    if ajax:
+        request.headers = {"x-requested-with": "XMLHttpRequest"}
+    view = ProposalActionView()
+    view.request = request
+    return view, request
 
 
 @pytest.mark.django_db
@@ -98,10 +112,48 @@ def test_apply_action_withdraw_sets_state_without_email(event):
 def test_build_message_reports_count_and_skips():
     view = ProposalActionView()
     message = view.build_message("approve", 2, 1)
-    assert "2 proposals were approved." in message
+    assert "2 requests were approved." in message
     assert "1 was skipped" in message
 
 
 def test_build_message_no_updates():
     view = ProposalActionView()
     assert str(view.build_message("reject", 0, 0)) == "No proposals were updated."
+
+
+@pytest.mark.django_db
+def test_apply_action_reopen_from_rejected_sets_submitted(event):
+    with scopes_disabled():
+        proposal = _proposal(event, "reopen-flow@e.com", state=ExhibitionProposalState.REJECTED)
+        _action_view(event, "org-reopen@e.com").apply_action(proposal, "reopen")
+        proposal.refresh_from_db()
+        assert proposal.state == ExhibitionProposalState.SUBMITTED
+        assert not ExhibitionEmailQueue.objects.filter(event=event, proposal=proposal).exists()
+
+
+@pytest.mark.django_db
+def test_post_skips_proposal_not_eligible_for_action(event):
+    with scopes_disabled():
+        proposal = _proposal(event, "skip@e.com", state=ExhibitionProposalState.DRAFT)
+        view, request = _action_post_view(event, "approve", [proposal.code], email="org-skip@e.com")
+        response = view.post(request)
+        proposal.refresh_from_db()
+        assert proposal.state == ExhibitionProposalState.DRAFT
+        assert response.status_code == 200
+        payload = json.loads(response.content)
+        assert payload["skipped"] == 1
+        assert payload["results"] == []
+
+
+@pytest.mark.django_db
+def test_post_returns_updated_actions_and_bulk_selectable(event):
+    with scopes_disabled():
+        proposal = _proposal(event, "json@e.com")
+        view, request = _action_post_view(event, "approve", [proposal.code], email="org-json@e.com")
+        response = view.post(request)
+        payload = json.loads(response.content)
+        assert payload["ok"] is True
+        result = payload["results"][0]
+        assert result["state"] == "accepted"
+        assert set(result["actions"]) == {"reject", "withdraw", "reopen"}
+        assert result["bulk_selectable"] is False
