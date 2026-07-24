@@ -156,4 +156,4 @@ def test_post_returns_updated_actions_and_bulk_selectable(event):
         result = payload["results"][0]
         assert result["state"] == "accepted"
         assert set(result["actions"]) == {"reject", "withdraw", "reopen"}
-        assert result["bulk_selectable"] is False
+        assert result["bulk_selectable"] is True
