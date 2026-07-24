@@ -997,7 +997,7 @@ class ProposalDetailView(EventPermissionRequiredMixin, UpdateView):
         )
 
     def can_review(self):
-        return self.can_manage() and self.object.can_transition_to(ExhibitionProposalState.ACCEPTED)
+        return self.can_manage() and self.object.state == ExhibitionProposalState.SUBMITTED
 
     def get_form_class(self):
         if self.can_review():
@@ -1028,7 +1028,6 @@ class ProposalDetailView(EventPermissionRequiredMixin, UpdateView):
         context["can_manage"] = self.can_manage()
         context["can_review"] = self.can_review()
         context["can_edit_exhibitor"] = self.can_edit_exhibitor()
-        context["review_actions"] = self.object.available_review_actions() if self.can_manage() else []
         context["hide_applicant_emails"] = should_hide_applicant_emails(
             self.request.user, self.request.event, request=self.request
         )

@@ -10,11 +10,18 @@
     </p>
     <form action="" method="post">
         {% csrf_token %}
-        <button type="submit" class="btn btn-primary">
-            {% trans "Reinstate request" %}
-        </button>
-        <a class="btn btn-default" href="{% url 'plugins:exhibition:proposal.user_list' organizer=request.event.organizer.slug event=request.event.slug %}">
-            {% trans "Cancel" %}
-        </a>
+        <div class="row checkout-button-row">
+            <div class="col-md-4 col-sm-6">
+                <a class="btn btn-block btn-default btn-lg" href="{% url 'plugins:exhibition:proposal.user_list' organizer=request.event.organizer.slug event=request.event.slug %}">
+                    {% trans "Cancel" %}
+                </a>
+            </div>
+            <div class="col-md-4 col-md-offset-4 col-sm-6">
+                <button type="submit" class="btn btn-block btn-primary btn-lg">
+                    {% trans "Reinstate request" %}
+                </button>
+            </div>
+            <div class="clearfix"></div>
+        </div>
     </form>
 {% endblock %}
