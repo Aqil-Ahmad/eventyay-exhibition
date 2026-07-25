@@ -1254,9 +1254,7 @@ class ExhibitionComposeForm(forms.Form):
     states = forms.MultipleChoiceField(
         label=_("Application state"),
         choices=[
-            (state.value, state.label)
-            for state in ExhibitionProposalState
-            if state != ExhibitionProposalState.DRAFT
+            (state.value, state.label) for state in ExhibitionProposalState if state != ExhibitionProposalState.DRAFT
         ],
         initial=[ExhibitionProposalState.ACCEPTED],
         widget=forms.CheckboxSelectMultiple,

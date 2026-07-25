@@ -330,8 +330,13 @@ def test_compose_recipients_filters_by_type_and_group(mail_event):
     with scopes_disabled():
         group = SponsorGroup.objects.create(event=mail_event, name="Gold")
     sponsor = _proposal(
-        mail_event, "Sp", ExhibitionProposalState.ACCEPTED, email="sp@example.com",
-        is_exhibitor=False, is_sponsor=True, sponsor_group=group,
+        mail_event,
+        "Sp",
+        ExhibitionProposalState.ACCEPTED,
+        email="sp@example.com",
+        is_exhibitor=False,
+        is_sponsor=True,
+        sponsor_group=group,
     )
     _proposal(mail_event, "Ex", ExhibitionProposalState.ACCEPTED, email="ex@example.com")
 
@@ -386,9 +391,7 @@ def test_queue_compose_emails_send_now(mail_event):
 
 @pytest.mark.django_db
 def test_compose_form_requires_subject_and_body(mail_event):
-    form = ExhibitionComposeForm(
-        data={"states": [ExhibitionProposalState.ACCEPTED]}, event=mail_event
-    )
+    form = ExhibitionComposeForm(data={"states": [ExhibitionProposalState.ACCEPTED]}, event=mail_event)
     assert not form.is_valid()
     assert "subject" in form.errors
     assert "body" in form.errors
