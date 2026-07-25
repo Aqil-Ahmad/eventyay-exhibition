@@ -8,6 +8,8 @@ from exhibition.signals import exhibition_presale_nav_tab
 from exhibition.views import (
     PublicCallSecretView,
     PublicCallView,
+    UserProposalEditView,
+    UserProposalWithdrawView,
     call_access_session_key,
 )
 
@@ -147,3 +149,17 @@ def test_secret_view_rejects_public_call(event):
         view = _secret_view(event)
         with pytest.raises(Http404):
             view.grant_secret_access(view.request, settings.call_secret)
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(
+    "view_class",
+    [UserProposalEditView, UserProposalWithdrawView],
+)
+def test_owner_action_views_not_gated_by_private_secret(event, view_class):
+    with scopes_disabled():
+        settings = make_call_settings(event, private=True)
+        view = view_class()
+        view.request = _request(event)
+        gate_blocks = view.enforce_private and settings.call_private and not view.has_private_call_access(settings)
+        assert gate_blocks is False
