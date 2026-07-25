@@ -24,8 +24,11 @@
     margin-bottom: 0;
 }
 
-.proposal-row-actions .btn + .btn {
-    margin-left: 4px;
+.proposal-row-actions {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 4px;
 }
 
 .proposal-action-btn {
