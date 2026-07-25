@@ -186,6 +186,53 @@ def queue_proposal_email(event, proposal, role, *, send_now=False, requestor=Non
     return queued
 
 
+def compose_recipients(event, states=None, partner_type=None, sponsor_group=None):
+    from .models import ExhibitionProposal, ExhibitionProposalState
+
+    queryset = ExhibitionProposal.objects.filter(event=event).exclude(state=ExhibitionProposalState.DRAFT)
+    if states:
+        queryset = queryset.filter(state__in=states)
+    if partner_type == "exhibitor":
+        queryset = queryset.filter(is_exhibitor=True)
+    elif partner_type == "sponsor":
+        queryset = queryset.filter(is_sponsor=True)
+    if sponsor_group is not None:
+        queryset = queryset.filter(sponsor_group=sponsor_group)
+    return queryset.select_related("user", "sponsor_group").order_by("-updated")
+
+
+def queue_compose_emails(event, proposals, subject, body, *, scheduled_at=None, send_now=False, requestor=None):
+    """Fan a composed message out into per-recipient queued rows."""
+    from .models import ExhibitionEmailQueue
+
+    created = []
+    seen_emails = set()
+    for proposal in proposals:
+        to_email = (proposal.email or "").strip() or (proposal.user.email if proposal.user_id else "")
+        to_email = to_email.strip()
+        if not to_email or to_email.lower() in seen_emails:
+            continue
+        seen_emails.add(to_email.lower())
+
+        user = proposal.user if proposal.user_id else None
+        locale = recipient_locale(event, user)
+        context = build_proposal_context(event, proposal)
+
+        queued = ExhibitionEmailQueue.objects.create(
+            event=event,
+            proposal=proposal,
+            to_email=to_email,
+            subject=_render(subject, context, locale),
+            body=_render(body, context, locale),
+            locale=locale or "",
+            scheduled_at=scheduled_at,
+        )
+        if send_now:
+            queued.send(requestor=requestor)
+        created.append(queued)
+    return created
+
+
 def queue_exhibitor_access_email(event, exhibitor, *, requestor=None):
     """Queue the access-credentials email; ``None`` if no recipient or template."""
     from .models import ExhibitionEmailQueue, ExhibitorSettings

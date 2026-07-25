@@ -12,7 +12,7 @@ from django.urls import reverse
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _, ngettext
 from django.views import View
-from django.views.generic import DeleteView, DetailView, ListView, TemplateView
+from django.views.generic import DeleteView, DetailView, FormView, ListView, TemplateView
 from eventyay.base.services.system_questions import (
     STATE_REQUIRED,
     get_system_question_base_state,
@@ -24,6 +24,7 @@ from eventyay.control.views import CreateView, UpdateView
 from . import mail as mail_helpers
 from .forms import (
     CallSettingsForm,
+    ExhibitionComposeForm,
     ExhibitionEmailQueueForm,
     ExhibitionMailTemplatesForm,
     ExhibitionProposalExtraLinkFormSet,
@@ -1480,6 +1481,67 @@ EMAIL_MANAGE_PERMISSION = (
     "can_change_exhibition_proposals",
     "is_exhibition_reviewer",
 )
+
+
+class EmailComposeView(EventPermissionRequiredMixin, FormView):
+    """Compose a broadcast email to a filtered group of applicants."""
+
+    permission = EMAIL_MANAGE_PERMISSION
+    template_name = "exhibitors/email_compose.html"
+    form_class = ExhibitionComposeForm
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs["event"] = self.request.event
+        return kwargs
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["email_placeholders"] = mail_helpers.PLACEHOLDER_DOCS
+        return context
+
+    def form_valid(self, form):
+        from .tasks import send_scheduled_email
+
+        event = self.request.event
+        scheduled_at = form.cleaned_data.get("scheduled_at")
+        send_now = "_send" in self.request.POST and not scheduled_at
+
+        recipients = mail_helpers.compose_recipients(
+            event,
+            states=form.cleaned_data["states"],
+            partner_type=form.cleaned_data["partner_type"],
+            sponsor_group=form.cleaned_data["sponsor_group"],
+        )
+        created = mail_helpers.queue_compose_emails(
+            event,
+            recipients,
+            form.cleaned_data["subject"],
+            form.cleaned_data["body"],
+            scheduled_at=scheduled_at,
+            send_now=send_now,
+            requestor=self.request.user,
+        )
+        if not created:
+            messages.warning(self.request, _("No applicants matched the selected filters."))
+            return self.form_invalid(form)
+
+        if scheduled_at:
+            for queued in created:
+                send_scheduled_email.apply_async(args=[event.pk, queued.pk], eta=scheduled_at)
+            messages.success(
+                self.request,
+                _("%(count)d emails have been scheduled.") % {"count": len(created)},
+            )
+            return redirect("plugins:exhibition:email.outbox", **event_kwargs(event))
+        if send_now:
+            messages.success(self.request, _("%(count)d emails have been sent.") % {"count": len(created)})
+            return redirect("plugins:exhibition:email.sent", **event_kwargs(event))
+        messages.success(
+            self.request,
+            _("%(count)d emails have been placed in the outbox.") % {"count": len(created)},
+        )
+        return redirect("plugins:exhibition:email.outbox", **event_kwargs(event))
 
 
 class EmailOutboxListView(EventPermissionRequiredMixin, ListView):

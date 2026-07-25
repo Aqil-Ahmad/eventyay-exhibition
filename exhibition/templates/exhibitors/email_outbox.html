@@ -18,6 +18,7 @@
                 <th>{% trans "Recipient" %}</th>
                 <th>{% trans "Subject" %}</th>
                 <th>{% trans "Created" %}</th>
+                <th>{% trans "Scheduled" %}</th>
                 <th>{% trans "Actions" %}</th>
             </tr>
             </thead>
@@ -31,6 +32,13 @@
                         </a>
                     </td>
                     <td>{{ email.created }}</td>
+                    <td>
+                        {% if email.scheduled_at %}
+                            <span class="label label-info">{{ email.scheduled_at }}</span>
+                        {% else %}
+                            <span class="text-muted">—</span>
+                        {% endif %}
+                    </td>
                     <td>
                         <div class="btn-toolbar" role="toolbar">
                             <div class="btn-group" role="group">
@@ -58,7 +66,7 @@
                 </tr>
             {% empty %}
                 <tr>
-                    <td colspan="4">{% trans "The outbox is empty." %}</td>
+                    <td colspan="5">{% trans "The outbox is empty." %}</td>
                 </tr>
             {% endfor %}
             </tbody>

@@ -756,6 +756,7 @@ class ExhibitionEmailQueue(models.Model):
     body = models.TextField(verbose_name=_("Body"))
     reply_to = models.CharField(max_length=255, blank=True, default="")
     locale = models.CharField(max_length=32, blank=True, default="")
+    scheduled_at = models.DateTimeField(null=True, blank=True, db_index=True)
     sent_at = models.DateTimeField(null=True, blank=True)
     created = models.DateTimeField(auto_now_add=True)
     updated = models.DateTimeField(auto_now=True)
@@ -787,7 +788,8 @@ class ExhibitionEmailQueue(models.Model):
             event_reply_to=self.reply_to or None,
         )
         self.sent_at = timezone.now()
-        self.save(update_fields=["sent_at", "updated"])
+        self.scheduled_at = None
+        self.save(update_fields=["sent_at", "scheduled_at", "updated"])
         self.event.log_action(
             "eventyay.plugins.exhibition.email.sent",
             user=requestor,
