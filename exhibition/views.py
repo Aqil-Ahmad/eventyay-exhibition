@@ -35,6 +35,7 @@ from .forms import (
     ExhibitorExtraLinkFormSet,
     ExhibitorInfoForm,
     ExhibitorSocialLinkFormSet,
+    ExhibitorVoucherBatchForm,
     SponsorGroupForm,
     social_link_prefixes,
 )
@@ -48,6 +49,7 @@ from .models import (
     ExhibitionQuestion,
     ExhibitorInfo,
     ExhibitorSettings,
+    ExhibitorVoucher,
     SponsorGroup,
     generate_booth_id,
     get_next_sponsor_group_level,
@@ -56,6 +58,7 @@ from .social_links import serialize_social_link
 from .utils import (
     add_external_image_csp_sources,
     build_exhibitor_video_embed,
+    generate_exhibitor_vouchers,
     public_exhibitors_queryset,
     should_hide_applicant_emails,
 )
@@ -1473,6 +1476,68 @@ class ExhibitorCopyKeyView(EventPermissionRequiredMixin, View):
         response = HttpResponse(exhibitor.key)
         response["Content-Disposition"] = 'attachment; filename="password.txt"'
         return response
+
+
+class ExhibitorVoucherManageView(EventPermissionRequiredMixin, DetailView):
+    model = ExhibitorInfo
+    template_name = "exhibitors/vouchers.html"
+    permission = ("can_change_event_settings",)
+    context_object_name = "exhibitor"
+
+    def get_queryset(self):
+        return ExhibitorInfo.objects.filter(event=self.request.event)
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context.setdefault("form", ExhibitorVoucherBatchForm(event=self.request.event))
+        context["vouchers"] = ExhibitorVoucher.objects.filter(exhibitor=self.object).select_related(
+            "voucher", "voucher__product"
+        )
+        return context
+
+    def get_success_url(self):
+        return reverse(
+            "plugins:exhibition:vouchers",
+            kwargs={**event_kwargs(self.request.event), "pk": self.object.pk},
+        )
+
+    def post(self, request, *args, **kwargs):
+        self.object = self.get_object()
+        if request.POST.get("action") == "delete":
+            return self.remove_voucher(request)
+        return self.create_vouchers(request)
+
+    def remove_voucher(self, request):
+        link = get_object_or_404(ExhibitorVoucher, pk=request.POST.get("voucher"), exhibitor=self.object)
+        if link.voucher.redeemed:
+            messages.error(request, _("This voucher has already been redeemed and cannot be removed."))
+            return redirect(self.get_success_url())
+        voucher = link.voucher
+        link.delete()
+        voucher.delete()
+        messages.success(request, _("Voucher removed."))
+        return redirect(self.get_success_url())
+
+    @transaction.atomic
+    def create_vouchers(self, request):
+        form = ExhibitorVoucherBatchForm(request.POST, event=self.request.event)
+        if not form.is_valid():
+            return self.render_to_response(self.get_context_data(form=form))
+        count = form.cleaned_data["count"]
+        generate_exhibitor_vouchers(
+            self.object,
+            product=form.cleaned_data["product"],
+            count=count,
+            max_usages=form.cleaned_data["max_usages"],
+            price_mode=form.cleaned_data["price_mode"],
+            value=form.cleaned_data["value"],
+            valid_until=form.cleaned_data["valid_until"],
+        )
+        messages.success(
+            request,
+            ngettext("%(count)d voucher created.", "%(count)d vouchers created.", count) % {"count": count},
+        )
+        return redirect(self.get_success_url())
 
 
 EMAIL_MANAGE_PERMISSION = (

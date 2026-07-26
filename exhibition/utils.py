@@ -176,3 +176,24 @@ def create_exhibitor_from_proposal(proposal):
     proposal.submitted = proposal.submitted or timezone.now()
     proposal.save(update_fields=["approved_exhibitor", "state", "submitted", "updated"])
     return exhibitor
+
+
+def generate_exhibitor_vouchers(exhibitor, *, product, count, max_usages, price_mode, value, valid_until):
+    from eventyay.base.models import Voucher
+
+    from .models import ExhibitorVoucher
+
+    tag = f"exhibitor-{exhibitor.key}"
+    links = []
+    for _ in range(count):
+        voucher = Voucher.objects.create(
+            event=exhibitor.event,
+            product=product,
+            max_usages=max_usages,
+            price_mode=price_mode,
+            value=value,
+            valid_until=valid_until,
+            tag=tag,
+        )
+        links.append(ExhibitorVoucher(exhibitor=exhibitor, voucher=voucher))
+    return ExhibitorVoucher.objects.bulk_create(links)

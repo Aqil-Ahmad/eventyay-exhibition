@@ -6,6 +6,7 @@ from django.db.models import Max
 from django.forms import inlineformset_factory
 from django.utils.translation import gettext_lazy as _
 from eventyay.base.forms import I18nModelForm, SettingsForm
+from eventyay.base.models import PriceModeChoices, Product
 from eventyay.common.forms.mixins import (
     EventLocalizedModelChoiceField,
     EventLocalizedModelMultipleChoiceField,
@@ -69,11 +70,16 @@ class ExhibitorInfoForm(I18nModelForm):
     )
     allow_voucher_access = forms.BooleanField(
         required=False,
-        label=_("Allowed to access voucher data"),
+        label=_("Can view voucher redemptions"),
+        help_text=_(
+            "Lets this exhibitor retrieve the attendees who redeemed vouchers issued to them. "
+            "Separate from lead scanning, which covers attendees scanned at the booth."
+        ),
     )
     allow_lead_access = forms.BooleanField(
         required=False,
-        label=_("Allowed to access scanned lead data"),
+        label=_("Can view scanned leads"),
+        help_text=_("Lets this exhibitor retrieve the leads they collected by scanning badges at their booth."),
     )
     lead_scanning_scope_by_device = forms.TypedChoiceField(
         label=_("Lead scanning behavior"),
@@ -357,6 +363,58 @@ class ExhibitorInfoForm(I18nModelForm):
                 transaction.on_commit(delete_replaced_files)
 
         return instance
+
+
+class ExhibitorVoucherBatchForm(forms.Form):
+    product = forms.ModelChoiceField(
+        queryset=Product.objects.none(),
+        label=_("Ticket product"),
+        help_text=_("The product a redeemed voucher applies to."),
+    )
+    count = forms.IntegerField(
+        min_value=1,
+        max_value=1000,
+        initial=1,
+        label=_("Number of vouchers"),
+    )
+    max_usages = forms.IntegerField(
+        min_value=1,
+        initial=1,
+        label=_("Maximum usages per voucher"),
+    )
+    price_mode = forms.ChoiceField(
+        choices=PriceModeChoices.choices,
+        initial=PriceModeChoices.NONE,
+        label=_("Price effect"),
+    )
+    value = forms.DecimalField(
+        required=False,
+        decimal_places=2,
+        max_digits=10,
+        label=_("Value"),
+        help_text=_("Amount or percentage, depending on the selected price effect."),
+    )
+    valid_until = forms.DateTimeField(
+        required=False,
+        widget=HtmlDateTimeInput,
+        label=_("Valid until"),
+    )
+
+    def __init__(self, *args, **kwargs):
+        self.event = kwargs.pop("event", None)
+        super().__init__(*args, **kwargs)
+        if self.event:
+            self.fields["product"].queryset = Product.objects.filter(event=self.event, active=True).order_by(
+                "position", "pk"
+            )
+
+    def clean(self):
+        cleaned_data = super().clean()
+        price_mode = cleaned_data.get("price_mode")
+        value = cleaned_data.get("value")
+        if price_mode and price_mode != PriceModeChoices.NONE and value is None:
+            self.add_error("value", _("Enter a value for the selected price effect."))
+        return cleaned_data
 
 
 class SponsorGroupForm(I18nModelForm):

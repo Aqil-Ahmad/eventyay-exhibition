@@ -2,7 +2,7 @@ from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
 from eventyay.api.serializers.i18n import I18nAwareModelSerializer
-from eventyay.base.models import OrderPosition
+from eventyay.base.models import Order, OrderPosition
 from eventyay.common.urls import normalize_url_scheme
 from i18nfield.strings import LazyI18nString
 from rest_framework import serializers, status, views, viewsets
@@ -14,6 +14,7 @@ from .models import (
     ExhibitorSettings,
     ExhibitorSocialLink,
     ExhibitorTag,
+    ExhibitorVoucher,
     Lead,
     SponsorGroup,
     generate_booth_id,
@@ -22,6 +23,24 @@ from .models import (
 from .social_links import SOCIAL_LINK_SPECS
 
 UNSET = object()
+
+VOUCHER_ACCESS_DISABLED_ERROR = "This exhibitor is not allowed to access voucher redemption data"
+
+
+def _forbidden(error):
+    return Response({"success": False, "error": error}, status=status.HTTP_403_FORBIDDEN)
+
+
+def get_allowed_attendee_data(order_position, settings):
+    allowed_fields = settings.all_allowed_fields
+    attendee_data = {
+        "name": order_position.attendee_name,
+        "email": order_position.attendee_email,
+        "company": order_position.company,
+        "city": order_position.city if "attendee_city" in allowed_fields else None,
+        "country": str(order_position.country) if "attendee_country" in allowed_fields else None,
+    }
+    return {key: value for key, value in attendee_data.items() if value is not None}
 
 
 def _localize_i18n_value(value, locale):
@@ -432,6 +451,41 @@ class LeadRetrieveView(views.APIView):
         )
 
         return Response({"success": True, "leads": list(leads)}, status=status.HTTP_200_OK)
+
+
+class VoucherRedemptionRetrieveView(views.APIView):
+    def get(self, request, *args, **kwargs):
+        key = request.headers.get("Exhibitor")
+        try:
+            exhibitor = ExhibitorInfo.objects.get(key=key)
+        except ExhibitorInfo.DoesNotExist:
+            return Response(
+                {"success": False, "error": "Invalid exhibitor key"},
+                status=status.HTTP_401_UNAUTHORIZED,
+            )
+
+        if not exhibitor.allow_voucher_access:
+            return _forbidden(VOUCHER_ACCESS_DISABLED_ERROR)
+
+        settings = ExhibitorSettings.objects.get_or_create(event=exhibitor.event)[0]
+        voucher_ids = ExhibitorVoucher.objects.filter(exhibitor=exhibitor).values_list("voucher_id", flat=True)
+        positions = (
+            OrderPosition.objects.filter(voucher_id__in=voucher_ids)
+            .exclude(order__status=Order.STATUS_CANCELED)
+            .select_related("order", "voucher")
+            .order_by("-order__datetime")
+        )
+        redemptions = [
+            {
+                "voucher_code": position.voucher.code,
+                "redeemed_at": position.order.datetime,
+                "order_status": position.order.status,
+                "attendee": get_allowed_attendee_data(position, settings),
+            }
+            for position in positions
+        ]
+
+        return Response({"success": True, "redemptions": redemptions}, status=status.HTTP_200_OK)
 
 
 class TagListView(views.APIView):

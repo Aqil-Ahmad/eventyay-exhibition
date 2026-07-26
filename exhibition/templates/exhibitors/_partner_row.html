@@ -33,6 +33,7 @@
         {% if "can_change_event_settings" in request.eventpermset %}
             <a href="{% url "plugins:exhibition:edit" organizer=request.event.organizer.slug event=request.event.slug pk=e.id %}?type={{ partner_type }}" class="btn btn-default btn-sm"><i class="fa fa-edit"></i></a>
             <a href="{% url "plugins:exhibition:copy_key" organizer=request.event.organizer.slug event=request.event.slug pk=e.id %}?type={{ partner_type }}" class="btn btn-default btn-sm" title="{% trans "Key" %}" data-toggle="tooltip"><i class="fa fa-copy"></i></a>
+            <a href="{% url "plugins:exhibition:vouchers" organizer=request.event.organizer.slug event=request.event.slug pk=e.id %}" class="btn btn-default btn-sm" title="{% trans "Vouchers" %}" data-toggle="tooltip"><i class="fa fa-ticket"></i></a>
             <a href="{% url "plugins:exhibition:delete" organizer=request.event.organizer.slug event=request.event.slug pk=e.id %}?type={{ partner_type }}" class="btn btn-delete btn-danger btn-sm"><i class="fa fa-trash"></i></a>
             <button type="button" draggable="true" class="btn btn-primary btn-sm dragsort-button" title="{% trans 'Move' %}" aria-label="{% trans 'Move' %}">
                 <i class="fa fa-arrows"></i>

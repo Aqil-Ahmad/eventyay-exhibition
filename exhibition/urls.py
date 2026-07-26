@@ -9,6 +9,7 @@ from .api import (
     LeadRetrieveView,
     LeadUpdateView,
     TagListView,
+    VoucherRedemptionRetrieveView,
 )
 from .views import (
     CallTextPreviewView,
@@ -29,6 +30,7 @@ from .views import (
     ExhibitorEditView,
     ExhibitorListView,
     ExhibitorReorderView,
+    ExhibitorVoucherManageView,
     ProposalActionView,
     ProposalDetailView,
     ProposalListView,
@@ -213,6 +215,11 @@ urlpatterns = [
         name="copy_key",
     ),
     path(
+        "exhibitors/event/<orgslug:organizer>/<slug:event>/vouchers/<int:pk>",
+        ExhibitorVoucherManageView.as_view(),
+        name="vouchers",
+    ),
+    path(
         "exhibitors/event/<orgslug:organizer>/<slug:event>/emails/outbox",
         EmailOutboxListView.as_view(),
         name="email.outbox",
@@ -271,6 +278,11 @@ urlpatterns = [
         "api/v1/event/<str:organizer>/<str:event>/exhibitors/lead/<str:lead_id>/update",
         LeadUpdateView.as_view(),
         name="lead-update",
+    ),
+    path(
+        "api/v1/event/<str:organizer>/<str:event>/exhibitors/vouchers/redemptions",
+        VoucherRedemptionRetrieveView.as_view(),
+        name="voucher-redemptions",
     ),
 ]
 

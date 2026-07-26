@@ -1,0 +1,82 @@
+{% extends "exhibitors/base.html" %}
+{% load i18n %}
+{% load bootstrap3 %}
+
+{% block title %}{% trans "Vouchers" %}{% endblock %}
+
+{% block exhibitors_header %}
+    <h1>{% blocktrans trimmed with name=exhibitor.name %}Vouchers for {{ name }}{% endblocktrans %}</h1>
+{% endblock %}
+
+{% block exhibitors_content %}
+    <p>
+        {% blocktrans trimmed %}
+            Issue ticket vouchers for this partner to hand out. Whoever redeems one on the ticket shop
+            becomes a lead this partner can retrieve, as long as voucher data access is enabled for them.
+        {% endblocktrans %}
+    </p>
+
+    <fieldset>
+        <legend>{% trans "Issued vouchers" %}</legend>
+        {% if vouchers %}
+            <div class="table-responsive">
+                <table class="table table-sm">
+                    <thead>
+                    <tr>
+                        <th>{% trans "Code" %}</th>
+                        <th>{% trans "Product" %}</th>
+                        <th>{% trans "Price effect" %}</th>
+                        <th>{% trans "Redeemed" %}</th>
+                        <th>{% trans "Valid until" %}</th>
+                        <th></th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    {% for link in vouchers %}
+                        <tr>
+                            <td><code>{{ link.voucher.code }}</code></td>
+                            <td>{{ link.voucher.product|default:"—" }}</td>
+                            <td>
+                                {{ link.voucher.get_price_mode_display }}
+                                {% if link.voucher.value %}{{ link.voucher.value }}{% endif %}
+                            </td>
+                            <td>{{ link.voucher.redeemed }} / {{ link.voucher.max_usages }}</td>
+                            <td>{{ link.voucher.valid_until|date:"SHORT_DATETIME_FORMAT"|default:"—" }}</td>
+                            <td class="text-right flip">
+                                <form action="" method="post">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="action" value="delete">
+                                    <input type="hidden" name="voucher" value="{{ link.pk }}">
+                                    <button type="submit" class="btn btn-delete btn-danger btn-sm"
+                                            {% if link.voucher.redeemed %}disabled title="{% trans "Already redeemed" %}"{% endif %}>
+                                        <i class="fa fa-trash"></i>
+                                    </button>
+                                </form>
+                            </td>
+                        </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            <p class="text-muted">{% trans "No vouchers have been issued for this partner yet." %}</p>
+        {% endif %}
+    </fieldset>
+
+    <form action="" method="post" class="form-horizontal">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="generate">
+        <fieldset>
+            <legend>{% trans "Issue new vouchers" %}</legend>
+            {% bootstrap_form form layout="horizontal" %}
+        </fieldset>
+        <div class="form-group submit-group">
+            <div class="col-md-9 col-md-offset-3">
+                <button type="submit" class="btn btn-primary">{% trans "Create vouchers" %}</button>
+                <a class="btn btn-default" href="{% url 'plugins:exhibition:info' organizer=request.event.organizer.slug event=request.event.slug %}">
+                    {% trans "Back" %}
+                </a>
+            </div>
+        </div>
+    </form>
+{% endblock %}
