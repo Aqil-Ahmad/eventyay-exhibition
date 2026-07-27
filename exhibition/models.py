@@ -51,6 +51,28 @@ def get_next_sponsor_group_level(event):
     return (SponsorGroup.objects.filter(event=event).aggregate(max_level=Max("level")).get("max_level") or 0) + 1
 
 
+def get_next_exhibitor_position(event):
+    if not event:
+        return 0
+    max_position = (
+        ExhibitorInfo.objects.filter(event=event, is_exhibitor=True)
+        .aggregate(value=Max("exhibitor_position"))
+        .get("value")
+    )
+    return (max_position if max_position is not None else -1) + 1
+
+
+def get_next_sponsor_position(event, sponsor_group):
+    if not event:
+        return 0
+    max_position = (
+        ExhibitorInfo.objects.filter(event=event, is_sponsor=True, sponsor_group=sponsor_group)
+        .aggregate(value=Max("sponsor_position"))
+        .get("value")
+    )
+    return (max_position if max_position is not None else -1) + 1
+
+
 def exhibitor_logo_path(instance, filename):
     name = instance.name
     if isinstance(name, LazyI18nString):
@@ -305,6 +327,8 @@ class ExhibitorInfo(models.Model):
     allow_voucher_access = models.BooleanField(default=False)
     allow_lead_access = models.BooleanField(default=False)
     lead_scanning_scope_by_device = models.BooleanField(default=False)
+    exhibitor_position = models.IntegerField(default=0)
+    sponsor_position = models.IntegerField(default=0)
 
     class Meta:
         ordering = ("name",)
@@ -318,6 +342,14 @@ class ExhibitorInfo(models.Model):
 
     def __str__(self):
         return str(self.name)
+
+    def save(self, *args, **kwargs):
+        if self._state.adding:
+            if self.is_exhibitor and not self.exhibitor_position:
+                self.exhibitor_position = get_next_exhibitor_position(self.event)
+            if self.is_sponsor and not self.sponsor_position:
+                self.sponsor_position = get_next_sponsor_position(self.event, self.sponsor_group)
+        super().save(*args, **kwargs)
 
     @property
     def localized_booth_name(self):
