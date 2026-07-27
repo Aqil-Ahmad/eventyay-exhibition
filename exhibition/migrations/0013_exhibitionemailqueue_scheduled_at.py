@@ -6,7 +6,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('exhibition', '0009_exhibitorinfo_active'),
+        ('exhibition', '0012_exhibitorsettings_call_private_and_more'),
     ]
 
     operations = [
