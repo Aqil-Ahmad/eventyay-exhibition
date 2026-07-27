@@ -19,6 +19,11 @@
     <fieldset>
         <legend>{% trans "Issued vouchers" %}</legend>
         {% if vouchers %}
+            <p>
+                <a class="btn btn-default" href="?download=yes">
+                    <i class="fa fa-download"></i> {% trans "Download codes (CSV)" %}
+                </a>
+            </p>
             <div class="table-responsive">
                 <table class="table table-sm">
                     <thead>
@@ -65,10 +70,16 @@
 
     <form action="" method="post" class="form-horizontal">
         {% csrf_token %}
+        {% bootstrap_form_errors form %}
         <input type="hidden" name="action" value="generate">
         <fieldset>
             <legend>{% trans "Issue new vouchers" %}</legend>
-            {% bootstrap_form form layout="horizontal" %}
+            {% bootstrap_field form.product layout="control" %}
+            {% bootstrap_field form.count layout="control" %}
+            {% bootstrap_field form.max_usages layout="control" %}
+            {% bootstrap_field form.price_mode layout="control" %}
+            {% bootstrap_field form.value layout="control" %}
+            {% bootstrap_field form.valid_until layout="control" %}
         </fieldset>
         <div class="form-group submit-group">
             <div class="col-md-9 col-md-offset-3">

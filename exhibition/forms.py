@@ -168,7 +168,6 @@ class ExhibitorInfoForm(I18nModelForm):
         "booth_id",
         "booth_name",
         "lead_scanning_enabled",
-        "allow_voucher_access",
         "allow_lead_access",
         "lead_scanning_scope_by_device",
     )
@@ -284,7 +283,6 @@ class ExhibitorInfoForm(I18nModelForm):
             cleaned_data["booth_name"] = ""
             cleaned_data["booth_id"] = None
             cleaned_data["lead_scanning_enabled"] = False
-            cleaned_data["allow_voucher_access"] = False
             cleaned_data["allow_lead_access"] = False
             cleaned_data["lead_scanning_scope_by_device"] = False
 
@@ -368,6 +366,8 @@ class ExhibitorInfoForm(I18nModelForm):
 class ExhibitorVoucherBatchForm(forms.Form):
     product = forms.ModelChoiceField(
         queryset=Product.objects.none(),
+        required=True,
+        empty_label=_("Select a product…"),
         label=_("Ticket product"),
         help_text=_("The product a redeemed voucher applies to."),
     )

@@ -1,5 +1,7 @@
+import io
 import json
 
+from defusedcsv import csv
 from django.conf import settings as django_settings
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
@@ -1487,13 +1489,56 @@ class ExhibitorVoucherManageView(EventPermissionRequiredMixin, DetailView):
     def get_queryset(self):
         return ExhibitorInfo.objects.filter(event=self.request.event)
 
+    def get(self, request, *args, **kwargs):
+        self.object = self.get_object()
+        if request.GET.get("download") == "yes":
+            return self.download_csv()
+        return self.render_to_response(self.get_context_data())
+
+    def voucher_links(self):
+        return ExhibitorVoucher.objects.filter(exhibitor=self.object).select_related("voucher", "voucher__product")
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context.setdefault("form", ExhibitorVoucherBatchForm(event=self.request.event))
-        context["vouchers"] = ExhibitorVoucher.objects.filter(exhibitor=self.object).select_related(
-            "voucher", "voucher__product"
-        )
+        context["vouchers"] = self.voucher_links()
         return context
+
+    def download_csv(self):
+        from eventyay.multidomain.urlreverse import build_absolute_uri
+
+        redeem_base = build_absolute_uri(self.request.event, "presale:event.index")
+        output = io.StringIO()
+        writer = csv.writer(output, quoting=csv.QUOTE_NONNUMERIC, delimiter=",")
+        writer.writerow(
+            [
+                _("Voucher code"),
+                _("Redeem link"),
+                _("Product"),
+                _("Price effect"),
+                _("Value"),
+                _("Valid until"),
+                _("Redeemed"),
+                _("Maximum usages"),
+            ]
+        )
+        for link in self.voucher_links():
+            voucher = link.voucher
+            writer.writerow(
+                [
+                    voucher.code,
+                    f"{redeem_base}?voucher={voucher.code}",
+                    str(voucher.product) if voucher.product else "",
+                    voucher.get_price_mode_display(),
+                    str(voucher.value) if voucher.value is not None else "",
+                    voucher.valid_until.isoformat() if voucher.valid_until else "",
+                    str(voucher.redeemed),
+                    str(voucher.max_usages),
+                ]
+            )
+        response = HttpResponse(output.getvalue().encode("utf-8"), content_type="text/csv")
+        response["Content-Disposition"] = 'attachment; filename="exhibitor-vouchers.csv"'
+        return response
 
     def get_success_url(self):
         return reverse(
