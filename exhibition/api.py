@@ -31,6 +31,13 @@ def _forbidden(error):
     return Response({"success": False, "error": error}, status=status.HTTP_403_FORBIDDEN)
 
 
+def _visible_attendee(attendee_data, exhibitor):
+    if exhibitor.allow_lead_access:
+        return attendee_data
+    attendee_data = attendee_data or {}
+    return {"note": attendee_data.get("note", ""), "tags": attendee_data.get("tags", [])}
+
+
 def _localize_i18n_value(value, locale):
     if isinstance(value, LazyI18nString):
         return value.localize(locale)
@@ -390,7 +397,7 @@ class LeadCreateView(views.APIView):
                 {
                     "success": False,
                     "error": "Lead already scanned",
-                    "attendee": attendee_data,
+                    "attendee": _visible_attendee(attendee_data, exhibitor),
                 },
                 status=status.HTTP_409_CONFLICT,
             )
@@ -412,7 +419,7 @@ class LeadCreateView(views.APIView):
         )
 
         return Response(
-            {"success": True, "lead_id": lead.id, "attendee": attendee_data},
+            {"success": True, "lead_id": lead.id, "attendee": _visible_attendee(attendee_data, exhibitor)},
             status=status.HTTP_201_CREATED,
         )
 
@@ -509,6 +516,6 @@ class LeadUpdateView(views.APIView):
         lead.save()
 
         return Response(
-            {"success": True, "lead_id": lead.id, "attendee": lead.attendee},
+            {"success": True, "lead_id": lead.id, "attendee": _visible_attendee(lead.attendee, exhibitor)},
             status=status.HTTP_200_OK,
         )
