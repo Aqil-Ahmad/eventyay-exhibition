@@ -36,7 +36,7 @@ def get_allowed_attendee_data(order_position, settings):
     attendee_data = {
         "name": order_position.attendee_name,
         "email": order_position.attendee_email,
-        "company": order_position.company,
+        "company": order_position.company if "attendee_company" in allowed_fields else None,
         "city": order_position.city if "attendee_city" in allowed_fields else None,
         "country": str(order_position.country) if "attendee_country" in allowed_fields else None,
     }
@@ -457,7 +457,11 @@ class VoucherRedemptionRetrieveView(views.APIView):
     def get(self, request, *args, **kwargs):
         key = request.headers.get("Exhibitor")
         try:
-            exhibitor = ExhibitorInfo.objects.get(key=key)
+            exhibitor = ExhibitorInfo.objects.get(
+                key=key,
+                event__slug=kwargs.get("event"),
+                event__organizer__slug=kwargs.get("organizer"),
+            )
         except ExhibitorInfo.DoesNotExist:
             return Response(
                 {"success": False, "error": "Invalid exhibitor key"},

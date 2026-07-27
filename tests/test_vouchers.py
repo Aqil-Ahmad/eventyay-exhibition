@@ -1,9 +1,11 @@
+from types import SimpleNamespace
+
 import pytest
 from django.test import RequestFactory
 from django_scopes import scopes_disabled
 from eventyay.base.models import PriceModeChoices, Product, Voucher
 
-from exhibition.api import VoucherRedemptionRetrieveView
+from exhibition.api import VoucherRedemptionRetrieveView, get_allowed_attendee_data
 from exhibition.forms import ExhibitorVoucherBatchForm
 from exhibition.models import ExhibitorInfo, ExhibitorVoucher
 from exhibition.utils import generate_exhibitor_vouchers
@@ -22,7 +24,7 @@ def _retrieve(event, key):
     request.event = event
     view = VoucherRedemptionRetrieveView()
     view.request = request
-    return view.get(request)
+    return view.get(request, organizer=event.organizer.slug, event=event.slug)
 
 
 @pytest.mark.django_db
@@ -66,6 +68,20 @@ def test_batch_form_limits_products_to_event(event):
         product = _product(event)
         form = ExhibitorVoucherBatchForm(event=event)
         assert list(form.fields["product"].queryset) == [product]
+
+
+def test_attendee_data_gates_company_when_not_allowed():
+    op = SimpleNamespace(attendee_name="N", attendee_email="e@x.com", company="Acme", city="C", country="US")
+    settings = SimpleNamespace(all_allowed_fields=["attendee_name", "attendee_email"])
+    data = get_allowed_attendee_data(op, settings)
+    assert data == {"name": "N", "email": "e@x.com"}
+
+
+def test_attendee_data_includes_company_when_allowed():
+    op = SimpleNamespace(attendee_name="N", attendee_email="e@x.com", company="Acme", city="C", country="US")
+    settings = SimpleNamespace(all_allowed_fields=["attendee_name", "attendee_email", "attendee_company"])
+    data = get_allowed_attendee_data(op, settings)
+    assert data["company"] == "Acme"
 
 
 @pytest.mark.django_db
