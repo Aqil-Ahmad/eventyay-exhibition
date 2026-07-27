@@ -1,5 +1,7 @@
 import logging
 
+from celery.exceptions import MaxRetriesExceededError, Retry
+from django.db import transaction
 from django.utils.timezone import now
 from eventyay.base.models import Event
 from eventyay.base.services.tasks import ProfiledEventTask
@@ -23,13 +25,27 @@ def send_scheduled_email(self, event_id, queue_id):
             logger.error("[Exhibition] Event %s not found for queued email %s", event_id, queue_id)
             return
 
-    queued = ExhibitionEmailQueue.objects.filter(pk=queue_id, event=event, sent_at__isnull=True).first()
-    if queued is None:
-        return
+    try:
+        with transaction.atomic():
+            queued = (
+                ExhibitionEmailQueue.objects.select_for_update(skip_locked=True)
+                .filter(pk=queue_id, event=event, sent_at__isnull=True)
+                .first()
+            )
+            if queued is None:
+                return
 
-    if queued.scheduled_at and queued.scheduled_at > now():
-        countdown = max(1, int((queued.scheduled_at - now()).total_seconds()))
-        self.retry(countdown=countdown, args=[original_event_id, queue_id], throw=False)
-        return
+            if queued.scheduled_at and queued.scheduled_at > now():
+                countdown = max(1, int((queued.scheduled_at - now()).total_seconds()))
+                self.retry(countdown=countdown, args=[original_event_id, queue_id], throw=False)
+                return
 
-    queued.send()
+            queued.send()
+    except Retry:
+        raise
+    except Exception as exc:
+        logger.exception("[Exhibition] Failed to send scheduled email %s", queue_id)
+        try:
+            self.retry(exc=exc, args=[original_event_id, queue_id])
+        except MaxRetriesExceededError:
+            logger.error("[Exhibition] Max retries exceeded for scheduled email %s", queue_id)
