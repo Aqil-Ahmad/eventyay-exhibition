@@ -5,7 +5,7 @@ from django.db import migrations, models
 
 class Migration(migrations.Migration):
     dependencies = [
-        ("exhibition", "0009_exhibitionproposal_profile_edited_at"),
+        ("exhibition", "0008_exhibitionemailqueue"),
     ]
 
     operations = [
