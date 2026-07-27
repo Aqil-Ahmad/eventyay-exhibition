@@ -124,19 +124,25 @@ def create_exhibitor_from_proposal(proposal):
         generate_booth_id,
     )
 
+    booth_id = proposal.booth_id
+    if proposal.is_exhibitor and not booth_id:
+        booth_id = generate_booth_id(event=proposal.event)
+
     if proposal.approved_exhibitor_id:
         exhibitor = proposal.approved_exhibitor
-        if not exhibitor.active:
-            exhibitor.active = True
-            exhibitor.save(update_fields=["active"])
+        exhibitor.active = True
+        exhibitor.is_exhibitor = proposal.is_exhibitor
+        exhibitor.is_sponsor = proposal.is_sponsor
+        exhibitor.sponsor_group = proposal.sponsor_group if proposal.is_sponsor else None
+        exhibitor.booth_id = booth_id if proposal.is_exhibitor else None
+        exhibitor.booth_name = proposal.booth_name if proposal.is_exhibitor else ""
+        exhibitor.save(
+            update_fields=["active", "is_exhibitor", "is_sponsor", "sponsor_group", "booth_id", "booth_name"]
+        )
         proposal.state = ExhibitionProposalState.ACCEPTED
         proposal.submitted = proposal.submitted or timezone.now()
         proposal.save(update_fields=["state", "submitted", "updated"])
         return exhibitor
-
-    booth_id = proposal.booth_id
-    if proposal.is_exhibitor and not booth_id:
-        booth_id = generate_booth_id(event=proposal.event)
 
     exhibitor = ExhibitorInfo.objects.create(
         event=proposal.event,
