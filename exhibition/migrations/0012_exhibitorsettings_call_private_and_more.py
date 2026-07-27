@@ -6,7 +6,7 @@ from django.db import migrations, models
 
 class Migration(migrations.Migration):
     dependencies = [
-        ("exhibition", "0009_exhibitorinfo_active"),
+        ("exhibition", "0011_default_share_attendee_name_email"),
     ]
 
     operations = [
