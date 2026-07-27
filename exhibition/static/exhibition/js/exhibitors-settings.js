@@ -220,8 +220,50 @@
         $(previewTab).on('shown.bs.tab', renderPreview)
     }
 
+    function initSecretLinkCopy() {
+        var button = document.querySelector('[data-copy-button]')
+        var source = document.querySelector('[data-copy-source]')
+        if (!button || !source) {
+            return
+        }
+        var originalIcon = button.querySelector('i')
+        var originalIconClass = originalIcon ? originalIcon.className : 'fa fa-copy'
+        var originalLabel = button.textContent.trim()
+
+        function renderButton(iconClass, label) {
+            while (button.firstChild) {
+                button.removeChild(button.firstChild)
+            }
+            var icon = document.createElement('i')
+            icon.className = iconClass
+            button.appendChild(icon)
+            button.appendChild(document.createTextNode(' ' + label))
+        }
+
+        button.addEventListener('click', function () {
+            source.select()
+            source.setSelectionRange(0, source.value.length)
+            var done = function () {
+                renderButton('fa fa-check', button.dataset.copiedLabel || 'Copied')
+                window.setTimeout(function () {
+                    renderButton(originalIconClass, originalLabel)
+                }, 1500)
+            }
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(source.value).then(done, function () {
+                    document.execCommand('copy')
+                    done()
+                })
+            } else {
+                document.execCommand('copy')
+                done()
+            }
+        })
+    }
+
     document.addEventListener('DOMContentLoaded', function () {
         initCallTextPreview()
+        initSecretLinkCopy()
         var showButton = document.getElementById('show-add-group-form')
         var addForm = document.getElementById('add-group-form')
         var cancelButton = document.getElementById('cancel-add-group-form')

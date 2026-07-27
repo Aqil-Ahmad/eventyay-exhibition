@@ -397,10 +397,20 @@ class CallSettingsForm(I18nModelForm):
             "call_text",
             "call_deadline",
             "call_hide_after_deadline",
+            "call_private",
         ]
         labels = {
-            "call_enabled": _("Publish Call"),
+            "call_enabled": _("Enable call"),
             "call_hide_after_deadline": _("Hide call page after the deadline"),
+            "call_private": _("Make this call private (accessible only via a secret link)"),
+        }
+        help_texts = {
+            "call_enabled": _(
+                "Turn the call on. Keep it enabled for private calls too, otherwise the secret link stops working."
+            ),
+            "call_private": _(
+                "The call page is not linked anywhere public and can only be opened with the secret link shown below."
+            ),
         }
         widgets = {
             "call_deadline": HtmlDateTimeInput,

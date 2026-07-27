@@ -21,6 +21,10 @@ def generate_key():
     return "".join(secrets.choice(alphabet) for _ in range(8))
 
 
+def generate_call_secret():
+    return secrets.token_urlsafe(24)
+
+
 def generate_proposal_code():
     alphabet = string.ascii_uppercase + string.digits
     return get_random_string(length=12, allowed_chars=alphabet)
@@ -178,6 +182,8 @@ class ExhibitorSettings(models.Model):
         verbose_name=_("Submission deadline"),
     )
     call_hide_after_deadline = models.BooleanField(default=False)
+    call_private = models.BooleanField(default=False)
+    call_secret = models.CharField(max_length=64, default=generate_call_secret)
     proposal_field_settings = models.JSONField(default=default_proposal_field_settings)
 
     def is_field_allowed(self, identifier):
@@ -188,6 +194,10 @@ class ExhibitorSettings(models.Model):
         if not self.call_enabled:
             return False
         return not self.call_deadline or self.call_deadline >= timezone.now()
+
+    def regenerate_call_secret(self):
+        self.call_secret = generate_call_secret()
+        self.save(update_fields=["call_secret"])
 
     @property
     def normalized_proposal_field_settings(self):

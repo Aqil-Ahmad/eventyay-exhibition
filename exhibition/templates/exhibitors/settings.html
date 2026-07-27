@@ -85,6 +85,7 @@ The {event_name} team{% endblocktrans %}
                     </div>
                     {% bootstrap_field call_settings_form.call_deadline layout="control" %}
                     {% bootstrap_field call_settings_form.call_hide_after_deadline layout="control" %}
+                    {% bootstrap_field call_settings_form.call_private layout="control" %}
                 </fieldset>
                 <div class="form-group submit-group">
                     <div class="col-md-9 col-md-offset-3">
@@ -92,13 +93,50 @@ The {event_name} team{% endblocktrans %}
                             {% trans "Save" %}
                         </button>
                         {% if settings.call_enabled %}
-                            <a class="btn btn-default btn-lg" href="{% url 'plugins:exhibition:public_call' organizer=request.event.organizer.slug event=request.event.slug %}">
-                                {% trans "View call page" %}
-                            </a>
+                            {% if settings.call_private %}
+                                <a class="btn btn-default btn-lg" href="{% url 'plugins:exhibition:public_call_secret' organizer=request.event.organizer.slug event=request.event.slug secret=settings.call_secret %}">
+                                    {% trans "View call page" %}
+                                </a>
+                            {% else %}
+                                <a class="btn btn-default btn-lg" href="{% url 'plugins:exhibition:public_call' organizer=request.event.organizer.slug event=request.event.slug %}">
+                                    {% trans "View call page" %}
+                                </a>
+                            {% endif %}
                         {% endif %}
                     </div>
                 </div>
             </form>
+            {% if settings.call_enabled and settings.call_private %}
+                <div class="panel panel-default call-secret-panel">
+                    <div class="panel-heading">
+                        <h3 class="panel-title"><i class="fa fa-lock"></i> {% trans "Secret call link" %}</h3>
+                    </div>
+                    <div class="panel-body">
+                        <p class="text-muted">{% trans "This call is private: it is not linked anywhere public. Share the link below with the organizations you want to invite. Anyone who has it can open the call and apply." %}</p>
+                        <div class="input-group call-secret-input">
+                            <input type="text" class="form-control" readonly
+                                   value="{{ request.scheme }}://{{ request.get_host }}{% url 'plugins:exhibition:public_call_secret' organizer=request.event.organizer.slug event=request.event.slug secret=settings.call_secret %}"
+                                   data-copy-source>
+                            <span class="input-group-btn">
+                                <button type="button" class="btn btn-primary" data-copy-button data-copied-label="{% trans 'Copied' %}" title="{% trans 'Copy to clipboard' %}">
+                                    <i class="fa fa-copy"></i> {% trans "Copy" %}
+                                </button>
+                            </span>
+                        </div>
+                        <form action="" method="post" class="call-secret-regenerate"
+                              data-confirm="{% trans 'Regenerate the secret link? The current link will stop working immediately.' %}"
+                              data-confirm-class="btn-danger">
+                            {% csrf_token %}
+                            <input type="hidden" name="action" value="regenerate_call_secret">
+                            <input type="hidden" name="tab" value="call">
+                            <button type="submit" class="btn btn-default btn-sm">
+                                <i class="fa fa-refresh"></i> {% trans "Regenerate link" %}
+                            </button>
+                            <span class="text-muted call-secret-hint">{% trans "Regenerating immediately invalidates the current link." %}</span>
+                        </form>
+                    </div>
+                </div>
+            {% endif %}
     {% elif active_tab == "exhibitors" %}
             <form action="" method="post" class="form-horizontal">
                 {% csrf_token %}

@@ -93,3 +93,24 @@
     margin-top: 12px;
     margin-bottom: 0;
 }
+
+.call-secret-panel {
+    margin-top: 20px;
+}
+
+.call-secret-input input[readonly] {
+    background-color: #fff;
+    font-family: monospace;
+}
+
+.call-secret-regenerate {
+    margin-top: 12px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.call-secret-hint {
+    font-size: 12px;
+}
