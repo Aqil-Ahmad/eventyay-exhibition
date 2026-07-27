@@ -20,7 +20,7 @@ def add_name_email_to_existing(apps, schema_editor):
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('exhibition', '0007_offset_exhibition_question_positions'),
+        ('exhibition', '0010_exhibitorinfo_exhibitor_position_and_more'),
     ]
 
     operations = [
