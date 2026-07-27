@@ -11,7 +11,7 @@ def backfill_lead_flags(apps, schema_editor):
 
 class Migration(migrations.Migration):
     dependencies = [
-        ("exhibition", "0009_exhibitorinfo_active"),
+        ("exhibition", "0012_exhibitorsettings_call_private_and_more"),
     ]
 
     operations = [
