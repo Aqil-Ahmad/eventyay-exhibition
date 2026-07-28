@@ -32,15 +32,38 @@ def _forbidden(error):
 
 
 def get_allowed_attendee_data(order_position, settings):
-    allowed_fields = settings.all_allowed_fields
-    attendee_data = {
-        "name": order_position.attendee_name,
-        "email": order_position.attendee_email,
-        "company": order_position.company if "attendee_company" in allowed_fields else None,
-        "city": order_position.city if "attendee_city" in allowed_fields else None,
-        "country": str(order_position.country) if "attendee_country" in allowed_fields else None,
-    }
-    return {key: value for key, value in attendee_data.items() if value is not None}
+    attendee_data = {}
+    if settings.is_field_allowed("attendee_name"):
+        attendee_data["name"] = order_position.attendee_name
+    if settings.is_field_allowed("attendee_email"):
+        attendee_data["email"] = order_position.attendee_email
+    if settings.is_field_allowed("system_company"):
+        attendee_data["company"] = order_position.company
+    if settings.is_field_allowed("system_job_title"):
+        attendee_data["job_title"] = order_position.job_title
+    if settings.is_field_allowed("system_street"):
+        address_parts = [
+            order_position.street,
+            order_position.zipcode,
+            order_position.city,
+            str(order_position.country) if order_position.country else "",
+        ]
+        attendee_data["address"] = ", ".join(part for part in address_parts if part)
+
+    answers = {answer.question_id: answer for answer in order_position.answers.all()}
+    required_questions = order_position.order.event.questions.filter(required=True, active=True).order_by(
+        "position", "id"
+    )
+    question_data = []
+    for question in required_questions:
+        if not settings.is_field_allowed(f"question_{question.pk}"):
+            continue
+        answer = answers.get(question.pk)
+        question_data.append({"question": str(question.question), "answer": str(answer.answer) if answer else ""})
+    if question_data:
+        attendee_data["questions"] = question_data
+
+    return attendee_data
 
 
 def _localize_i18n_value(value, locale):
