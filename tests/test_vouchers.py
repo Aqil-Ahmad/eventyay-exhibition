@@ -97,9 +97,7 @@ def test_attendee_data_gates_company_when_not_allowed():
 
 
 def test_attendee_data_includes_company_when_allowed():
-    data = get_allowed_attendee_data(
-        _position(), _settings("attendee_name", "attendee_email", "system_company")
-    )
+    data = get_allowed_attendee_data(_position(), _settings("attendee_name", "attendee_email", "system_company"))
     assert data["company"] == "Acme"
 
 
