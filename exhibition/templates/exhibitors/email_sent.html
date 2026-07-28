@@ -18,11 +18,16 @@
             </tr>
             </thead>
             <tbody>
-            {% for email in emails %}
+            {% for entry in entries %}
                 <tr>
-                    <td>{{ email.to_email }}</td>
-                    <td>{{ email.subject }}</td>
-                    <td>{{ email.sent_at }}</td>
+                    <td>
+                        <span title="{{ entry.recipients|join:', ' }}">{{ entry.recipients|slice:":3"|join:", " }}{% if entry.recipients|length > 3 %} …{% endif %}</span>
+                        {% if entry.is_batch %}
+                            <span class="label label-default">{{ entry.recipients|length }}</span>
+                        {% endif %}
+                    </td>
+                    <td>{{ entry.subject }}</td>
+                    <td>{{ entry.sent_at }}</td>
                 </tr>
             {% empty %}
                 <tr>

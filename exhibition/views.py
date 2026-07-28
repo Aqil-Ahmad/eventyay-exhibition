@@ -1544,6 +1544,42 @@ class EmailComposeView(EventPermissionRequiredMixin, FormView):
         return redirect("plugins:exhibition:email.outbox", **event_kwargs(event))
 
 
+def group_email_entries(emails):
+    """Collapse rows that share a compose batch into one entry per message."""
+    entries = []
+    by_batch = {}
+    for email in emails:
+        if email.batch is None:
+            entries.append(
+                {
+                    "pk": email.pk,
+                    "subject": email.subject,
+                    "recipients": [email.to_email],
+                    "created": email.created,
+                    "sent_at": email.sent_at,
+                    "scheduled_at": email.scheduled_at,
+                    "is_batch": False,
+                }
+            )
+            continue
+        key = str(email.batch)
+        entry = by_batch.get(key)
+        if entry is None:
+            entry = {
+                "pk": email.pk,
+                "subject": email.subject,
+                "recipients": [],
+                "created": email.created,
+                "sent_at": email.sent_at,
+                "scheduled_at": email.scheduled_at,
+                "is_batch": True,
+            }
+            by_batch[key] = entry
+            entries.append(entry)
+        entry["recipients"].append(email.to_email)
+    return entries
+
+
 class EmailOutboxListView(EventPermissionRequiredMixin, ListView):
     """Unsent queued emails awaiting organiser review."""
 
@@ -1554,6 +1590,11 @@ class EmailOutboxListView(EventPermissionRequiredMixin, ListView):
 
     def get_queryset(self):
         return ExhibitionEmailQueue.objects.filter(event=self.request.event, sent_at__isnull=True).order_by("-created")
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["entries"] = group_email_entries(context["emails"])
+        return context
 
 
 class EmailSentListView(EventPermissionRequiredMixin, ListView):
@@ -1566,6 +1607,11 @@ class EmailSentListView(EventPermissionRequiredMixin, ListView):
 
     def get_queryset(self):
         return ExhibitionEmailQueue.objects.filter(event=self.request.event, sent_at__isnull=False).order_by("-sent_at")
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["entries"] = group_email_entries(context["emails"])
+        return context
 
 
 class EmailEditView(EventPermissionRequiredMixin, UpdateView):
@@ -1580,8 +1626,38 @@ class EmailEditView(EventPermissionRequiredMixin, UpdateView):
     def get_queryset(self):
         return ExhibitionEmailQueue.objects.filter(event=self.request.event, sent_at__isnull=True)
 
+    def batch_queryset(self):
+        return ExhibitionEmailQueue.objects.filter(
+            event=self.request.event, batch=self.object.batch, sent_at__isnull=True
+        )
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        if self.object.batch:
+            context["recipients"] = list(self.batch_queryset().values_list("to_email", flat=True))
+        else:
+            context["recipients"] = [self.object.to_email]
+        return context
+
     def form_valid(self, form):
-        self.object = form.save()
+        self.object = form.save(commit=False)
+        subject = form.cleaned_data["subject"]
+        body = form.cleaned_data["body"]
+
+        if self.object.batch:
+            rows = list(self.batch_queryset())
+            self.batch_queryset().update(subject=subject, body=body)
+            if "_send" in self.request.POST:
+                for row in rows:
+                    row.subject = subject
+                    row.body = body
+                    row.send(requestor=self.request.user)
+                messages.success(self.request, _("The emails have been saved and sent."))
+            else:
+                messages.success(self.request, _("The emails have been saved."))
+            return redirect(self.get_success_url())
+
+        self.object.save()
         if "_send" in self.request.POST:
             self.object.send(requestor=self.request.user)
             messages.success(self.request, _("The email has been saved and sent."))
@@ -1594,19 +1670,28 @@ class EmailEditView(EventPermissionRequiredMixin, UpdateView):
 
 
 class EmailSendView(EventPermissionRequiredMixin, View):
-    """Send a single queued email."""
+    """Send a queued email (or the whole batch it belongs to)."""
 
     permission = EMAIL_MANAGE_PERMISSION
 
     def post(self, request, *args, **kwargs):
         email = get_object_or_404(ExhibitionEmailQueue, pk=kwargs["pk"], event=request.event, sent_at__isnull=True)
-        email.send(requestor=request.user)
-        messages.success(request, _("The email has been sent."))
+        if email.batch:
+            rows = ExhibitionEmailQueue.objects.filter(
+                event=request.event, batch=email.batch, sent_at__isnull=True
+            )
+        else:
+            rows = [email]
+        count = 0
+        for row in rows:
+            row.send(requestor=request.user)
+            count += 1
+        messages.success(request, ngettext("%(count)d email has been sent.", "%(count)d emails have been sent.", count) % {"count": count})
         return redirect("plugins:exhibition:email.outbox", **event_kwargs(request.event))
 
 
 class EmailDeleteView(EventPermissionRequiredMixin, DeleteView):
-    """Discard a queued (unsent) email."""
+    """Discard a queued email (or the whole batch it belongs to)."""
 
     model = ExhibitionEmailQueue
     permission = EMAIL_MANAGE_PERMISSION
@@ -1615,6 +1700,25 @@ class EmailDeleteView(EventPermissionRequiredMixin, DeleteView):
 
     def get_queryset(self):
         return ExhibitionEmailQueue.objects.filter(event=self.request.event, sent_at__isnull=True)
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        if self.object.batch:
+            context["recipients"] = list(
+                self.get_queryset().filter(batch=self.object.batch).values_list("to_email", flat=True)
+            )
+        else:
+            context["recipients"] = [self.object.to_email]
+        return context
+
+    def form_valid(self, form):
+        self.object = self.get_object()
+        success_url = self.get_success_url()
+        if self.object.batch:
+            self.get_queryset().filter(batch=self.object.batch).delete()
+        else:
+            self.object.delete()
+        return redirect(success_url)
 
     def get_success_url(self):
         messages.success(self.request, _("The email has been discarded."))

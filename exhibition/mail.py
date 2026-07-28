@@ -2,6 +2,7 @@
 
 import logging
 import re
+import uuid
 from collections import defaultdict
 from urllib.parse import urljoin
 
@@ -202,9 +203,10 @@ def compose_recipients(event, states=None, partner_type=None, sponsor_group=None
 
 
 def queue_compose_emails(event, proposals, subject, body, *, scheduled_at=None, send_now=False, requestor=None):
-    """Fan a composed message out into per-recipient queued rows."""
+    """Fan a composed message out into per-recipient queued rows sharing a batch."""
     from .models import ExhibitionEmailQueue
 
+    batch = uuid.uuid4()
     created = []
     seen_emails = set()
     for proposal in proposals:
@@ -221,6 +223,7 @@ def queue_compose_emails(event, proposals, subject, body, *, scheduled_at=None, 
         queued = ExhibitionEmailQueue.objects.create(
             event=event,
             proposal=proposal,
+            batch=batch,
             to_email=to_email,
             subject=_render(subject, context, locale),
             body=_render(body, context, locale),

@@ -1,6 +1,7 @@
 import os
 import secrets
 import string
+import uuid
 
 from django.conf import settings
 from django.db import models
@@ -751,6 +752,7 @@ class ExhibitionEmailQueue(models.Model):
         blank=True,
         related_name="emails",
     )
+    batch = models.UUIDField(null=True, blank=True, db_index=True)
     to_email = models.EmailField(verbose_name=_("Recipient"))
     subject = models.CharField(max_length=255, verbose_name=_("Subject"))
     body = models.TextField(verbose_name=_("Body"))

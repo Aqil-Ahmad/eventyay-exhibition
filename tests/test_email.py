@@ -19,7 +19,13 @@ from exhibition.models import (
     ExhibitorSettings,
     SponsorGroup,
 )
-from exhibition.views import EmailComposeView, EmailTemplatePreviewView
+from exhibition.views import (
+    EmailComposeView,
+    EmailDeleteView,
+    EmailSendView,
+    EmailTemplatePreviewView,
+    group_email_entries,
+)
 
 
 def _locale_index(event, field_name, locale):
@@ -509,3 +515,64 @@ def test_scheduled_task_sends_when_due(mail_event, proposal):
     assert queued.sent_at is not None
     assert queued.scheduled_at is None
     assert mocked_mail.call_count == 1
+
+
+@pytest.mark.django_db
+def test_group_email_entries_collapses_batches(mail_event):
+    p1 = _proposal(mail_event, "One", ExhibitionProposalState.ACCEPTED, email="one@example.com")
+    p2 = _proposal(mail_event, "Two", ExhibitionProposalState.ACCEPTED, email="two@example.com")
+    with scopes_disabled():
+        mail_helpers.queue_compose_emails(mail_event, [p1, p2], "Hi", "Body")
+        lifecycle = mail_helpers.queue_proposal_email(mail_event, p1, mail_helpers.PROPOSAL_ACCEPTED)
+        emails = list(ExhibitionEmailQueue.objects.filter(event=mail_event).order_by("-created"))
+
+    entries = group_email_entries(emails)
+    batch_entries = [e for e in entries if e["is_batch"]]
+    single_entries = [e for e in entries if not e["is_batch"]]
+
+    assert len(batch_entries) == 1
+    assert sorted(batch_entries[0]["recipients"]) == ["one@example.com", "two@example.com"]
+    assert len(single_entries) == 1
+    assert single_entries[0]["pk"] == lifecycle.pk
+
+
+@pytest.mark.django_db
+def test_send_view_sends_whole_batch(mail_event):
+    p1 = _proposal(mail_event, "One", ExhibitionProposalState.ACCEPTED, email="one@example.com")
+    p2 = _proposal(mail_event, "Two", ExhibitionProposalState.ACCEPTED, email="two@example.com")
+    with scopes_disabled():
+        created = mail_helpers.queue_compose_emails(mail_event, [p1, p2], "Hi", "Body")
+
+    request = RequestFactory().post("/send")
+    request.event = mail_event
+    request.user = None
+    request.session = {}
+    request._messages = FallbackStorage(request)
+
+    with patch("eventyay.base.services.mail.mail") as mocked_mail:
+        EmailSendView().post(request, pk=created[0].pk)
+
+    assert mocked_mail.call_count == 2
+    with scopes_disabled():
+        assert ExhibitionEmailQueue.objects.filter(event=mail_event, sent_at__isnull=True).count() == 0
+
+
+@pytest.mark.django_db
+def test_delete_view_discards_whole_batch(mail_event):
+    p1 = _proposal(mail_event, "One", ExhibitionProposalState.ACCEPTED, email="one@example.com")
+    p2 = _proposal(mail_event, "Two", ExhibitionProposalState.ACCEPTED, email="two@example.com")
+    with scopes_disabled():
+        created = mail_helpers.queue_compose_emails(mail_event, [p1, p2], "Hi", "Body")
+
+    request = RequestFactory().post("/delete")
+    request.event = mail_event
+    request.user = None
+    request.session = {}
+    request._messages = FallbackStorage(request)
+    view = EmailDeleteView()
+    view.request = request
+    view.kwargs = {"pk": created[0].pk}
+    view.form_valid(None)
+
+    with scopes_disabled():
+        assert ExhibitionEmailQueue.objects.filter(event=mail_event).count() == 0

@@ -15,4 +15,10 @@ class Migration(migrations.Migration):
             name='scheduled_at',
             field=models.DateTimeField(blank=True, db_index=True, null=True),
         ),
+        migrations.AddField(
+            model_name='exhibitionemailqueue',
+            name='batch',
+            field=models.UUIDField(blank=True, db_index=True, null=True),
+        ),
     ]
+
