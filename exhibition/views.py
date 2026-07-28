@@ -1677,16 +1677,17 @@ class EmailSendView(EventPermissionRequiredMixin, View):
     def post(self, request, *args, **kwargs):
         email = get_object_or_404(ExhibitionEmailQueue, pk=kwargs["pk"], event=request.event, sent_at__isnull=True)
         if email.batch:
-            rows = ExhibitionEmailQueue.objects.filter(
-                event=request.event, batch=email.batch, sent_at__isnull=True
-            )
+            rows = ExhibitionEmailQueue.objects.filter(event=request.event, batch=email.batch, sent_at__isnull=True)
         else:
             rows = [email]
         count = 0
         for row in rows:
             row.send(requestor=request.user)
             count += 1
-        messages.success(request, ngettext("%(count)d email has been sent.", "%(count)d emails have been sent.", count) % {"count": count})
+        messages.success(
+            request,
+            ngettext("%(count)d email has been sent.", "%(count)d emails have been sent.", count) % {"count": count},
+        )
         return redirect("plugins:exhibition:email.outbox", **event_kwargs(request.event))
 
 
