@@ -70,17 +70,36 @@ def test_batch_form_limits_products_to_event(event):
         assert list(form.fields["product"].queryset) == [product]
 
 
+def _settings(*allowed):
+    allowed = set(allowed)
+    return SimpleNamespace(is_field_allowed=lambda key: key in allowed)
+
+
+def _position():
+    no_questions = SimpleNamespace(filter=lambda **kwargs: SimpleNamespace(order_by=lambda *args: []))
+    return SimpleNamespace(
+        attendee_name="N",
+        attendee_email="e@x.com",
+        company="Acme",
+        job_title="",
+        street="",
+        zipcode="",
+        city="",
+        country="",
+        answers=SimpleNamespace(all=lambda: []),
+        order=SimpleNamespace(event=SimpleNamespace(questions=no_questions)),
+    )
+
+
 def test_attendee_data_gates_company_when_not_allowed():
-    op = SimpleNamespace(attendee_name="N", attendee_email="e@x.com", company="Acme", city="C", country="US")
-    settings = SimpleNamespace(all_allowed_fields=["attendee_name", "attendee_email"])
-    data = get_allowed_attendee_data(op, settings)
+    data = get_allowed_attendee_data(_position(), _settings("attendee_name", "attendee_email"))
     assert data == {"name": "N", "email": "e@x.com"}
 
 
 def test_attendee_data_includes_company_when_allowed():
-    op = SimpleNamespace(attendee_name="N", attendee_email="e@x.com", company="Acme", city="C", country="US")
-    settings = SimpleNamespace(all_allowed_fields=["attendee_name", "attendee_email", "attendee_company"])
-    data = get_allowed_attendee_data(op, settings)
+    data = get_allowed_attendee_data(
+        _position(), _settings("attendee_name", "attendee_email", "system_company")
+    )
     assert data["company"] == "Acme"
 
 
