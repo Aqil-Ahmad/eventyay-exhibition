@@ -1,6 +1,6 @@
 import logging
 
-from celery.exceptions import MaxRetriesExceededError, Retry
+from celery.exceptions import MaxRetriesExceededError
 from django.db import transaction
 from django.utils.timezone import now
 from eventyay.base.models import Event
@@ -36,13 +36,10 @@ def send_scheduled_email(self, event_id, queue_id):
                 return
 
             if queued.scheduled_at and queued.scheduled_at > now():
-                countdown = max(1, int((queued.scheduled_at - now()).total_seconds()))
-                self.retry(countdown=countdown, args=[original_event_id, queue_id], throw=False)
+                send_scheduled_email.apply_async(args=[original_event_id, queue_id], eta=queued.scheduled_at)
                 return
 
             queued.send()
-    except Retry:
-        raise
     except Exception as exc:
         logger.exception("[Exhibition] Failed to send scheduled email %s", queue_id)
         try:
