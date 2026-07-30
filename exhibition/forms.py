@@ -63,10 +63,6 @@ class ExhibitorInfoForm(I18nModelForm):
         required=False,
         label=_("Sponsor Group"),
     )
-    not_an_exhibitor = forms.BooleanField(
-        required=False,
-        label=_("This Partner is Not an Exhibitor"),
-    )
     allow_voucher_access = forms.BooleanField(
         required=False,
         label=_("Allowed to access voucher data"),
@@ -133,6 +129,7 @@ class ExhibitorInfoForm(I18nModelForm):
             "logo_url",
             "header_image",
             "header_image_url",
+            "is_exhibitor",
             "is_sponsor",
             "sponsor_group",
             "booth_id",
@@ -152,6 +149,7 @@ class ExhibitorInfoForm(I18nModelForm):
             "logo": _("Logo"),
             "header_image": _("Header Image"),
             "url": _("Organization Website"),
+            "is_exhibitor": _("Mark this partner as an exhibitor"),
             "is_sponsor": _("Mark this partner as an event sponsor"),
             "booth_name": _("Preferred booth name"),
             "lead_scanning_enabled": _("Allow lead scanning"),
@@ -181,8 +179,6 @@ class ExhibitorInfoForm(I18nModelForm):
         "allow_lead_access",
         "lead_scanning_scope_by_device",
     )
-    TYPE_TOGGLE_FIELDS = ("is_sponsor", "not_an_exhibitor")
-
     def __init__(self, *args, **kwargs):
         self.partner_type = kwargs.pop("partner_type", None)
         event = kwargs.get("event")
@@ -190,9 +186,9 @@ class ExhibitorInfoForm(I18nModelForm):
         super().__init__(*args, **kwargs)
         self.event = event or getattr(instance, "event", None)
         if self.partner_type == "sponsor":
-            self._drop_fields(self.EXHIBITOR_ONLY_FIELDS + self.TYPE_TOGGLE_FIELDS)
+            self._drop_fields(self.EXHIBITOR_ONLY_FIELDS + ("is_sponsor",))
         elif self.partner_type == "exhibitor":
-            self._drop_fields(self.SPONSOR_ONLY_FIELDS + self.TYPE_TOGGLE_FIELDS)
+            self._drop_fields(self.SPONSOR_ONLY_FIELDS + ("is_exhibitor",))
         if "sponsor_group" in self.fields:
             self.fields["sponsor_group"].queryset = SponsorGroup.objects.filter(event=self.event).order_by("pk")
             self.fields["sponsor_group"].empty_label = _("No sponsor group")
@@ -201,7 +197,6 @@ class ExhibitorInfoForm(I18nModelForm):
         self.fields["slides"].widget.attrs.setdefault("accept", ".pdf,application/pdf")
         if self.instance and self.instance.pk:
             self.initial["lead_scanning_scope_by_device"] = self.instance.lead_scanning_scope_by_device
-            self.initial["not_an_exhibitor"] = not self.instance.is_exhibitor
         description_field = self.fields.get("description")
         if description_field:
             widget = description_field.widget
@@ -332,16 +327,17 @@ class ExhibitorInfoForm(I18nModelForm):
             if image_url:
                 cleaned_data[url_field] = normalize_url_scheme(image_url)
 
-        editing_existing = bool(self.instance and self.instance.pk)
         if self.partner_type == "sponsor":
             is_sponsor = True
-            is_exhibitor = self.instance.is_exhibitor if editing_existing else False
+            is_exhibitor = bool(cleaned_data.get("is_exhibitor"))
         elif self.partner_type == "exhibitor":
-            is_sponsor = self.instance.is_sponsor if editing_existing else False
+            is_sponsor = bool(cleaned_data.get("is_sponsor"))
             is_exhibitor = True
         else:
             is_sponsor = bool(cleaned_data.get("is_sponsor"))
-            is_exhibitor = not cleaned_data.get("not_an_exhibitor", False)
+            is_exhibitor = bool(cleaned_data.get("is_exhibitor"))
+            if not is_sponsor and not is_exhibitor:
+                self.add_error(None, _("A partner must be marked as an exhibitor, a sponsor, or both."))
         self._resolved_is_sponsor = is_sponsor
         cleaned_data["is_exhibitor"] = is_exhibitor
 
@@ -363,7 +359,7 @@ class ExhibitorInfoForm(I18nModelForm):
             cleaned_data["allow_lead_access"] = False
             cleaned_data["lead_scanning_scope_by_device"] = False
 
-        for name in self.TYPE_TOGGLE_FIELDS + self.SPONSOR_ONLY_FIELDS + self.EXHIBITOR_ONLY_FIELDS:
+        for name in ("is_exhibitor", "is_sponsor") + self.SPONSOR_ONLY_FIELDS + self.EXHIBITOR_ONLY_FIELDS:
             if name not in self.fields:
                 cleaned_data.pop(name, None)
 

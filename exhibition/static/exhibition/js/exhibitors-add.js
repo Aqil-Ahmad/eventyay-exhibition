@@ -9,7 +9,7 @@
         var previewObjectUrls = new WeakMap()
         var sponsorCheckbox = document.getElementById('id_is_sponsor')
         var sponsorGroupWrapper = document.getElementById('sponsor-group-wrapper')
-        var notExhibitorCheckbox = document.getElementById('id_not_an_exhibitor')
+        var exhibitorCheckbox = document.getElementById('id_is_exhibitor')
         var boothNameWrapper = document.getElementById('booth-name-wrapper')
         var boothIdWrapper = document.getElementById('booth-id-wrapper')
         var leadScanningSection = document.getElementById('lead-scanning-section')
@@ -172,10 +172,10 @@
         }
 
         function toggleExhibitorFields() {
-            if (!notExhibitorCheckbox) {
+            if (!exhibitorCheckbox) {
                 return
             }
-            var hideExhibitorFields = notExhibitorCheckbox.checked
+            var hideExhibitorFields = !exhibitorCheckbox.checked
             ;[boothNameWrapper, boothIdWrapper, leadScanningSection].forEach(function (element) {
                 if (element) {
                     element.classList.toggle('hidden', hideExhibitorFields)
@@ -190,8 +190,8 @@
             sponsorCheckbox.addEventListener('change', toggleSponsorGroup)
         }
 
-        if (notExhibitorCheckbox) {
-            notExhibitorCheckbox.addEventListener('change', toggleExhibitorFields)
+        if (exhibitorCheckbox) {
+            exhibitorCheckbox.addEventListener('change', toggleExhibitorFields)
         }
 
         document.querySelectorAll('[data-partner-image-source-pair]').forEach(initImageSourcePair)

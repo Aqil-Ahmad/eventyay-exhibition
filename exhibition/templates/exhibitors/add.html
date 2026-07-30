@@ -187,9 +187,14 @@
         {% endfor %}
     </fieldset>
 
-    {% if form.is_sponsor or form.sponsor_group or form.not_an_exhibitor or form.booth_id %}
+    {% if form.is_exhibitor or form.is_sponsor or form.sponsor_group or form.booth_id %}
     <fieldset>
         <legend>{% trans "Organizer only" %}</legend>
+        {% if form.is_exhibitor %}
+        <div id="is-exhibitor-wrapper">
+            {% bootstrap_field form.is_exhibitor layout="control" %}
+        </div>
+        {% endif %}
         {% if form.is_sponsor %}
         <div id="is-sponsor-wrapper">
             {% bootstrap_field form.is_sponsor layout="control" %}
@@ -198,11 +203,6 @@
         {% if form.sponsor_group %}
         <div id="sponsor-group-wrapper">
             {% bootstrap_field form.sponsor_group layout="control" %}
-        </div>
-        {% endif %}
-        {% if form.not_an_exhibitor %}
-        <div id="not-an-exhibitor-wrapper">
-            {% bootstrap_field form.not_an_exhibitor layout="control" %}
         </div>
         {% endif %}
         {% if form.booth_id %}
