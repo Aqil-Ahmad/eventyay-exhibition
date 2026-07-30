@@ -4,6 +4,7 @@ from django.core.files.uploadedfile import UploadedFile
 from django.db import transaction
 from django.db.models import Max
 from django.forms import inlineformset_factory
+from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 from eventyay.base.forms import I18nModelForm, SettingsForm
 from eventyay.base.models import PriceModeChoices, Product
@@ -25,6 +26,7 @@ from .models import (
     ExhibitionProposal,
     ExhibitionProposalExtraLink,
     ExhibitionProposalSocialLink,
+    ExhibitionProposalState,
     ExhibitionQuestion,
     ExhibitionQuestionOption,
     ExhibitionQuestionVariant,
@@ -1296,6 +1298,55 @@ class ExhibitionEmailQueueForm(forms.ModelForm):
         widgets = {
             "body": forms.Textarea(attrs={"rows": 12}),
         }
+
+
+class ExhibitionComposeForm(forms.Form):
+    """Compose a broadcast email to a filtered group of applicants."""
+
+    PARTNER_TYPE_CHOICES = (
+        ("", _("Exhibitors and sponsors")),
+        ("exhibitor", _("Exhibitors only")),
+        ("sponsor", _("Sponsors only")),
+    )
+
+    states = forms.MultipleChoiceField(
+        label=_("Application state"),
+        choices=[
+            (state.value, state.label) for state in ExhibitionProposalState if state != ExhibitionProposalState.DRAFT
+        ],
+        initial=[ExhibitionProposalState.ACCEPTED],
+        widget=forms.CheckboxSelectMultiple,
+    )
+    partner_type = forms.ChoiceField(
+        label=_("Partner type"),
+        choices=PARTNER_TYPE_CHOICES,
+        required=False,
+    )
+    sponsor_group = forms.ModelChoiceField(
+        label=_("Sponsor group"),
+        queryset=SponsorGroup.objects.none(),
+        required=False,
+        empty_label=_("Any sponsor group"),
+    )
+    subject = forms.CharField(label=_("Subject"), max_length=255)
+    body = forms.CharField(label=_("Body"), widget=forms.Textarea(attrs={"rows": 12}))
+    scheduled_at = forms.DateTimeField(
+        label=_("Send at"),
+        required=False,
+        widget=HtmlDateTimeInput,
+        help_text=_("Leave empty to send immediately or save to the outbox."),
+    )
+
+    def __init__(self, *args, **kwargs):
+        self.event = kwargs.pop("event")
+        super().__init__(*args, **kwargs)
+        self.fields["sponsor_group"].queryset = SponsorGroup.objects.filter(event=self.event).order_by("level", "pk")
+
+    def clean_scheduled_at(self):
+        scheduled_at = self.cleaned_data.get("scheduled_at")
+        if scheduled_at and scheduled_at <= timezone.now():
+            raise forms.ValidationError(_("The scheduled time must be in the future."))
+        return scheduled_at
 
 
 class ExhibitionMailTemplatesForm(SettingsForm):
