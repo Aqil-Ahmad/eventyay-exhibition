@@ -1,5 +1,11 @@
 {% extends "exhibitors/base.html" %}
 {% load i18n %}
+{% load static %}
+
+{% block custom_header %}
+    {{ block.super }}
+    <link rel="stylesheet" href="{% static 'exhibition/css/message-center.css' %}">
+{% endblock %}
 
 {% block title %}{{ request.event.name }} - {% trans "Sent emails" %}{% endblock %}
 
@@ -18,11 +24,16 @@
             </tr>
             </thead>
             <tbody>
-            {% for email in emails %}
+            {% for entry in entries %}
                 <tr>
-                    <td>{{ email.to_email }}</td>
-                    <td>{{ email.subject }}</td>
-                    <td>{{ email.sent_at }}</td>
+                    <td>
+                        <span class="email-recipients" title="{{ entry.recipients|join:', ' }}">{{ entry.recipients|join:", " }}</span>
+                        {% if entry.is_batch %}
+                            <span class="label label-default">{{ entry.recipients|length }}</span>
+                        {% endif %}
+                    </td>
+                    <td>{{ entry.subject }}</td>
+                    <td class="email-created">{{ entry.sent_at }}</td>
                 </tr>
             {% empty %}
                 <tr>

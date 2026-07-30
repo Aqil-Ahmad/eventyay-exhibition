@@ -1,0 +1,19 @@
+.email-recipients {
+    display: inline-block;
+    max-width: 24em;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    vertical-align: bottom;
+}
+
+.email-created,
+.email-scheduled,
+.email-actions {
+    white-space: nowrap;
+}
+
+.email-actions .btn-toolbar {
+    display: flex;
+    gap: 4px;
+}
