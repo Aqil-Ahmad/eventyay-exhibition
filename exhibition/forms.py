@@ -179,6 +179,7 @@ class ExhibitorInfoForm(I18nModelForm):
         "allow_lead_access",
         "lead_scanning_scope_by_device",
     )
+
     def __init__(self, *args, **kwargs):
         self.partner_type = kwargs.pop("partner_type", None)
         event = kwargs.get("event")
