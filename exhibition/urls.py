@@ -12,6 +12,7 @@ from .api import (
 )
 from .views import (
     CallTextPreviewView,
+    EmailBulkActionView,
     EmailComposeView,
     EmailDeleteView,
     EmailEditView,
@@ -222,6 +223,11 @@ urlpatterns = [
         "exhibitors/event/<orgslug:organizer>/<slug:event>/emails/outbox",
         EmailOutboxListView.as_view(),
         name="email.outbox",
+    ),
+    path(
+        "exhibitors/event/<orgslug:organizer>/<slug:event>/emails/bulk",
+        EmailBulkActionView.as_view(),
+        name="email.bulk",
     ),
     path(
         "exhibitors/event/<orgslug:organizer>/<slug:event>/emails/sent",

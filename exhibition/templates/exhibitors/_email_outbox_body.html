@@ -1,0 +1,108 @@
+{% load i18n %}
+
+<form method="get" class="form-inline email-search" data-ajax>
+    <div class="input-group">
+        <input type="text" name="q" class="form-control" placeholder="{% trans 'Search recipient or subject' %}" value="{{ query }}">
+    </div>
+    <input type="hidden" name="ordering" value="{{ current_ordering }}">
+    {% include "eventyay_common/filter_actions.html" %}
+</form>
+
+{% trans "Recipient" as label_recipient %}
+{% trans "Subject" as label_subject %}
+{% trans "Created" as label_created %}
+
+<form method="post" action="{% url 'plugins:exhibition:email.bulk' organizer=request.event.organizer.slug event=request.event.slug %}">
+    {% csrf_token %}
+    {% if entries %}
+        <div class="email-bulk-toolbar">
+            <button type="submit" class="btn btn-default btn-sm" name="op" value="send">
+                <i class="fa fa-mail-forward"></i> {% trans "Send selected" %}
+            </button>
+            <button type="submit" class="btn btn-default btn-sm" name="op" value="discard">
+                <i class="fa fa-trash"></i> {% trans "Discard selected" %}
+            </button>
+            <button type="submit" class="btn btn-primary btn-sm" name="op" value="send_all">
+                {% trans "Send all" %}
+            </button>
+            <button type="submit" class="btn btn-danger btn-sm" name="op" value="discard_all">
+                {% trans "Discard all" %}
+            </button>
+        </div>
+    {% endif %}
+    <div class="table-responsive">
+        <table class="table table-hover">
+            <thead>
+            <tr>
+                <th class="email-select"><input type="checkbox" data-select-all></th>
+                <th>{% include "exhibitors/_email_sort_header.html" with field="to_email" label=label_recipient %}</th>
+                <th>{% include "exhibitors/_email_sort_header.html" with field="subject" label=label_subject %}</th>
+                <th>{% include "exhibitors/_email_sort_header.html" with field="created" label=label_created %}</th>
+                <th>{% trans "Scheduled" %}</th>
+                <th>{% trans "Actions" %}</th>
+            </tr>
+            </thead>
+            <tbody>
+            {% for entry in entries %}
+                <tr>
+                    <td class="email-select">
+                        <input type="checkbox" name="selected" value="{{ entry.pk }}" data-select-row>
+                    </td>
+                    <td>
+                        <span class="email-recipients" title="{{ entry.recipients|join:', ' }}">{{ entry.recipients|join:", " }}</span>
+                        {% if entry.is_batch %}
+                            <span class="label label-default">{{ entry.recipients|length }}</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <a href="{% url 'plugins:exhibition:email.edit' organizer=request.event.organizer.slug event=request.event.slug pk=entry.pk %}">
+                            {{ entry.subject }}
+                        </a>
+                    </td>
+                    <td class="email-created">{{ entry.created }}</td>
+                    <td class="email-scheduled">
+                        {% if entry.scheduled_at %}
+                            <span class="label label-info">{{ entry.scheduled_at }}</span>
+                        {% else %}
+                            <span class="text-muted">—</span>
+                        {% endif %}
+                    </td>
+                    <td class="email-actions">
+                        <div class="btn-toolbar" role="toolbar">
+                            <div class="btn-group" role="group">
+                                <button type="submit" class="btn btn-sm btn-primary" title="{% trans 'Send this email' %}"
+                                        formaction="{% url 'plugins:exhibition:email.send' organizer=request.event.organizer.slug event=request.event.slug pk=entry.pk %}">
+                                    <i class="fa fa-mail-forward"></i>
+                                </button>
+                            </div>
+                            <div class="btn-group" role="group">
+                                <a class="btn btn-sm btn-info" title="{% trans 'Edit this email' %}"
+                                   href="{% url 'plugins:exhibition:email.edit' organizer=request.event.organizer.slug event=request.event.slug pk=entry.pk %}">
+                                    <i class="fa fa-edit"></i>
+                                </a>
+                            </div>
+                            <div class="btn-group" role="group">
+                                <a class="btn btn-sm btn-danger" title="{% trans 'Discard this email' %}"
+                                   href="{% url 'plugins:exhibition:email.delete' organizer=request.event.organizer.slug event=request.event.slug pk=entry.pk %}">
+                                    <i class="fa fa-trash"></i>
+                                </a>
+                            </div>
+                        </div>
+                    </td>
+                </tr>
+            {% empty %}
+                <tr>
+                    <td colspan="6">
+                        {% if query %}
+                            {% trans "No emails match your search." %}
+                        {% else %}
+                            {% trans "The outbox is empty." %}
+                        {% endif %}
+                    </td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% include "pretixcontrol/pagination.html" %}
+</form>

@@ -17,3 +17,33 @@
     display: flex;
     gap: 4px;
 }
+
+.email-select {
+    width: 2em;
+    text-align: center;
+}
+
+.email-search {
+    margin-bottom: 15px;
+}
+
+.email-bulk-toolbar {
+    margin-bottom: 10px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.email-sort {
+    white-space: nowrap;
+    margin-left: 4px;
+}
+
+.email-sort a {
+    text-decoration: none;
+}
+
+.email-list-loading {
+    opacity: 0.5;
+    pointer-events: none;
+}
