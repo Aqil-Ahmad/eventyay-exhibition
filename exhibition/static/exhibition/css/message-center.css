@@ -24,7 +24,16 @@
 }
 
 .email-search {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
     margin-bottom: 15px;
+}
+
+.email-search .filter-actions {
+    display: flex;
+    gap: 6px;
 }
 
 .email-bulk-toolbar {
