@@ -3,7 +3,7 @@ from django.db import migrations, models
 
 class Migration(migrations.Migration):
     dependencies = [
-        ("exhibition", "0012_exhibitorsettings_call_private_and_more"),
+        ("exhibition", "0013_exhibitionemailqueue_scheduled_at"),
     ]
 
     operations = [
