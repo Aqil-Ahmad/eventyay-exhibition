@@ -11,9 +11,17 @@
     <form action="" method="post">
         {% csrf_token %}
         <p>
-            {% blocktrans trimmed with subject=email.subject to=email.to_email %}
-                Are you sure you want to discard the email “{{ subject }}” to {{ to }}? This cannot be undone.
-            {% endblocktrans %}
+            {% if email.batch %}
+                {% blocktrans trimmed with subject=email.subject count counter=recipients|length %}
+                    Are you sure you want to discard the email “{{ subject }}” to {{ counter }} recipient? This cannot be undone.
+                {% plural %}
+                    Are you sure you want to discard the email “{{ subject }}” to {{ counter }} recipients? This cannot be undone.
+                {% endblocktrans %}
+            {% else %}
+                {% blocktrans trimmed with subject=email.subject to=email.to_email %}
+                    Are you sure you want to discard the email “{{ subject }}” to {{ to }}? This cannot be undone.
+                {% endblocktrans %}
+            {% endif %}
         </p>
         <div class="form-group submit-group">
             <a class="btn btn-default" href="{% url 'plugins:exhibition:email.outbox' organizer=request.event.organizer.slug event=request.event.slug %}">
