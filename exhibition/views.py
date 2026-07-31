@@ -100,6 +100,16 @@ def queue_exhibitor_access_mail(event, exhibitor, requestor):
     return mail_helpers.queue_exhibitor_access_email(event, exhibitor, requestor=requestor)
 
 
+def partner_type_of(exhibitor):
+    if exhibitor.is_sponsor and exhibitor.is_exhibitor:
+        return "both"
+    if exhibitor.is_sponsor:
+        return "sponsor"
+    if exhibitor.is_exhibitor:
+        return "exhibitor"
+    return None
+
+
 class PublicEventLoginRequiredMixin(LoginRequiredMixin):
     def get_login_url(self):
         return reverse("cfp:event.login", kwargs=event_kwargs(self.request.event))
@@ -723,6 +733,13 @@ class ExhibitorLinkFormsetMixin:
     social_formset_prefix = "social_links"
     extra_formset_prefix = "extra_links"
 
+    def get_proposal_field_settings(self):
+        settings = ExhibitorSettings.objects.get_or_create(event=self.request.event)[0]
+        return settings.normalized_proposal_field_settings
+
+    def proposal_field_is_active(self, key):
+        return self.get_proposal_field_settings()[key]["active"]
+
     def get_formset_instance(self):
         obj = getattr(self, "object", None)
         return obj if obj is not None else ExhibitorInfo(event=self.request.event)
@@ -743,22 +760,30 @@ class ExhibitorLinkFormsetMixin:
 
     def post_with_formsets(self):
         form = self.get_form()
-        self.social_media_formset = self.get_social_formset()
-        self.extra_links_formset = self.get_extra_link_formset()
+        self.social_media_formset = self.get_social_formset() if self.proposal_field_is_active("social_links") else None
+        self.extra_links_formset = (
+            self.get_extra_link_formset() if self.proposal_field_is_active("extra_links") else None
+        )
 
-        if form.is_valid() and self.social_media_formset.is_valid() and self.extra_links_formset.is_valid():
+        if (
+            form.is_valid()
+            and (self.social_media_formset is None or self.social_media_formset.is_valid())
+            and (self.extra_links_formset is None or self.extra_links_formset.is_valid())
+        ):
             return self.form_valid(form)
         return self.form_invalid(form)
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
+        show_social_links = self.proposal_field_is_active("social_links")
+        show_extra_links = self.proposal_field_is_active("extra_links")
         context["social_media_formset"] = kwargs.get(
             "social_media_formset",
-            getattr(self, "social_media_formset", self.get_social_formset()),
+            getattr(self, "social_media_formset", self.get_social_formset() if show_social_links else None),
         )
         context["extra_links_formset"] = kwargs.get(
             "extra_links_formset",
-            getattr(self, "extra_links_formset", self.get_extra_link_formset()),
+            getattr(self, "extra_links_formset", self.get_extra_link_formset() if show_extra_links else None),
         )
         context["social_link_prefixes"] = social_link_prefixes()
         return context
@@ -767,10 +792,11 @@ class ExhibitorLinkFormsetMixin:
         return self.render_to_response(self.get_context_data(form=form))
 
     def save_link_formsets(self):
-        self.social_media_formset.instance = self.object
-        self.extra_links_formset.instance = self.object
-        self.social_media_formset.save()
-        self.extra_links_formset.save()
+        for formset in (self.social_media_formset, self.extra_links_formset):
+            if formset is None:
+                continue
+            formset.instance = self.object
+            formset.save()
 
 
 class SponsorGroupFrontPageToggleView(EventPermissionRequiredMixin, View):
@@ -1386,6 +1412,10 @@ class ExhibitorCreateView(ExhibitorLinkFormsetMixin, EventPermissionRequiredMixi
         context = super().get_context_data(**kwargs)
         context["action"] = "create"
         context["partner_type"] = self.partner_type
+        context["page_title"] = {
+            "sponsor": _("Add a Sponsor"),
+            "exhibitor": _("Add an Exhibitor"),
+        }.get(self.partner_type, _("Add an Exhibitor or Sponsor"))
         return context
 
     def get_success_url(self):
@@ -1438,6 +1468,11 @@ class ExhibitorEditView(ExhibitorLinkFormsetMixin, EventPermissionRequiredMixin,
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context["action"] = "edit"
+        context["page_title"] = {
+            "sponsor": _("Edit Sponsor"),
+            "exhibitor": _("Edit Exhibitor"),
+            "both": _("Edit Exhibitor & Sponsor"),
+        }.get(partner_type_of(self.object), _("Edit Exhibitor or Sponsor"))
         return context
 
     def get_success_url(self):
@@ -1455,6 +1490,15 @@ class ExhibitorDeleteView(EventPermissionRequiredMixin, DeleteView):
 
     def get_queryset(self):
         return ExhibitorInfo.objects.filter(event=self.request.event)
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["page_title"] = {
+            "sponsor": _("Delete Sponsor"),
+            "exhibitor": _("Delete Exhibitor"),
+            "both": _("Delete Exhibitor & Sponsor"),
+        }.get(partner_type_of(self.object), _("Delete Exhibitor or Sponsor"))
+        return context
 
     def get_success_url(self) -> str:
         return reverse(

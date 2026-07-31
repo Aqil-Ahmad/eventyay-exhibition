@@ -65,10 +65,6 @@ class ExhibitorInfoForm(I18nModelForm):
         required=False,
         label=_("Sponsor Group"),
     )
-    not_an_exhibitor = forms.BooleanField(
-        required=False,
-        label=_("This Partner is Not an Exhibitor"),
-    )
     allow_voucher_access = forms.BooleanField(
         required=False,
         label=_("Allowed to access voucher data"),
@@ -139,6 +135,7 @@ class ExhibitorInfoForm(I18nModelForm):
             "logo_url",
             "header_image",
             "header_image_url",
+            "is_exhibitor",
             "is_sponsor",
             "sponsor_group",
             "booth_id",
@@ -158,8 +155,9 @@ class ExhibitorInfoForm(I18nModelForm):
             "logo": _("Logo"),
             "header_image": _("Header Image"),
             "url": _("Organization Website"),
+            "is_exhibitor": _("Mark this partner as an exhibitor"),
             "is_sponsor": _("Mark this partner as an event sponsor"),
-            "booth_name": _("Booth name"),
+            "booth_name": _("Preferred booth name"),
             "lead_scanning_enabled": _("Can scan attendee badges"),
         }
         help_texts = {
@@ -168,6 +166,21 @@ class ExhibitorInfoForm(I18nModelForm):
                 "Turn this off to block scanning entirely."
             ),
         }
+
+    PROFILE_SETTING_FIELD_MAP = {
+        "name": ("name",),
+        "description": ("description",),
+        "email": ("email",),
+        "url": ("url",),
+        "contact_url": ("contact_url",),
+        "video_url": ("video_url",),
+        "slides": ("slides", "slides_url"),
+        "logo": ("logo", "logo_url"),
+        "header_image": ("header_image", "header_image_url"),
+        "booth_name": ("booth_name",),
+    }
+    PROFILE_FORMSET_KEYS = ("social_links", "extra_links")
+    PROFILE_COMPOSITE_KEYS = ("slides", "logo", "header_image")
 
     SPONSOR_ONLY_FIELDS = ("sponsor_group",)
     EXHIBITOR_ONLY_FIELDS = (
@@ -178,7 +191,6 @@ class ExhibitorInfoForm(I18nModelForm):
         "allow_lead_access",
         "lead_scanning_scope_by_device",
     )
-    TYPE_TOGGLE_FIELDS = ("is_sponsor", "not_an_exhibitor")
 
     def __init__(self, *args, **kwargs):
         self.partner_type = kwargs.pop("partner_type", None)
@@ -187,9 +199,9 @@ class ExhibitorInfoForm(I18nModelForm):
         super().__init__(*args, **kwargs)
         self.event = event or getattr(instance, "event", None)
         if self.partner_type == "sponsor":
-            self._drop_fields(self.EXHIBITOR_ONLY_FIELDS + self.TYPE_TOGGLE_FIELDS)
+            self._drop_fields(self.EXHIBITOR_ONLY_FIELDS + ("is_sponsor",))
         elif self.partner_type == "exhibitor":
-            self._drop_fields(self.SPONSOR_ONLY_FIELDS + self.TYPE_TOGGLE_FIELDS)
+            self._drop_fields(self.SPONSOR_ONLY_FIELDS + ("is_exhibitor",))
         if "sponsor_group" in self.fields:
             self.fields["sponsor_group"].queryset = SponsorGroup.objects.filter(event=self.event).order_by("pk")
             self.fields["sponsor_group"].empty_label = _("No sponsor group")
@@ -198,7 +210,6 @@ class ExhibitorInfoForm(I18nModelForm):
         self.fields["slides"].widget.attrs.setdefault("accept", ".pdf,application/pdf")
         if self.instance and self.instance.pk:
             self.initial["lead_scanning_scope_by_device"] = self.instance.lead_scanning_scope_by_device
-            self.initial["not_an_exhibitor"] = not self.instance.is_exhibitor
         description_field = self.fields.get("description")
         if description_field:
             widget = description_field.widget
@@ -207,6 +218,59 @@ class ExhibitorInfoForm(I18nModelForm):
                     sub_widget.attrs.setdefault("rows", 4)
             else:
                 widget.attrs.setdefault("rows", 4)
+        self.profile_field_settings = {}
+        self.ordered_profile_keys = []
+        if self.event:
+            settings = ExhibitorSettings.objects.get_or_create(event=self.event)[0]
+            self.profile_field_settings = settings.normalized_proposal_field_settings
+            self._apply_profile_field_settings()
+            self.ordered_profile_keys = [
+                key for key in settings.ordered_proposal_field_keys if self.profile_key_is_active(key)
+            ]
+            self._apply_profile_field_order()
+
+    def _apply_profile_field_settings(self):
+        for key, field_names in self.PROFILE_SETTING_FIELD_MAP.items():
+            if self.profile_key_is_active(key):
+                if key in self.PROFILE_COMPOSITE_KEYS or key == "booth_name":
+                    continue
+                for field_name in field_names:
+                    if field_name in self.fields:
+                        self.fields[field_name].required = self.profile_field_settings[key]["required"]
+            else:
+                self._drop_fields(field_names)
+
+    def _apply_profile_field_order(self):
+        ordered_field_names = []
+        for key in self.ordered_profile_keys:
+            for field_name in self.PROFILE_SETTING_FIELD_MAP.get(key, ()):
+                if field_name in self.fields:
+                    ordered_field_names.append(field_name)
+        self.order_fields(ordered_field_names)
+
+    def profile_key_is_active(self, key):
+        setting = self.profile_field_settings.get(key)
+        return bool(setting["active"]) if setting else False
+
+    def profile_key_is_required(self, key):
+        setting = self.profile_field_settings.get(key)
+        return bool(setting["active"] and setting["required"]) if setting else False
+
+    @property
+    def profile_items(self):
+        items = []
+        for key in self.ordered_profile_keys:
+            if key in self.PROFILE_FORMSET_KEYS:
+                items.append({"kind": key, "key": key})
+                continue
+            field_names = [name for name in self.PROFILE_SETTING_FIELD_MAP.get(key, ()) if name in self.fields]
+            if not field_names:
+                continue
+            if key in self.PROFILE_COMPOSITE_KEYS:
+                items.append({"kind": key, "key": key})
+            else:
+                items.append({"kind": "field", "key": key, "field": self[field_names[0]]})
+        return items
 
     def _drop_fields(self, names):
         for name in names:
@@ -220,11 +284,13 @@ class ExhibitorInfoForm(I18nModelForm):
             cleaned_data["video_url"] = normalize_url_scheme(video_url)
 
         slides_url = cleaned_data.get("slides_url") or ""
-        submitted_slides = self.fields["slides"].widget.value_from_datadict(
-            self.data,
-            self.files,
-            self.add_prefix("slides"),
-        )
+        submitted_slides = None
+        if "slides" in self.fields:
+            submitted_slides = self.fields["slides"].widget.value_from_datadict(
+                self.data,
+                self.files,
+                self.add_prefix("slides"),
+            )
         has_new_slides_upload = isinstance(submitted_slides, UploadedFile)
         if slides_url and has_new_slides_upload:
             message = _("Either upload a PDF or enter an external PDF URL, not both.")
@@ -253,12 +319,16 @@ class ExhibitorInfoForm(I18nModelForm):
         for image_field, url_field in self.file_url_fields.items():
             if image_field == "slides":
                 continue
+            if image_field not in self.fields and url_field not in self.fields:
+                continue
             image_url = cleaned_data.get(url_field) or ""
-            submitted_image = self.fields[image_field].widget.value_from_datadict(
-                self.data,
-                self.files,
-                self.add_prefix(image_field),
-            )
+            submitted_image = None
+            if image_field in self.fields:
+                submitted_image = self.fields[image_field].widget.value_from_datadict(
+                    self.data,
+                    self.files,
+                    self.add_prefix(image_field),
+                )
             has_new_upload = isinstance(submitted_image, UploadedFile)
 
             if image_url and has_new_upload:
@@ -270,23 +340,31 @@ class ExhibitorInfoForm(I18nModelForm):
             if image_url:
                 cleaned_data[url_field] = normalize_url_scheme(image_url)
 
-        editing_existing = bool(self.instance and self.instance.pk)
         if self.partner_type == "sponsor":
             is_sponsor = True
-            is_exhibitor = self.instance.is_exhibitor if editing_existing else False
+            is_exhibitor = bool(cleaned_data.get("is_exhibitor"))
         elif self.partner_type == "exhibitor":
-            is_sponsor = self.instance.is_sponsor if editing_existing else False
+            is_sponsor = bool(cleaned_data.get("is_sponsor"))
             is_exhibitor = True
         else:
             is_sponsor = bool(cleaned_data.get("is_sponsor"))
-            is_exhibitor = not cleaned_data.get("not_an_exhibitor", False)
+            is_exhibitor = bool(cleaned_data.get("is_exhibitor"))
+            if not is_sponsor and not is_exhibitor:
+                self.add_error(None, _("A partner must be marked as an exhibitor, a sponsor, or both."))
         self._resolved_is_sponsor = is_sponsor
         cleaned_data["is_exhibitor"] = is_exhibitor
 
         if not is_sponsor:
             cleaned_data["sponsor_group"] = None
 
-        if not is_exhibitor:
+        if is_exhibitor:
+            if (
+                self.profile_key_is_required("booth_name")
+                and "booth_name" in self.fields
+                and not cleaned_data.get("booth_name")
+            ):
+                self.add_error("booth_name", _("This field is required."))
+        else:
             cleaned_data["booth_name"] = ""
             cleaned_data["booth_id"] = None
             cleaned_data["lead_scanning_enabled"] = False
@@ -294,7 +372,7 @@ class ExhibitorInfoForm(I18nModelForm):
             cleaned_data["allow_lead_access"] = False
             cleaned_data["lead_scanning_scope_by_device"] = False
 
-        for name in self.TYPE_TOGGLE_FIELDS + self.SPONSOR_ONLY_FIELDS + self.EXHIBITOR_ONLY_FIELDS:
+        for name in ("is_exhibitor", "is_sponsor") + self.SPONSOR_ONLY_FIELDS + self.EXHIBITOR_ONLY_FIELDS:
             if name not in self.fields:
                 cleaned_data.pop(name, None)
 
