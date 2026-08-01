@@ -654,7 +654,7 @@ class UserProposalEditView(
         kwargs = super().get_form_kwargs()
         kwargs["event"] = self.request.event
         kwargs["read_only"] = not self.can_edit()
-        kwargs["draft_save"] = self.request.POST.get("action") == "draft"
+        kwargs["draft_save"] = self.request.POST.get("action") == "draft" and not self.state_is_locked()
         return kwargs
 
     def post(self, request, *args, **kwargs):
