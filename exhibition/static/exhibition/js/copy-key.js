@@ -1,9 +1,18 @@
 (function () {
     document.addEventListener('DOMContentLoaded', function () {
         document.querySelectorAll('.exhibitor-copy-key').forEach(function (button) {
-            button.addEventListener('click', function () {
-                var originalLabel = button.getAttribute('title')
+            var $button = $(button)
+            var originalTitle = $button.attr('data-original-title') || button.getAttribute('title')
 
+            function showFeedback(label) {
+                $button.attr('data-original-title', label).tooltip('show')
+                window.setTimeout(function () {
+                    $button.tooltip('hide')
+                    $button.attr('data-original-title', originalTitle)
+                }, 2000)
+            }
+
+            button.addEventListener('click', function () {
                 button.disabled = true
                 fetch(button.dataset.url, { credentials: 'same-origin' })
                     .then(function (response) {
@@ -16,16 +25,13 @@
                         return navigator.clipboard.writeText(data.key)
                     })
                     .then(function () {
-                        $(button).attr('data-original-title', button.dataset.copiedLabel).tooltip('show')
+                        showFeedback(button.dataset.copiedLabel)
                     })
                     .catch(function () {
-                        $(button).attr('data-original-title', button.dataset.failedLabel).tooltip('show')
+                        showFeedback(button.dataset.failedLabel)
                     })
                     .finally(function () {
                         button.disabled = false
-                        window.setTimeout(function () {
-                            $(button).attr('data-original-title', originalLabel)
-                        }, 2000)
                     })
             })
         })
