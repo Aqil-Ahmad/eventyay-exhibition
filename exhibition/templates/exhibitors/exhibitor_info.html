@@ -6,6 +6,7 @@
     {{ block.super }}
     <link rel="stylesheet" href="{% static 'exhibition/css/dragsort-table.css' %}">
     <script defer src="{% static 'orga/js/dragsort.js' %}"></script>
+    <script defer src="{% static 'exhibition/js/copy-key.js' %}"></script>
 {% endblock %}
 {% block exhibitors_header %}
     <h1>{% if partner_type == 'sponsor' %}{% trans "Sponsors" %}{% elif partner_type == 'exhibitor' %}{% trans "Exhibitors" %}{% else %}{% trans "Exhibitors & Sponsors" %}{% endif %}</h1>
