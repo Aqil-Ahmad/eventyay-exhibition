@@ -14,7 +14,7 @@
 
             button.addEventListener('click', function () {
                 button.disabled = true
-                fetch(button.dataset.url, { credentials: 'same-origin' })
+                fetch(button.dataset.url, { credentials: 'same-origin', cache: 'no-store' })
                     .then(function (response) {
                         if (!response.ok) {
                             throw new Error('Could not fetch exhibitor key.')
