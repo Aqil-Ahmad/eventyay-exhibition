@@ -1586,8 +1586,8 @@ class ExhibitorCopyKeyView(EventPermissionRequiredMixin, View):
 
     def get(self, request, *args, **kwargs):
         exhibitor = get_object_or_404(ExhibitorInfo, pk=kwargs["pk"], event=request.event)
-        response = HttpResponse(exhibitor.key)
-        response["Content-Disposition"] = 'attachment; filename="password.txt"'
+        response = JsonResponse({"key": exhibitor.key})
+        response["Cache-Control"] = "no-store"
         return response
 
 
