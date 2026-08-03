@@ -125,12 +125,18 @@
                     </a>
                 </div>
                 <div class="col-md-4 col-md-offset-4 col-sm-6">
-                    <button type="submit" class="btn btn-block btn-primary btn-lg" name="action" value="submit">
-                        {% trans "Submit request" %}
-                    </button>
-                    <button type="submit" class="btn btn-block btn-link" name="action" value="draft">
-                        {% trans "or save as draft for now" %}
-                    </button>
+                    {% if state_locked %}
+                        <button type="submit" class="btn btn-block btn-primary btn-lg" name="action" value="save">
+                            {% trans "Save changes" %}
+                        </button>
+                    {% else %}
+                        <button type="submit" class="btn btn-block btn-primary btn-lg" name="action" value="submit">
+                            {% if already_submitted %}{% trans "Save changes" %}{% else %}{% trans "Submit request" %}{% endif %}
+                        </button>
+                        <button type="submit" class="btn btn-block btn-link" name="action" value="draft">
+                            {% trans "or save as draft for now" %}
+                        </button>
+                    {% endif %}
                 </div>
                 <div class="clearfix"></div>
             </div>

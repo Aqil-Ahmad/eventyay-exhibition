@@ -761,6 +761,13 @@ class ExhibitionProposalForm(ExhibitionQuestionFieldsMixin, I18nModelForm):
         if self.read_only:
             for field in self.fields.values():
                 field.disabled = True
+        elif instance and instance.pk and instance.state == ExhibitionProposalState.ACCEPTED:
+            name_field = self.fields.get("name")
+            if name_field is not None:
+                name_field.disabled = True
+                name_field.help_text = _(
+                    "The organization name is locked after acceptance. Contact the organizers to change it."
+                )
 
     def apply_proposal_field_settings(self):
         file_field_keys = set(self.file_url_fields)
@@ -989,9 +996,6 @@ class ExhibitionProposalReviewForm(I18nModelForm):
         self.event = event or getattr(instance, "event", None)
         self.fields["sponsor_group"].queryset = SponsorGroup.objects.filter(event=self.event).order_by("level", "pk")
         self.fields["sponsor_group"].empty_label = _("No sponsor group")
-        if instance and instance.pk and instance.approved_exhibitor_id:
-            for field_name in ("is_exhibitor", "is_sponsor", "sponsor_group", "booth_id", "booth_name"):
-                self.fields[field_name].disabled = True
 
     def clean(self):
         cleaned_data = super().clean()

@@ -43,6 +43,7 @@ from .models import (
     PROPOSAL_DEFAULT_FIELD_KEYS,
     PROPOSAL_DEFAULT_FIELDS,
     PROPOSAL_FORMSET_FIELD_KEYS,
+    PROPOSAL_REVIEW_ACTIONS,
     ExhibitionEmailQueue,
     ExhibitionProposal,
     ExhibitionProposalState,
@@ -59,6 +60,7 @@ from .utils import (
     build_exhibitor_video_embed,
     public_exhibitors_queryset,
     should_hide_applicant_emails,
+    sync_exhibitor_from_proposal,
 )
 
 
@@ -118,6 +120,7 @@ class PublicEventLoginRequiredMixin(LoginRequiredMixin):
 class PublicCallEnabledMixin:
     hide_after_deadline = False
     enforce_private = False
+    require_call_enabled = True
 
     def get_exhibition_settings(self):
         return ExhibitorSettings.objects.get_or_create(event=self.request.event)[0]
@@ -127,7 +130,7 @@ class PublicCallEnabledMixin:
 
     def dispatch(self, request, *args, **kwargs):
         settings = self.get_exhibition_settings()
-        if not settings.call_enabled:
+        if self.require_call_enabled and not settings.call_enabled:
             raise Http404()
         if self.hide_after_deadline and settings.call_hide_after_deadline and not settings.call_is_open:
             raise Http404()
@@ -473,6 +476,7 @@ class UserProposalListView(PublicCallEnabledMixin, PublicEventLoginRequiredMixin
     template_name = "exhibitors/public_proposal_list.html"
     context_object_name = "proposals"
     enforce_private = True
+    require_call_enabled = False
 
     def has_private_call_access(self, settings):
         if super().has_private_call_access(settings):
@@ -490,7 +494,12 @@ class UserProposalListView(PublicCallEnabledMixin, PublicEventLoginRequiredMixin
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context["settings"] = self.get_exhibition_settings()
+        settings = self.get_exhibition_settings()
+        context["settings"] = settings
+        for proposal in context["proposals"]:
+            proposal.submitter_can_edit = proposal.editable and (
+                not proposal.requires_open_call_to_edit or settings.call_is_open
+            )
         return context
 
 
@@ -637,6 +646,7 @@ class UserProposalEditView(
     template_name = "exhibitors/public_proposal_form.html"
     slug_field = "code"
     slug_url_kwarg = "code"
+    require_call_enabled = False
 
     def get_queryset(self):
         return ExhibitionProposal.objects.filter(
@@ -645,14 +655,17 @@ class UserProposalEditView(
         ).prefetch_related("answers", "answers__options")
 
     def can_edit(self):
-        settings = self.get_exhibition_settings()
-        return self.object.editable and settings.call_is_open
+        if not self.object.editable:
+            return False
+        if not self.object.requires_open_call_to_edit:
+            return True
+        return self.get_exhibition_settings().call_is_open
 
     def get_form_kwargs(self):
         kwargs = super().get_form_kwargs()
         kwargs["event"] = self.request.event
         kwargs["read_only"] = not self.can_edit()
-        kwargs["draft_save"] = self.request.POST.get("action") == "draft"
+        kwargs["draft_save"] = self.request.POST.get("action") == "draft" and not self.state_is_locked()
         return kwargs
 
     def post(self, request, *args, **kwargs):
@@ -662,15 +675,21 @@ class UserProposalEditView(
             return redirect(self.get_success_url())
         return self.post_with_formsets()
 
+    def state_is_locked(self):
+        return self.object.state == ExhibitionProposalState.ACCEPTED
+
     @transaction.atomic
     def form_valid(self, form):
         previous_state = self.object.state
-        if self.request.POST.get("action") == "draft":
-            form.instance.state = ExhibitionProposalState.DRAFT
-            form.instance.submitted = None
+        if not self.state_is_locked():
+            if self.request.POST.get("action") == "draft":
+                form.instance.state = ExhibitionProposalState.DRAFT
+                form.instance.submitted = None
+            else:
+                form.instance.state = ExhibitionProposalState.SUBMITTED
+                form.instance.submitted = form.instance.submitted or timezone.now()
         else:
-            form.instance.state = ExhibitionProposalState.SUBMITTED
-            form.instance.submitted = form.instance.submitted or timezone.now()
+            form.instance.profile_edited_at = timezone.now()
         response = super().form_valid(form)
         self.save_link_formsets()
         if (
@@ -678,12 +697,16 @@ class UserProposalEditView(
             and previous_state != ExhibitionProposalState.SUBMITTED
         ):
             send_proposal_confirmation(self.request.event, self.object, self.request.user)
+        if self.object.approved_exhibitor_id:
+            sync_exhibitor_from_proposal(self.object)
         messages.success(self.request, _("Your request has been saved."))
         return response
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context["can_edit"] = self.can_edit()
+        context["state_locked"] = self.state_is_locked()
+        context["already_submitted"] = self.object.state == ExhibitionProposalState.SUBMITTED
         return context
 
     def get_success_url(self):
@@ -717,9 +740,45 @@ class UserProposalWithdrawView(PublicCallEnabledMixin, PublicEventLoginRequiredM
         self.object = self.get_object()
         if self.object.can_be_withdrawn:
             self.object.withdraw()
-            messages.success(request, _("Your proposal has been withdrawn."))
+            messages.success(request, _("Your request has been withdrawn."))
         else:
-            messages.error(request, _("This proposal can no longer be withdrawn."))
+            messages.error(request, _("This request can no longer be withdrawn."))
+        return redirect(self.get_success_url())
+
+    def get_success_url(self):
+        return reverse(
+            "plugins:exhibition:proposal.user_list",
+            kwargs=event_kwargs(self.request.event),
+        )
+
+
+class UserProposalReinstateView(PublicCallEnabledMixin, PublicEventLoginRequiredMixin, DetailView):
+    model = ExhibitionProposal
+    template_name = "exhibitors/public_proposal_reinstate.html"
+    context_object_name = "proposal"
+    slug_field = "code"
+    slug_url_kwarg = "code"
+
+    def get_queryset(self):
+        return ExhibitionProposal.objects.filter(
+            event=self.request.event,
+            user=self.request.user,
+        )
+
+    def get(self, request, *args, **kwargs):
+        self.object = self.get_object()
+        if not self.object.can_be_reinstated:
+            messages.error(request, _("This request can no longer be reinstated."))
+            return redirect(self.get_success_url())
+        return super().get(request, *args, **kwargs)
+
+    def post(self, request, *args, **kwargs):
+        self.object = self.get_object()
+        if self.object.can_be_reinstated:
+            self.object.reopen()
+            messages.success(request, _("Your request has been reinstated and is pending review again."))
+        else:
+            messages.error(request, _("This request can no longer be reinstated."))
         return redirect(self.get_success_url())
 
     def get_success_url(self):
@@ -951,8 +1010,14 @@ class ProposalListView(EventPermissionRequiredMixin, ListView):
         context["hide_applicant_emails"] = should_hide_applicant_emails(
             self.request.user, self.request.event, request=self.request
         )
-        context["can_manage"] = self.can_manage()
-        context["actionable_state"] = ExhibitionProposalState.SUBMITTED
+        can_manage = self.can_manage()
+        context["can_manage"] = can_manage
+        if can_manage:
+            for proposal in context["proposals"]:
+                proposal.review_actions = proposal.available_review_actions()
+                proposal.bulk_selectable = proposal.can_transition_to(
+                    ExhibitionProposalState.ACCEPTED
+                ) or proposal.can_transition_to(ExhibitionProposalState.REJECTED)
         return context
 
 
@@ -1021,14 +1086,21 @@ class ProposalDetailView(EventPermissionRequiredMixin, UpdateView):
     def form_valid(self, form):
         self.object = form.save()
         action = self.request.POST.get("action", "save")
-        if action in ("approve", "reject"):
+        if action in PROPOSAL_REVIEW_ACTIONS:
             if not self.can_manage():
                 raise PermissionDenied()
-            if self.object.state != ExhibitionProposalState.SUBMITTED:
-                messages.error(self.request, _("This proposal can no longer be changed."))
+            if not self.object.can_transition_to(PROPOSAL_REVIEW_ACTIONS[action]):
+                messages.error(self.request, _("This request can no longer be changed to that state."))
                 return redirect(self.get_success_url())
+            return self.perform_review_action(action)
+
+        messages.success(self.request, _("Review details saved."))
+        return redirect(self.get_success_url())
+
+    def perform_review_action(self, action):
+        requestor = self.request.user
         if action == "approve":
-            exhibitor = self.object.approve(requestor=self.request.user)
+            exhibitor = self.object.approve(requestor=requestor)
             messages.success(
                 self.request,
                 _("Request approved and partner profile created. An acceptance email was placed in the outbox."),
@@ -1039,22 +1111,15 @@ class ProposalDetailView(EventPermissionRequiredMixin, UpdateView):
                     **event_kwargs(self.request.event),
                     pk=exhibitor.pk,
                 )
-            return redirect(self.get_success_url())
-        if action == "reject":
-            if self.object.approved_exhibitor_id:
-                messages.error(
-                    self.request,
-                    _("This request has already been approved and cannot be rejected."),
-                )
-            else:
-                self.object.reject(requestor=self.request.user)
-                messages.success(
-                    self.request,
-                    _("Request rejected. A rejection email was placed in the outbox."),
-                )
-            return redirect(self.get_success_url())
-
-        messages.success(self.request, _("Review details saved."))
+        elif action == "reject":
+            self.object.reject(requestor=requestor)
+            messages.success(self.request, _("Request rejected. A rejection email was placed in the outbox."))
+        elif action == "withdraw":
+            self.object.withdraw()
+            messages.success(self.request, _("Request withdrawn."))
+        elif action == "reopen":
+            self.object.reopen()
+            messages.success(self.request, _("Request reopened for review."))
         return redirect(self.get_success_url())
 
     def get_success_url(self):
@@ -1066,7 +1131,7 @@ class ProposalDetailView(EventPermissionRequiredMixin, UpdateView):
 
 class ProposalActionView(EventPermissionRequiredMixin, View):
     permission = ("can_change_event_settings", "can_change_exhibition_proposals")
-    valid_actions = {"approve", "reject", "withdraw"}
+    valid_actions = set(PROPOSAL_REVIEW_ACTIONS)
 
     def post(self, request, *args, **kwargs):
         action = request.POST.get("action")
@@ -1074,6 +1139,7 @@ class ProposalActionView(EventPermissionRequiredMixin, View):
         if action not in self.valid_actions or not codes:
             return self.respond(request, False, _("No valid action was selected."), [], 0)
 
+        target_state = PROPOSAL_REVIEW_ACTIONS[action]
         proposals = ExhibitionProposal.objects.filter(event=request.event, code__in=codes).select_related(
             "approved_exhibitor"
         )
@@ -1081,7 +1147,7 @@ class ProposalActionView(EventPermissionRequiredMixin, View):
         skipped = 0
         with transaction.atomic():
             for proposal in proposals:
-                if proposal.state != ExhibitionProposalState.SUBMITTED:
+                if not proposal.can_transition_to(target_state):
                     skipped += 1
                     continue
                 self.apply_action(proposal, action)
@@ -1090,6 +1156,9 @@ class ProposalActionView(EventPermissionRequiredMixin, View):
                         "code": proposal.code,
                         "state": proposal.state,
                         "state_display": proposal.get_state_display(),
+                        "actions": proposal.available_review_actions(),
+                        "bulk_selectable": proposal.can_transition_to(ExhibitionProposalState.ACCEPTED)
+                        or proposal.can_transition_to(ExhibitionProposalState.REJECTED),
                     }
                 )
         return self.respond(request, True, self.build_message(action, len(results), skipped), results, skipped)
@@ -1100,15 +1169,17 @@ class ProposalActionView(EventPermissionRequiredMixin, View):
         elif action == "reject":
             proposal.reject(requestor=self.request.user)
         elif action == "withdraw":
-            proposal.state = ExhibitionProposalState.WITHDRAWN
-            proposal.save(update_fields=["state", "updated"])
+            proposal.withdraw()
+        elif action == "reopen":
+            proposal.reopen()
 
     def build_message(self, action, count, skipped):
         if count:
             templates = {
-                "approve": ngettext("%(count)d proposal was approved.", "%(count)d proposals were approved.", count),
-                "reject": ngettext("%(count)d proposal was rejected.", "%(count)d proposals were rejected.", count),
-                "withdraw": ngettext("%(count)d proposal was withdrawn.", "%(count)d proposals were withdrawn.", count),
+                "approve": ngettext("%(count)d request was approved.", "%(count)d requests were approved.", count),
+                "reject": ngettext("%(count)d request was rejected.", "%(count)d requests were rejected.", count),
+                "withdraw": ngettext("%(count)d request was withdrawn.", "%(count)d requests were withdrawn.", count),
+                "reopen": ngettext("%(count)d request was reopened.", "%(count)d requests were reopened.", count),
             }
             message = templates[action] % {"count": count}
         else:
