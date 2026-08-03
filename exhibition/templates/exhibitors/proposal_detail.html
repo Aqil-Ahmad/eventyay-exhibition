@@ -45,8 +45,10 @@
                             </tbody>
                         </table>
                     </div>
-                {% else %}
+                {% elif proposal.accepted_profile_snapshot %}
                     <p class="text-muted">{% trans "The applicant edited the profile, but the tracked fields are unchanged." %}</p>
+                {% else %}
+                    <p class="text-muted">{% trans "This profile was edited before change tracking was available, so the original values are not recorded." %}</p>
                 {% endif %}
             </div>
         </div>

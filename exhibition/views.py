@@ -690,6 +690,9 @@ class UserProposalEditView(
                 form.instance.submitted = form.instance.submitted or timezone.now()
         else:
             form.instance.profile_edited_at = timezone.now()
+            if not form.instance.accepted_profile_snapshot:
+                baseline = ExhibitionProposal.objects.get(pk=form.instance.pk)
+                form.instance.accepted_profile_snapshot = baseline.submitter_profile_values()
         response = super().form_valid(form)
         self.save_link_formsets()
         if (
