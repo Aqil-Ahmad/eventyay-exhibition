@@ -1077,9 +1077,7 @@ class ProposalDetailView(EventPermissionRequiredMixin, UpdateView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context["answers"] = self.object.answers.select_related("question").prefetch_related("options")
-        context["profile_changes"] = (
-            self.object.profile_field_changes() if self.object.edited_after_acceptance else []
-        )
+        context["profile_changes"] = self.object.profile_field_changes() if self.object.edited_after_acceptance else []
         context["can_manage"] = self.can_manage()
         context["can_review"] = self.can_review()
         context["can_edit_exhibitor"] = self.can_edit_exhibitor()

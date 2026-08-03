@@ -143,9 +143,7 @@ def create_exhibitor_from_proposal(proposal):
         proposal.submitted = proposal.submitted or timezone.now()
         proposal.profile_edited_at = None
         proposal.capture_profile_snapshot()
-        proposal.save(
-            update_fields=["state", "submitted", "profile_edited_at", "accepted_profile_snapshot", "updated"]
-        )
+        proposal.save(update_fields=["state", "submitted", "profile_edited_at", "accepted_profile_snapshot", "updated"])
         return exhibitor
 
     exhibitor = ExhibitorInfo.objects.create(

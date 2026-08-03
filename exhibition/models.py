@@ -633,9 +633,7 @@ class ExhibitionProposal(models.Model):
             "header_image": self.visible_header_image_url,
             "booth_name": self.localized_booth_name,
             "notes": self.notes or "",
-            "social_links": "\n".join(
-                f"{link.get_network_display()}: {link.url}" for link in self.social_links.all()
-            ),
+            "social_links": "\n".join(f"{link.get_network_display()}: {link.url}" for link in self.social_links.all()),
             "extra_links": "\n".join(f"{link.label}: {link.url}" for link in self.extra_links.all()),
         }
         for answer in self.answers.all():
