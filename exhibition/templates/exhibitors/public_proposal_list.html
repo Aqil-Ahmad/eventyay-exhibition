@@ -39,6 +39,11 @@
                                     <i class="fa fa-undo"></i> {% trans "Withdraw" %}
                                 </a>
                             {% endif %}
+                            {% if proposal.can_be_reinstated %}
+                                <a class="btn btn-sm btn-default" href="{% url 'plugins:exhibition:proposal.user_reinstate' organizer=request.event.organizer.slug event=request.event.slug code=proposal.code %}">
+                                    <i class="fa fa-inbox"></i> {% trans "Reinstate" %}
+                                </a>
+                            {% endif %}
                         </td>
                     </tr>
                 {% endfor %}
