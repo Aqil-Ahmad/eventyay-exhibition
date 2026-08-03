@@ -131,7 +131,7 @@ urlpatterns = [
     ),
     path(
         "exhibitors/event/<orgslug:organizer>/<slug:event>",
-        ExhibitorListView.as_view(),
+        ExhibitorListView.as_view(partner_type="exhibitor"),
         name="info",
     ),
     path(
