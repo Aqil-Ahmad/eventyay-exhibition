@@ -46,6 +46,7 @@ from .views import (
     UserProposalCreateView,
     UserProposalEditView,
     UserProposalListView,
+    UserProposalReinstateView,
     UserProposalWithdrawView,
 )
 
@@ -84,6 +85,11 @@ urlpatterns = [
         "<str:organizer>/<str:event>/exhibition/call/proposals/<str:code>/withdraw/",
         UserProposalWithdrawView.as_view(),
         name="proposal.user_withdraw",
+    ),
+    path(
+        "<str:organizer>/<str:event>/exhibition/call/proposals/<str:code>/reinstate/",
+        UserProposalReinstateView.as_view(),
+        name="proposal.user_reinstate",
     ),
     path(
         "<str:organizer>/<str:event>/exhibition/<int:pk>/",

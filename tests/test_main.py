@@ -304,7 +304,8 @@ def test_proposal_form_reflects_saved_field_order(event):
 def test_sponsor_form_hides_exhibitor_fields(event):
     form = ExhibitorInfoForm(event=event, partner_type="sponsor")
     assert "sponsor_group" in form.fields
-    for name in ("booth_id", "booth_name", "lead_scanning_enabled", "is_sponsor", "not_an_exhibitor"):
+    assert "is_exhibitor" in form.fields
+    for name in ("booth_id", "booth_name", "lead_scanning_enabled", "is_sponsor"):
         assert name not in form.fields
 
 
@@ -312,7 +313,8 @@ def test_sponsor_form_hides_exhibitor_fields(event):
 def test_exhibitor_form_hides_sponsor_fields(event):
     form = ExhibitorInfoForm(event=event, partner_type="exhibitor")
     assert "booth_id" in form.fields
-    for name in ("sponsor_group", "is_sponsor", "not_an_exhibitor"):
+    assert "is_sponsor" in form.fields
+    for name in ("sponsor_group", "is_exhibitor"):
         assert name not in form.fields
 
 

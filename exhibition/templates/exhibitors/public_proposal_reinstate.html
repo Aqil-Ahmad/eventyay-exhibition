@@ -2,17 +2,12 @@
 {% load i18n %}
 
 {% block call_content %}
-    <h2 id="exhibition-call-heading">{% trans "Withdraw request" %}</h2>
+    <h2 id="exhibition-call-heading">{% trans "Reinstate request" %}</h2>
     <p>
         {% blocktrans trimmed with name=proposal.name %}
-            Are you sure you want to withdraw your request “{{ name }}”?
+            Do you want to reinstate your withdrawn request “{{ name }}”? It will be pending review again.
         {% endblocktrans %}
     </p>
-    {% if proposal.state == "accepted" %}
-        <div class="alert alert-warning" role="alert">
-            {% trans "This request has already been approved. Withdrawing it will hide the exhibitor or sponsor profile created from it from public listings." %}
-        </div>
-    {% endif %}
     <form action="" method="post">
         {% csrf_token %}
         <div class="row checkout-button-row">
@@ -22,8 +17,8 @@
                 </a>
             </div>
             <div class="col-md-4 col-md-offset-4 col-sm-6">
-                <button type="submit" class="btn btn-block btn-danger btn-lg">
-                    {% trans "Withdraw request" %}
+                <button type="submit" class="btn btn-block btn-primary btn-lg">
+                    {% trans "Reinstate request" %}
                 </button>
             </div>
             <div class="clearfix"></div>

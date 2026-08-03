@@ -30,6 +30,13 @@
         var bulkButtons = container.querySelectorAll('[data-proposal-bulk]')
         var countLabel = container.querySelector('[data-proposal-selected-count]')
 
+        var actionConfig = {
+            approve: { icon: 'fa-check', cls: 'proposal-action-approve', variant: 'btn-success', label: i18n.labelApprove },
+            reject: { icon: 'fa-times', cls: 'proposal-action-reject', variant: 'btn-danger', label: i18n.labelReject },
+            withdraw: { icon: 'fa-undo', cls: 'proposal-action-withdraw', variant: '', label: i18n.labelWithdraw },
+            reopen: { icon: 'fa-inbox', cls: 'proposal-action-reopen', variant: '', label: i18n.labelReopen },
+        }
+
         function checkboxes() {
             return Array.prototype.slice.call(container.querySelectorAll('[data-proposal-checkbox]'))
         }
@@ -73,6 +80,63 @@
             feedback.appendChild(alert)
         }
 
+        function buildActionButton(action, code) {
+            var config = actionConfig[action]
+            if (!config) {
+                return null
+            }
+            var button = document.createElement('button')
+            button.type = 'button'
+            button.className = 'btn btn-sm proposal-action-btn ' + config.cls + (config.variant ? ' ' + config.variant : '')
+            button.setAttribute('data-proposal-action', action)
+            button.setAttribute('data-proposal-code', code)
+            if (config.label) {
+                button.title = config.label
+            }
+            var icon = document.createElement('i')
+            icon.className = 'fa ' + config.icon
+            button.appendChild(icon)
+            return button
+        }
+
+        function rebuildActions(row, result) {
+            var actionsCell = row.querySelector('[data-proposal-actions-cell]')
+            if (!actionsCell) {
+                return
+            }
+            actionsCell.querySelectorAll('[data-proposal-action]').forEach(function (button) {
+                button.remove()
+            })
+            var viewLink = actionsCell.querySelector('a')
+            ;(result.actions || []).forEach(function (action) {
+                var button = buildActionButton(action, result.code)
+                if (button) {
+                    actionsCell.insertBefore(button, viewLink)
+                }
+            })
+        }
+
+        function rebuildCheckbox(row, result) {
+            var cell = row.querySelector('[data-proposal-select-cell]')
+            if (!cell) {
+                return
+            }
+            var existing = cell.querySelector('[data-proposal-checkbox]')
+            if (result.bulk_selectable && !existing) {
+                var box = document.createElement('input')
+                box.type = 'checkbox'
+                box.className = 'proposal-select'
+                box.value = result.code
+                box.setAttribute('data-proposal-checkbox', '')
+                if (i18n.selectAria) {
+                    box.setAttribute('aria-label', i18n.selectAria)
+                }
+                cell.appendChild(box)
+            } else if (!result.bulk_selectable && existing) {
+                existing.remove()
+            }
+        }
+
         function updateRow(result) {
             var row = container.querySelector('[data-proposal-row="' + result.code + '"]')
             if (!row) {
@@ -82,16 +146,8 @@
             if (stateCell) {
                 stateCell.textContent = result.state_display
             }
-            var actionsCell = row.querySelector('[data-proposal-actions-cell]')
-            if (actionsCell) {
-                actionsCell.querySelectorAll('[data-proposal-action]').forEach(function (button) {
-                    button.remove()
-                })
-            }
-            var checkbox = row.querySelector('[data-proposal-checkbox]')
-            if (checkbox) {
-                checkbox.remove()
-            }
+            rebuildActions(row, result)
+            rebuildCheckbox(row, result)
         }
 
         function setBusy(busy) {
@@ -160,11 +216,20 @@
             if (action === 'withdraw') {
                 return i18n.confirmWithdrawOne
             }
+            if (action === 'reopen') {
+                return i18n.confirmReopenOne
+            }
             return null
         }
 
         function confirmClassFor(action) {
-            return action === 'approve' ? 'btn-success' : 'btn-danger'
+            if (action === 'approve') {
+                return 'btn-success'
+            }
+            if (action === 'reopen') {
+                return 'btn-primary'
+            }
+            return 'btn-danger'
         }
 
         function requestConfirmation(action, message) {
