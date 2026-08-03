@@ -11,7 +11,7 @@ def backfill_lead_flags(apps, schema_editor):
 
 class Migration(migrations.Migration):
     dependencies = [
-        ("exhibition", "0013_exhibitionemailqueue_scheduled_at"),
+        ("exhibition", "0014_exhibitionproposal_profile_edited_at"),
     ]
 
     operations = [
