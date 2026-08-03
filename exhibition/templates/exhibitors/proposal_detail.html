@@ -16,6 +16,42 @@
         </a>
     </p>
 
+    {% if proposal.edited_after_acceptance %}
+        <div class="panel panel-warning" id="post-acceptance-changes">
+            <div class="panel-heading">
+                <h3 class="panel-title">
+                    {% blocktrans with when=proposal.profile_edited_at|date:"SHORT_DATETIME_FORMAT" %}Changes made by the applicant after acceptance ({{ when }}){% endblocktrans %}
+                </h3>
+            </div>
+            <div class="panel-body">
+                {% if profile_changes %}
+                    <div class="table-responsive">
+                        <table class="table table-bordered">
+                            <thead>
+                                <tr>
+                                    <th>{% trans "Field" %}</th>
+                                    <th>{% trans "Before acceptance" %}</th>
+                                    <th>{% trans "After edit" %}</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for change in profile_changes %}
+                                    <tr>
+                                        <th scope="row">{{ change.label }}</th>
+                                        <td><del>{{ change.old|linebreaksbr|default:"—" }}</del></td>
+                                        <td><ins>{{ change.new|linebreaksbr|default:"—" }}</ins></td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    <p class="text-muted">{% trans "The applicant edited the profile, but the tracked fields are unchanged." %}</p>
+                {% endif %}
+            </div>
+        </div>
+    {% endif %}
+
     <div class="panel panel-default">
         <div class="panel-heading">
             <h3 class="panel-title">{{ proposal.name|event_localize }}</h3>

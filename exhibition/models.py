@@ -452,6 +452,21 @@ PROPOSAL_REVIEW_ACTIONS = {
     "reopen": ExhibitionProposalState.SUBMITTED,
 }
 
+SUBMITTER_PROFILE_FIELD_LABELS = {
+    "description": _("Organization Description"),
+    "email": _("Contact email"),
+    "url": _("Organization Website"),
+    "contact_url": _("Contact Page URL"),
+    "video_url": _("Promotional Video URL"),
+    "slides": _("Promotional Slides"),
+    "logo": _("Logo"),
+    "header_image": _("Header Image"),
+    "booth_name": _("Preferred booth name"),
+    "notes": _("Message to the organizers"),
+    "social_links": _("Social Media"),
+    "extra_links": _("Extra Links"),
+}
+
 
 class ExhibitionProposal(models.Model):
     code = models.CharField(
@@ -530,6 +545,7 @@ class ExhibitionProposal(models.Model):
     )
     submitted = models.DateTimeField(null=True, blank=True)
     profile_edited_at = models.DateTimeField(null=True, blank=True)
+    accepted_profile_snapshot = models.JSONField(null=True, blank=True)
     created = models.DateTimeField(auto_now_add=True)
     updated = models.DateTimeField(auto_now=True)
 
@@ -603,6 +619,65 @@ class ExhibitionProposal(models.Model):
     @property
     def edited_after_acceptance(self):
         return self.state == ExhibitionProposalState.ACCEPTED and self.profile_edited_at is not None
+
+    def submitter_profile_values(self):
+        """Serialise the submitter-owned profile fields into a comparable {key: text} mapping."""
+        values = {
+            "description": localize_event_text(self.description) or "",
+            "email": self.email or "",
+            "url": self.url or "",
+            "contact_url": self.contact_url or "",
+            "video_url": self.video_url or "",
+            "slides": self.visible_slides_url,
+            "logo": self.visible_logo_url,
+            "header_image": self.visible_header_image_url,
+            "booth_name": self.localized_booth_name,
+            "notes": self.notes or "",
+            "social_links": "\n".join(
+                f"{link.get_network_display()}: {link.url}" for link in self.social_links.all()
+            ),
+            "extra_links": "\n".join(f"{link.label}: {link.url}" for link in self.extra_links.all()),
+        }
+        for answer in self.answers.all():
+            values[f"answer_{answer.question_id}"] = str(answer.answer_string)
+        return {key: str(value) for key, value in values.items()}
+
+    def capture_profile_snapshot(self):
+        self.accepted_profile_snapshot = self.submitter_profile_values()
+
+    def profile_field_changes(self):
+        """Return the field-level diff between the acceptance snapshot and the current profile."""
+        if not self.accepted_profile_snapshot:
+            return []
+        old_values = self.accepted_profile_snapshot
+        new_values = self.submitter_profile_values()
+        answer_labels = self._answer_field_labels(list(old_values) + list(new_values))
+        ordered_keys = list(SUBMITTER_PROFILE_FIELD_LABELS) + list(answer_labels)
+        changes = []
+        for key in ordered_keys:
+            old = old_values.get(key, "")
+            new = new_values.get(key, "")
+            if old == new:
+                continue
+            changes.append(
+                {
+                    "label": SUBMITTER_PROFILE_FIELD_LABELS.get(key) or answer_labels.get(key) or key,
+                    "old": old,
+                    "new": new,
+                }
+            )
+        return changes
+
+    def _answer_field_labels(self, keys):
+        answer_ids = {
+            key.removeprefix("answer_")
+            for key in keys
+            if key.startswith("answer_") and key.removeprefix("answer_").isdigit()
+        }
+        if not answer_ids:
+            return {}
+        questions = ExhibitionQuestion.objects.filter(id__in=answer_ids)
+        return {f"answer_{question.id}": question.localized_question for question in questions}
 
     @property
     def localized_booth_name(self):

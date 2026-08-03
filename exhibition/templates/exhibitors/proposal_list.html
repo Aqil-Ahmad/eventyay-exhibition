@@ -89,9 +89,9 @@
                         <td data-proposal-state>
                             {{ proposal.get_state_display }}
                             {% if proposal.edited_after_acceptance %}
-                                <span class="label label-warning" title="{% blocktrans with when=proposal.profile_edited_at|date:'SHORT_DATETIME_FORMAT' %}Profile edited by the applicant on {{ when }}, after acceptance.{% endblocktrans %}">
+                                <a class="label label-warning" href="{% url 'plugins:exhibition:proposal.detail' organizer=request.event.organizer.slug event=request.event.slug code=proposal.code %}#post-acceptance-changes" title="{% blocktrans with when=proposal.profile_edited_at|date:'SHORT_DATETIME_FORMAT' %}Profile edited by the applicant on {{ when }}, after acceptance. View changes.{% endblocktrans %}">
                                     {% trans "Edited after acceptance" %}
-                                </span>
+                                </a>
                             {% endif %}
                         </td>
                         <td>{{ proposal.updated|date:"SHORT_DATETIME_FORMAT" }}</td>
