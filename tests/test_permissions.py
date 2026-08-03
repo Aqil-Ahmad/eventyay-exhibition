@@ -89,10 +89,34 @@ def test_manager_gets_full_review_form(event):
 
 
 @pytest.mark.django_db
-def test_manager_gets_notes_form_for_non_submitted_proposal(event):
+def test_manager_gets_notes_form_for_draft_proposal(event):
     with scopes_disabled():
-        user = _member(event, "mg-terminal@e.com", can_change_exhibition_proposals=True)
-        proposal = _proposal(event, "sub-terminal@e.com", state=ExhibitionProposalState.REJECTED)
+        user = _member(event, "mg-draft@e.com", can_change_exhibition_proposals=True)
+        proposal = _proposal(event, "sub-draft@e.com", state=ExhibitionProposalState.DRAFT)
+        view = _detail_view(event, user)
+        view.object = proposal
+        assert view.can_manage() is True
+        assert view.can_review() is False
+        assert view.get_form_class() is ExhibitionProposalReviewNotesForm
+
+
+@pytest.mark.django_db
+def test_manager_gets_notes_form_for_rejected_proposal(event):
+    with scopes_disabled():
+        user = _member(event, "mg-rejected@e.com", can_change_exhibition_proposals=True)
+        proposal = _proposal(event, "sub-rejected@e.com", state=ExhibitionProposalState.REJECTED)
+        view = _detail_view(event, user)
+        view.object = proposal
+        assert view.can_manage() is True
+        assert view.can_review() is False
+        assert view.get_form_class() is ExhibitionProposalReviewNotesForm
+
+
+@pytest.mark.django_db
+def test_manager_gets_notes_form_for_accepted_proposal(event):
+    with scopes_disabled():
+        user = _member(event, "mg-accepted@e.com", can_change_exhibition_proposals=True)
+        proposal = _proposal(event, "sub-accepted@e.com", state=ExhibitionProposalState.ACCEPTED)
         view = _detail_view(event, user)
         view.object = proposal
         assert view.can_manage() is True
