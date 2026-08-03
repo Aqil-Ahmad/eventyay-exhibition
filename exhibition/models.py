@@ -496,6 +496,7 @@ class ExhibitionProposal(models.Model):
         verbose_name=_("Internal review notes"),
     )
     submitted = models.DateTimeField(null=True, blank=True)
+    profile_edited_at = models.DateTimeField(null=True, blank=True)
     created = models.DateTimeField(auto_now_add=True)
     updated = models.DateTimeField(auto_now=True)
 
@@ -510,6 +511,7 @@ class ExhibitionProposal(models.Model):
         return self.state in {
             ExhibitionProposalState.DRAFT,
             ExhibitionProposalState.SUBMITTED,
+            ExhibitionProposalState.ACCEPTED,
         }
 
     def approve(self, requestor=None):
@@ -542,6 +544,14 @@ class ExhibitionProposal(models.Model):
         if self.approved_exhibitor_id and self.approved_exhibitor.active:
             self.approved_exhibitor.active = False
             self.approved_exhibitor.save(update_fields=["active"])
+
+    @property
+    def requires_open_call_to_edit(self):
+        return self.state != ExhibitionProposalState.ACCEPTED
+
+    @property
+    def edited_after_acceptance(self):
+        return self.state == ExhibitionProposalState.ACCEPTED and self.profile_edited_at is not None
 
     @property
     def localized_booth_name(self):

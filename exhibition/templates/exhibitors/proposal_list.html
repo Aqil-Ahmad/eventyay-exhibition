@@ -86,7 +86,14 @@
                                 {% endif %}
                             {% endwith %}
                         </td>
-                        <td data-proposal-state>{{ proposal.get_state_display }}</td>
+                        <td data-proposal-state>
+                            {{ proposal.get_state_display }}
+                            {% if proposal.edited_after_acceptance %}
+                                <span class="label label-warning" title="{% blocktrans with when=proposal.profile_edited_at|date:'SHORT_DATETIME_FORMAT' %}Profile edited by the applicant on {{ when }}, after acceptance.{% endblocktrans %}">
+                                    {% trans "Edited after acceptance" %}
+                                </span>
+                            {% endif %}
+                        </td>
                         <td>{{ proposal.updated|date:"SHORT_DATETIME_FORMAT" }}</td>
                         <td class="text-right proposal-row-actions" data-proposal-actions-cell>
                             {% if can_manage and proposal.state == actionable_state %}

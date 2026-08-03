@@ -59,6 +59,7 @@ from .utils import (
     build_exhibitor_video_embed,
     public_exhibitors_queryset,
     should_hide_applicant_emails,
+    sync_exhibitor_from_proposal,
 )
 
 
@@ -118,6 +119,7 @@ class PublicEventLoginRequiredMixin(LoginRequiredMixin):
 class PublicCallEnabledMixin:
     hide_after_deadline = False
     enforce_private = False
+    require_call_enabled = True
 
     def get_exhibition_settings(self):
         return ExhibitorSettings.objects.get_or_create(event=self.request.event)[0]
@@ -127,7 +129,7 @@ class PublicCallEnabledMixin:
 
     def dispatch(self, request, *args, **kwargs):
         settings = self.get_exhibition_settings()
-        if not settings.call_enabled:
+        if self.require_call_enabled and not settings.call_enabled:
             raise Http404()
         if self.hide_after_deadline and settings.call_hide_after_deadline and not settings.call_is_open:
             raise Http404()
@@ -473,6 +475,7 @@ class UserProposalListView(PublicCallEnabledMixin, PublicEventLoginRequiredMixin
     template_name = "exhibitors/public_proposal_list.html"
     context_object_name = "proposals"
     enforce_private = True
+    require_call_enabled = False
 
     def has_private_call_access(self, settings):
         if super().has_private_call_access(settings):
@@ -490,7 +493,12 @@ class UserProposalListView(PublicCallEnabledMixin, PublicEventLoginRequiredMixin
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context["settings"] = self.get_exhibition_settings()
+        settings = self.get_exhibition_settings()
+        context["settings"] = settings
+        for proposal in context["proposals"]:
+            proposal.submitter_can_edit = proposal.editable and (
+                not proposal.requires_open_call_to_edit or settings.call_is_open
+            )
         return context
 
 
@@ -637,6 +645,7 @@ class UserProposalEditView(
     template_name = "exhibitors/public_proposal_form.html"
     slug_field = "code"
     slug_url_kwarg = "code"
+    require_call_enabled = False
 
     def get_queryset(self):
         return ExhibitionProposal.objects.filter(
@@ -645,14 +654,17 @@ class UserProposalEditView(
         ).prefetch_related("answers", "answers__options")
 
     def can_edit(self):
-        settings = self.get_exhibition_settings()
-        return self.object.editable and settings.call_is_open
+        if not self.object.editable:
+            return False
+        if not self.object.requires_open_call_to_edit:
+            return True
+        return self.get_exhibition_settings().call_is_open
 
     def get_form_kwargs(self):
         kwargs = super().get_form_kwargs()
         kwargs["event"] = self.request.event
         kwargs["read_only"] = not self.can_edit()
-        kwargs["draft_save"] = self.request.POST.get("action") == "draft"
+        kwargs["draft_save"] = self.request.POST.get("action") == "draft" and not self.state_is_locked()
         return kwargs
 
     def post(self, request, *args, **kwargs):
@@ -662,15 +674,21 @@ class UserProposalEditView(
             return redirect(self.get_success_url())
         return self.post_with_formsets()
 
+    def state_is_locked(self):
+        return self.object.state == ExhibitionProposalState.ACCEPTED
+
     @transaction.atomic
     def form_valid(self, form):
         previous_state = self.object.state
-        if self.request.POST.get("action") == "draft":
-            form.instance.state = ExhibitionProposalState.DRAFT
-            form.instance.submitted = None
+        if not self.state_is_locked():
+            if self.request.POST.get("action") == "draft":
+                form.instance.state = ExhibitionProposalState.DRAFT
+                form.instance.submitted = None
+            else:
+                form.instance.state = ExhibitionProposalState.SUBMITTED
+                form.instance.submitted = form.instance.submitted or timezone.now()
         else:
-            form.instance.state = ExhibitionProposalState.SUBMITTED
-            form.instance.submitted = form.instance.submitted or timezone.now()
+            form.instance.profile_edited_at = timezone.now()
         response = super().form_valid(form)
         self.save_link_formsets()
         if (
@@ -678,12 +696,16 @@ class UserProposalEditView(
             and previous_state != ExhibitionProposalState.SUBMITTED
         ):
             send_proposal_confirmation(self.request.event, self.object, self.request.user)
+        if self.object.approved_exhibitor_id:
+            sync_exhibitor_from_proposal(self.object)
         messages.success(self.request, _("Your request has been saved."))
         return response
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context["can_edit"] = self.can_edit()
+        context["state_locked"] = self.state_is_locked()
+        context["already_submitted"] = self.object.state == ExhibitionProposalState.SUBMITTED
         return context
 
     def get_success_url(self):
