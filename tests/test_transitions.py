@@ -61,6 +61,41 @@ def test_available_review_actions_for_accepted_has_no_approve(event):
 
 
 @pytest.mark.django_db
+def test_create_exhibitor_from_proposal_captures_profile_snapshot(event):
+    with scopes_disabled():
+        proposal = _proposal(event, "snap@e.com", description="Original description")
+        create_exhibitor_from_proposal(proposal)
+        proposal.refresh_from_db()
+
+        assert proposal.state == ExhibitionProposalState.ACCEPTED
+        assert proposal.profile_edited_at is None
+        assert proposal.accepted_profile_snapshot == proposal.submitter_profile_values()
+        assert proposal.accepted_profile_snapshot["description"] == "Original description"
+
+
+@pytest.mark.django_db
+def test_reapprove_after_reject_refreshes_profile_snapshot_and_clears_edited_flag(event):
+    with scopes_disabled():
+        proposal = _proposal(event, "refresh@e.com", description="Original description")
+        create_exhibitor_from_proposal(proposal)
+        proposal.refresh_from_db()
+
+        proposal.description = "Edited after acceptance"
+        proposal.profile_edited_at = proposal.updated
+        proposal.save(update_fields=["description", "profile_edited_at"])
+
+        proposal.reject()
+        proposal.refresh_from_db()
+        proposal.approve()
+        proposal.refresh_from_db()
+
+        assert proposal.state == ExhibitionProposalState.ACCEPTED
+        assert proposal.profile_edited_at is None
+        assert proposal.accepted_profile_snapshot["description"] == "Edited after acceptance"
+        assert proposal.profile_field_changes() == []
+
+
+@pytest.mark.django_db
 def test_reject_after_accept_deactivates_partner(event):
     with scopes_disabled():
         proposal = _proposal(event, "flip@e.com")

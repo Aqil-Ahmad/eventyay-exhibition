@@ -649,8 +649,15 @@ class ExhibitionProposal(models.Model):
             return []
         old_values = self.accepted_profile_snapshot
         new_values = self.submitter_profile_values()
-        answer_labels = self._answer_field_labels(list(old_values) + list(new_values))
-        ordered_keys = list(SUBMITTER_PROFILE_FIELD_LABELS) + list(answer_labels)
+        all_keys = set(old_values) | set(new_values)
+        answer_labels = self._answer_field_labels(all_keys)
+        base_keys = list(SUBMITTER_PROFILE_FIELD_LABELS)
+        answer_keys = sorted(
+            (key for key in all_keys if key.startswith("answer_")),
+            key=lambda key: int(key.removeprefix("answer_")),
+        )
+        other_keys = sorted(all_keys - set(base_keys) - set(answer_keys))
+        ordered_keys = base_keys + answer_keys + other_keys
         changes = []
         for key in ordered_keys:
             old = old_values.get(key, "")
