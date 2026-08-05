@@ -27,13 +27,17 @@
     display: flex;
     align-items: center;
     flex-wrap: wrap;
-    gap: 8px;
+    gap: 6px;
     margin-bottom: 15px;
 }
 
 .email-search .filter-actions {
     display: flex;
     gap: 6px;
+}
+
+.email-search .form-control {
+    border-radius: 4px;
 }
 
 .email-bulk-toolbar {
