@@ -30,17 +30,6 @@
 {% endblock %}
 
 {% block exhibitors_content %}
-    {% trans "Your exhibitor access code" as default_subject %}
-    {% blocktrans asvar default_body %}Hello {exhibitor_name},
-
-Your exhibitor account for {event_name} has been created.
-
-Booth: {booth_id}
-Access code: {exhibitor_access_code}
-
-Best regards,
-The {event_name} team{% endblocktrans %}
-
     {% if active_tab == "call" %}
             <form action="" method="post" class="form-horizontal">
                 {% csrf_token %}
@@ -165,20 +154,13 @@ The {event_name} team{% endblocktrans %}
 
                 <fieldset>
                     <legend>{% trans "Exhibitor login" %}</legend>
-
-                    <div class="form-group">
-                        <label class="col-md-3 control-label">{% trans "Access code email subject" %}</label>
-                        <div class="col-md-9">
-                            <input type="text" name="exhibitors_access_mail_subject" class="form-control" value="{{ settings.exhibitors_access_mail_subject|default:default_subject }}">
-                        </div>
-                    </div>
-
-                    <div class="form-group">
-                        <label class="col-md-3 control-label">{% trans "Access code email body" %}</label>
-                        <div class="col-md-9">
-                            <textarea name="exhibitors_access_mail_body" class="form-control" rows="5">{{ settings.exhibitors_access_mail_body|default:default_body }}</textarea>
-                        </div>
-                    </div>
+                    <p>
+                        {% url 'plugins:exhibition:email.templates' organizer=request.event.organizer.slug event=request.event.slug as templates_url %}
+                        {% blocktrans trimmed %}
+                            The access-code email is edited with the other email templates in the
+                            <a href="{{ templates_url }}">Message center</a>.
+                        {% endblocktrans %}
+                    </p>
                 </fieldset>
 
                 <div class="form-group submit-group">

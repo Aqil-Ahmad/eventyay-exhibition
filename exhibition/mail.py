@@ -16,8 +16,9 @@ logger = logging.getLogger(__name__)
 PROPOSAL_NEW = "proposal_new"
 PROPOSAL_ACCEPTED = "proposal_accepted"
 PROPOSAL_REJECTED = "proposal_rejected"
+EXHIBITOR_ACCESS = "exhibitor_access"
 
-LIFECYCLE_ROLES = (PROPOSAL_NEW, PROPOSAL_ACCEPTED, PROPOSAL_REJECTED)
+LIFECYCLE_ROLES = (PROPOSAL_NEW, PROPOSAL_ACCEPTED, PROPOSAL_REJECTED, EXHIBITOR_ACCESS)
 
 PLACEHOLDER_DOCS = (
     ("{event_name}", _lazy("The event's name")),
@@ -25,6 +26,9 @@ PLACEHOLDER_DOCS = (
     ("{request_code}", _lazy("The request's unique code")),
     ("{request_url}", _lazy("Link for the applicant to view or edit the request")),
     ("{name}", _lazy("The applicant's name")),
+    ("{exhibitor_name}", _lazy("The exhibitor / sponsor name (access email only)")),
+    ("{booth_id}", _lazy("The exhibitor's booth ID (access email only)")),
+    ("{exhibitor_access_code}", _lazy("The exhibitor's secret access code (access email only)")),
 )
 
 _SETTINGS_PREFIX = "exhibition_mail_"
@@ -74,6 +78,18 @@ DEFAULT_TEMPLATES = {
                 "thank you for your interest in {event_name}. Unfortunately we are unable "
                 "to accept your request “{request_name}” this time.\n\n"
                 "We hope to see you at a future event.\n\n"
+                "Best regards,\n"
+                "The {event_name} team"
+            )
+        ),
+    ),
+    EXHIBITOR_ACCESS: (
+        LazyI18nString.from_gettext(gettext_noop("Your exhibitor access code for {event_name}")),
+        LazyI18nString.from_gettext(
+            gettext_noop(
+                "Hello,\n\n"
+                "your exhibitor account for {event_name} has been created.\n\n"
+                "You can sign in using the following access code: {exhibitor_access_code}\n\n"
                 "Best regards,\n"
                 "The {event_name} team"
             )
@@ -238,18 +254,13 @@ def queue_compose_emails(event, proposals, subject, body, *, scheduled_at=None, 
 
 def queue_exhibitor_access_email(event, exhibitor, *, requestor=None):
     """Queue the access-credentials email; ``None`` if no recipient or template."""
-    from .models import ExhibitionEmailQueue, ExhibitorSettings
+    from .models import ExhibitionEmailQueue
 
     to_email = (exhibitor.email or "").strip()
     if not to_email:
         return None
 
-    exhibitor_settings = ExhibitorSettings.objects.filter(event=event).first()
-    subject_tpl = (exhibitor_settings.exhibitors_access_mail_subject if exhibitor_settings else "") or ""
-    body_tpl = (exhibitor_settings.exhibitors_access_mail_body if exhibitor_settings else "") or ""
-    if not subject_tpl and not body_tpl:
-        return None
-
+    subject_tpl, body_tpl = get_email_template(event, EXHIBITOR_ACCESS)
     locale = recipient_locale(event)
     context = build_exhibitor_context(event, exhibitor)
 
