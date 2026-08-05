@@ -49,6 +49,9 @@
                 <a href="{{ add_url }}" class="btn btn-default"><i class="fa fa-plus"></i>
                     {% if partner_type == 'sponsor' %}{% trans "Add a Sponsor" %}{% elif partner_type == 'exhibitor' %}{% trans "Add an Exhibitor" %}{% else %}{% trans "Add an Exhibitor or Sponsor" %}{% endif %}
                 </a>
+                <a href="?download=yes" class="btn btn-default" title="{% trans "Download access keys as CSV" %}">
+                    <i class="fa fa-download"></i> {% trans "Download access keys" %}
+                </a>
             {% endif %}
         </p>
 
