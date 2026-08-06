@@ -84,12 +84,13 @@ DEFAULT_TEMPLATES = {
         ),
     ),
     EXHIBITOR_ACCESS: (
-        LazyI18nString.from_gettext(gettext_noop("Your exhibitor access code for {event_name}")),
+        LazyI18nString.from_gettext(gettext_noop("Your exhibitor access code")),
         LazyI18nString.from_gettext(
             gettext_noop(
-                "Hello,\n\n"
-                "your exhibitor account for {event_name} has been created.\n\n"
-                "You can sign in using the following access code: {exhibitor_access_code}\n\n"
+                "Hello {exhibitor_name},\n\n"
+                "Your exhibitor account for {event_name} has been created.\n\n"
+                "Booth: {booth_id}\n"
+                "Access code: {exhibitor_access_code}\n\n"
                 "Best regards,\n"
                 "The {event_name} team"
             )
@@ -253,7 +254,7 @@ def queue_compose_emails(event, proposals, subject, body, *, scheduled_at=None, 
 
 
 def queue_exhibitor_access_email(event, exhibitor, *, requestor=None):
-    """Queue the access-credentials email; ``None`` if no recipient or template."""
+    """Queue the access-credentials email; ``None`` if the exhibitor has no email address."""
     from .models import ExhibitionEmailQueue
 
     to_email = (exhibitor.email or "").strip()
