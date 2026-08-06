@@ -67,14 +67,14 @@ class ExhibitorInfoForm(I18nModelForm):
     )
     allow_voucher_access = forms.BooleanField(
         required=False,
-        label=_("Allowed to access voucher data"),
+        label=_("Allowed To Access Voucher Data"),
     )
     allow_lead_access = forms.BooleanField(
         required=False,
-        label=_("Allowed to access scanned lead data"),
+        label=_("Allowed To Access Scanned Lead Data"),
     )
     lead_scanning_scope_by_device = forms.TypedChoiceField(
-        label=_("Lead scanning behavior"),
+        label=_("Lead Scanning Behavior"),
         choices=(
             (
                 False,
@@ -144,17 +144,17 @@ class ExhibitorInfoForm(I18nModelForm):
         labels = {
             "name": _("Organization Name"),
             "description": _("Organization Description"),
-            "email": _("Contact email"),
+            "email": _("Contact Email"),
             "contact_url": _("Contact Page URL"),
             "video_url": _("Promotional Video URL"),
             "slides": _("Promotional Slides"),
             "logo": _("Logo"),
             "header_image": _("Header Image"),
             "url": _("Organization Website"),
-            "is_exhibitor": _("Mark this partner as an exhibitor"),
-            "is_sponsor": _("Mark this partner as an event sponsor"),
-            "booth_name": _("Preferred booth name"),
-            "lead_scanning_enabled": _("Allow lead scanning"),
+            "is_exhibitor": _("Mark This Partner As An Exhibitor"),
+            "is_sponsor": _("Mark This Partner As An Event Sponsor"),
+            "booth_name": _("Preferred Booth Name"),
+            "lead_scanning_enabled": _("Allow Lead Scanning"),
         }
 
     PROFILE_SETTING_FIELD_MAP = {
@@ -698,15 +698,15 @@ class ExhibitionProposalForm(ExhibitionQuestionFieldsMixin, I18nModelForm):
         labels = {
             "name": _("Organization Name"),
             "description": _("Organization Description"),
-            "email": _("Contact email"),
+            "email": _("Contact Email"),
             "contact_url": _("Contact Page URL"),
             "video_url": _("Promotional Video URL"),
             "slides": _("Promotional Slides"),
             "logo": _("Logo"),
             "header_image": _("Header Image"),
             "url": _("Organization Website"),
-            "booth_name": _("Preferred booth name"),
-            "notes": _("Message to the organizers"),
+            "booth_name": _("Preferred Booth Name"),
+            "notes": _("Message To The Organizers"),
         }
         widgets = {
             "notes": forms.Textarea(attrs={"rows": 4}),
@@ -720,13 +720,18 @@ class ExhibitionProposalForm(ExhibitionQuestionFieldsMixin, I18nModelForm):
         super().__init__(*args, **kwargs)
         self.event = event or getattr(instance, "event", None)
         self.exhibition_settings = None
+        self.proposal_field_settings = {}
         self.active_proposal_fields = {}
         self.required_proposal_fields = {}
         if self.event:
             self.exhibition_settings = ExhibitorSettings.objects.get_or_create(event=self.event)[0]
-            proposal_field_settings = self.exhibition_settings.normalized_proposal_field_settings
-            self.active_proposal_fields = {key: value["active"] for key, value in proposal_field_settings.items()}
-            self.required_proposal_fields = {key: value["required"] for key, value in proposal_field_settings.items()}
+            self.proposal_field_settings = self.exhibition_settings.normalized_proposal_field_settings
+            self.active_proposal_fields = {
+                key: value["active"] for key, value in self.proposal_field_settings.items()
+            }
+            self.required_proposal_fields = {
+                key: value["required"] for key, value in self.proposal_field_settings.items()
+            }
         for field_name in ("logo", "header_image"):
             if field_name in self.fields:
                 self.fields[field_name].widget.attrs.setdefault("accept", "image/*")
@@ -781,27 +786,52 @@ class ExhibitionProposalForm(ExhibitionQuestionFieldsMixin, I18nModelForm):
                 else:
                     field.required = is_required
 
-    def apply_proposal_field_order(self):
+    def _ordered_proposal_entries(self):
         if not self.exhibition_settings:
-            return
-        field_settings = self.exhibition_settings.normalized_proposal_field_settings
-        formset_keys = set(PROPOSAL_FORMSET_FIELD_KEYS)
+            return []
         entries = []
         for key in PROPOSAL_DEFAULT_FIELD_KEYS:
-            if key in formset_keys:
-                continue
-            entries.append((field_settings[key]["position"], 0, self.setting_field_map.get(key, ())))
+            entries.append(
+                (self.proposal_field_settings[key]["position"], 0, key, self.setting_field_map.get(key, ()))
+            )
         for field_name, field in self.fields.items():
             question = getattr(field, "question", None)
             if question is not None:
-                entries.append((question.position, 1, (field_name,)))
+                entries.append((question.position, 1, f"question_{question.pk}", (field_name,)))
         entries.sort(key=lambda entry: (entry[0], entry[1]))
-        ordered_field_names = []
-        for _position, _kind, field_names in entries:
-            for field_name in field_names:
-                if field_name in self.fields:
-                    ordered_field_names.append(field_name)
+        return entries
+
+    def apply_proposal_field_order(self):
+        if not self.exhibition_settings:
+            return
+        ordered_field_names = [
+            field_name
+            for _position, _kind, _key, field_names in self._ordered_proposal_entries()
+            for field_name in field_names
+            if field_name in self.fields
+        ]
         self.order_fields(ordered_field_names)
+
+    @property
+    def proposal_items(self):
+        if not self.exhibition_settings:
+            return [{"kind": "field", "key": field_name, "field": self[field_name]} for field_name in self.fields]
+        formset_keys = set(PROPOSAL_FORMSET_FIELD_KEYS)
+        composite_keys = {"slides", "logo", "header_image"}
+        items = []
+        for _position, _kind, key, field_names in self._ordered_proposal_entries():
+            if key in formset_keys:
+                if self.field_setting_is_active(key):
+                    items.append({"kind": key, "key": key})
+                continue
+            visible_field_names = [name for name in field_names if name in self.fields]
+            if not visible_field_names:
+                continue
+            if key in composite_keys:
+                items.append({"kind": key, "key": key})
+            else:
+                items.append({"kind": "field", "key": key, "field": self[visible_field_names[0]]})
+        return items
 
     def field_setting_is_active(self, key):
         return self.active_proposal_fields.get(key, True)
@@ -969,11 +999,11 @@ class ExhibitionProposalReviewForm(I18nModelForm):
             "review_notes",
         ]
         labels = {
-            "is_exhibitor": _("Approve as exhibitor"),
-            "is_sponsor": _("Approve as sponsor"),
+            "is_exhibitor": _("Approve As Exhibitor"),
+            "is_sponsor": _("Approve As Sponsor"),
             "booth_id": _("Booth ID"),
-            "booth_name": _("Booth name"),
-            "review_notes": _("Internal review notes"),
+            "booth_name": _("Booth Name"),
+            "review_notes": _("Internal Review Notes"),
         }
         widgets = {
             "review_notes": forms.Textarea(attrs={"rows": 4}),
@@ -1003,7 +1033,7 @@ class ExhibitionProposalReviewNotesForm(I18nModelForm):
         localized_fields = "__all__"
         fields = ["review_notes"]
         labels = {
-            "review_notes": _("Internal review notes"),
+            "review_notes": _("Internal Review Notes"),
         }
         widgets = {
             "review_notes": forms.Textarea(attrs={"rows": 4}),
@@ -1029,9 +1059,9 @@ class ExhibitionQuestionForm(I18nModelForm):
             "active",
         ]
         labels = {
-            "variant": _("Field type"),
-            "question": _("Custom question"),
-            "help_text": _("Help text"),
+            "variant": _("Field Type"),
+            "question": _("Custom Question"),
+            "help_text": _("Help Text"),
             "required": _("Required"),
             "active": _("Active"),
         }

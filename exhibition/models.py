@@ -127,7 +127,7 @@ PROPOSAL_DEFAULT_FIELDS = (
         "required_locked": True,
     },
     {"key": "description", "label": _("Organization Description"), "active": True},
-    {"key": "email", "label": _("Contact email"), "active": False},
+    {"key": "email", "label": _("Contact Email"), "active": False},
     {"key": "url", "label": _("Organization Website"), "active": False},
     {"key": "contact_url", "label": _("Contact Page URL"), "active": False},
     {"key": "video_url", "label": _("Promotional Video URL"), "active": False},
@@ -138,10 +138,10 @@ PROPOSAL_DEFAULT_FIELDS = (
         "label": _("Header Image"),
         "active": False,
     },
-    {"key": "booth_name", "label": _("Preferred booth name"), "active": False},
+    {"key": "booth_name", "label": _("Preferred Booth Name"), "active": False},
     {
         "key": "notes",
-        "label": _("Message to the organizers"),
+        "label": _("Message To The Organizers"),
         "active": False,
     },
     {
@@ -521,12 +521,12 @@ class ExhibitionProposal(models.Model):
     notes = models.TextField(
         null=True,
         blank=True,
-        verbose_name=_("Message to the organizers"),
+        verbose_name=_("Message To The Organizers"),
     )
     review_notes = models.TextField(
         null=True,
         blank=True,
-        verbose_name=_("Internal review notes"),
+        verbose_name=_("Internal Review Notes"),
     )
     submitted = models.DateTimeField(null=True, blank=True)
     profile_edited_at = models.DateTimeField(null=True, blank=True)
@@ -686,7 +686,7 @@ class ExhibitionQuestion(models.Model):
         choices=ExhibitionQuestionVariant.choices,
         default=ExhibitionQuestionVariant.STRING,
     )
-    question = I18nCharField(max_length=800, verbose_name=_("Custom question"))
+    question = I18nCharField(max_length=800, verbose_name=_("Custom Question"))
     help_text = I18nCharField(
         null=True,
         blank=True,

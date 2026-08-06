@@ -42,7 +42,6 @@ from .forms import (
 from .models import (
     PROPOSAL_DEFAULT_FIELD_KEYS,
     PROPOSAL_DEFAULT_FIELDS,
-    PROPOSAL_FORMSET_FIELD_KEYS,
     PROPOSAL_REVIEW_ACTIONS,
     ExhibitionEmailQueue,
     ExhibitionProposal,
@@ -561,8 +560,6 @@ class ProposalLinkFormsetMixin:
         )
         context["social_link_prefixes"] = social_link_prefixes()
         context["settings"] = self.get_exhibition_settings()
-        context["show_social_links"] = self.proposal_field_is_active("social_links")
-        context["show_extra_links"] = self.proposal_field_is_active("extra_links")
         context.setdefault("can_edit", True)
         return context
 
@@ -1221,14 +1218,11 @@ class ExhibitionQuestionListView(EventPermissionRequiredMixin, ListView):
         field_settings = settings.normalized_proposal_field_settings
         answer_counts = self.get_default_field_answer_counts()
         field_definitions = {field["key"]: field for field in PROPOSAL_DEFAULT_FIELDS}
-        formset_keys = set(PROPOSAL_FORMSET_FIELD_KEYS)
 
-        orderable_rows = []
+        rows = []
         for key in PROPOSAL_DEFAULT_FIELD_KEYS:
-            if key in formset_keys:
-                continue
             definition = field_definitions[key]
-            orderable_rows.append(
+            rows.append(
                 {
                     "sort_position": field_settings[key]["position"],
                     "sort_kind": 0,
@@ -1241,12 +1235,11 @@ class ExhibitionQuestionListView(EventPermissionRequiredMixin, ListView):
                     "active_locked": definition.get("active_locked", False),
                     "required_locked": definition.get("required_locked", False),
                     "answer_count": answer_counts.get(key, 0),
-                    "orderable": True,
                     "is_custom": False,
                 }
             )
         for question in context["questions"]:
-            orderable_rows.append(
+            rows.append(
                 {
                     "sort_position": question.position,
                     "sort_kind": 1,
@@ -1259,30 +1252,12 @@ class ExhibitionQuestionListView(EventPermissionRequiredMixin, ListView):
                     "active_locked": False,
                     "required_locked": False,
                     "answer_count": question.answer_count,
-                    "orderable": True,
                     "is_custom": True,
                     "pk": question.pk,
                 }
             )
-        orderable_rows.sort(key=lambda row: (row["sort_position"], row["sort_kind"]))
-
-        formset_rows = [
-            {
-                "dragsort_id": key,
-                "input_prefix": key,
-                "label": field_definitions[key]["label"],
-                "active": field_settings[key]["active"],
-                "required": field_settings[key]["required"],
-                "supports_required": field_definitions[key].get("supports_required", True),
-                "active_locked": field_definitions[key].get("active_locked", False),
-                "required_locked": field_definitions[key].get("required_locked", False),
-                "answer_count": answer_counts.get(key, 0),
-                "orderable": False,
-                "is_custom": False,
-            }
-            for key in PROPOSAL_FORMSET_FIELD_KEYS
-        ]
-        context["proposal_fields"] = orderable_rows + formset_rows
+        rows.sort(key=lambda row: (row["sort_position"], row["sort_kind"]))
+        context["proposal_fields"] = rows
         return context
 
     def get_default_field_answer_counts(self):
@@ -1334,7 +1309,7 @@ class ExhibitionQuestionListView(EventPermissionRequiredMixin, ListView):
             proposal_field_settings[key]["active"] = is_active
             proposal_field_settings[key]["required"] = is_active and (
                 field.get("required_locked")
-                or (field.get("supports_required", True) and request.POST.get(f"{key}_required") == "on")
+                or (field.get("supports_required", True) and request.POST.get(f"{key}_required") == "required")
             )
             if field.get("supports_required") is False:
                 proposal_field_settings[key]["required"] = False
@@ -1345,7 +1320,7 @@ class ExhibitionQuestionListView(EventPermissionRequiredMixin, ListView):
         questions = list(ExhibitionQuestion.objects.filter(event=request.event))
         for question in questions:
             question.active = request.POST.get(f"question_{question.pk}_active") == "on"
-            question.required = request.POST.get(f"question_{question.pk}_required") == "on"
+            question.required = request.POST.get(f"question_{question.pk}_required") == "required"
         if questions:
             ExhibitionQuestion.objects.bulk_update(questions, ["active", "required"])
 
@@ -1354,8 +1329,7 @@ class ExhibitionQuestionListView(EventPermissionRequiredMixin, ListView):
 
     def save_field_order(self, settings, order_str):
         proposal_field_settings = settings.normalized_proposal_field_settings
-        orderable_keys = [key for key in PROPOSAL_DEFAULT_FIELD_KEYS if key not in PROPOSAL_FORMSET_FIELD_KEYS]
-        orderable_key_set = set(orderable_keys)
+        orderable_key_set = set(PROPOSAL_DEFAULT_FIELD_KEYS)
         questions = {question.pk: question for question in ExhibitionQuestion.objects.filter(event=settings.event)}
         seen_keys = set()
         seen_question_pks = set()
@@ -1372,7 +1346,7 @@ class ExhibitionQuestionListView(EventPermissionRequiredMixin, ListView):
                 seen_question_pks.add(question.pk)
                 reordered_questions.append(question)
                 position += 1
-        for key in orderable_keys:
+        for key in PROPOSAL_DEFAULT_FIELD_KEYS:
             if key not in seen_keys:
                 proposal_field_settings[key]["position"] = position
                 position += 1
@@ -1383,9 +1357,6 @@ class ExhibitionQuestionListView(EventPermissionRequiredMixin, ListView):
         for question in remaining_questions:
             question.position = position
             reordered_questions.append(question)
-            position += 1
-        for key in PROPOSAL_FORMSET_FIELD_KEYS:
-            proposal_field_settings[key]["position"] = position
             position += 1
         settings.proposal_field_settings = proposal_field_settings
         settings.save(update_fields=["proposal_field_settings"])
