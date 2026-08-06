@@ -152,17 +152,6 @@
                 </fieldset>
 
 
-                <fieldset>
-                    <legend>{% trans "Exhibitor login" %}</legend>
-                    <p>
-                        {% url 'plugins:exhibition:email.templates' organizer=request.event.organizer.slug event=request.event.slug as templates_url %}
-                        {% blocktrans trimmed %}
-                            The access-code email is edited with the other email templates in the
-                            <a href="{{ templates_url }}">Message center</a>.
-                        {% endblocktrans %}
-                    </p>
-                </fieldset>
-
                 <div class="form-group submit-group">
                     <div class="col-md-9 col-md-offset-3">
                         <button type="submit" class="btn btn-primary btn-save">
