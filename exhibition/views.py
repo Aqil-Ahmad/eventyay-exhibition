@@ -117,6 +117,14 @@ def queue_exhibitor_access_mail(event, exhibitor, requestor):
     return mail_helpers.queue_exhibitor_access_email(event, exhibitor, requestor=requestor)
 
 
+def access_newly_granted(exhibitor, previous=None):
+    """True when lead scanning or voucher access is enabled and was not before."""
+    previous = previous or {}
+    return (exhibitor.lead_scanning_enabled and not previous.get("lead_scanning_enabled")) or (
+        exhibitor.allow_voucher_access and not previous.get("allow_voucher_access")
+    )
+
+
 def partner_type_of(exhibitor):
     if exhibitor.is_sponsor and exhibitor.is_exhibitor:
         return "both"
@@ -424,8 +432,12 @@ class ExhibitorListView(EventPermissionRequiredMixin, FilteredListMixin, ListVie
                     exhibitor.key,
                 ]
             )
-        response = HttpResponse(output.getvalue().encode("utf-8"), content_type="text/csv")
-        response["Content-Disposition"] = 'attachment; filename="exhibitor-keys.csv"'
+        filename = {
+            "sponsor": "sponsor-keys.csv",
+            "exhibitor": "exhibitor-keys.csv",
+        }.get(self.partner_type, "partner-keys.csv")
+        response = HttpResponse(output.getvalue().encode("utf-8"), content_type="text/csv; charset=utf-8")
+        response["Content-Disposition"] = f'attachment; filename="{filename}"'
         response["Cache-Control"] = "no-store"
         return response
 
@@ -1661,8 +1673,9 @@ class ExhibitorCreateView(ExhibitorLinkFormsetMixin, EventPermissionRequiredMixi
 
         response = super().form_valid(form)
         self.save_link_formsets()
-        needs_key = form.instance.lead_scanning_enabled or form.instance.allow_voucher_access
-        if needs_key and queue_exhibitor_access_mail(self.request.event, self.object, self.request.user):
+        if access_newly_granted(form.instance) and queue_exhibitor_access_mail(
+            self.request.event, self.object, self.request.user
+        ):
             messages.info(self.request, _("An access-credentials email was placed in the outbox."))
         return response
 
@@ -1717,10 +1730,9 @@ class ExhibitorEditView(ExhibitorLinkFormsetMixin, EventPermissionRequiredMixin,
 
         response = super().form_valid(form)
         self.save_link_formsets()
-        newly_granted = (form.instance.lead_scanning_enabled and not previous.get("lead_scanning_enabled")) or (
-            form.instance.allow_voucher_access and not previous.get("allow_voucher_access")
-        )
-        if newly_granted and queue_exhibitor_access_mail(self.request.event, self.object, self.request.user):
+        if access_newly_granted(form.instance, previous) and queue_exhibitor_access_mail(
+            self.request.event, self.object, self.request.user
+        ):
             messages.info(self.request, _("An access-credentials email was placed in the outbox."))
         return response
 
