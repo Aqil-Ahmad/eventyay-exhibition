@@ -726,9 +726,7 @@ class ExhibitionProposalForm(ExhibitionQuestionFieldsMixin, I18nModelForm):
         if self.event:
             self.exhibition_settings = ExhibitorSettings.objects.get_or_create(event=self.event)[0]
             self.proposal_field_settings = self.exhibition_settings.normalized_proposal_field_settings
-            self.active_proposal_fields = {
-                key: value["active"] for key, value in self.proposal_field_settings.items()
-            }
+            self.active_proposal_fields = {key: value["active"] for key, value in self.proposal_field_settings.items()}
             self.required_proposal_fields = {
                 key: value["required"] for key, value in self.proposal_field_settings.items()
             }
@@ -791,9 +789,7 @@ class ExhibitionProposalForm(ExhibitionQuestionFieldsMixin, I18nModelForm):
             return []
         entries = []
         for key in PROPOSAL_DEFAULT_FIELD_KEYS:
-            entries.append(
-                (self.proposal_field_settings[key]["position"], 0, key, self.setting_field_map.get(key, ()))
-            )
+            entries.append((self.proposal_field_settings[key]["position"], 0, key, self.setting_field_map.get(key, ())))
         for field_name, field in self.fields.items():
             question = getattr(field, "question", None)
             if question is not None:
