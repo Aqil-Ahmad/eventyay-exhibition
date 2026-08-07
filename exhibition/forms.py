@@ -57,24 +57,24 @@ class ExhibitorInfoForm(I18nModelForm):
     )
     header_image_url = forms.URLField(
         required=False,
-        label=_("Header Image URL"),
+        label=_("Header image URL"),
         help_text=_("Use an external image URL instead of uploading a header image file."),
     )
     sponsor_group = forms.ModelChoiceField(
         queryset=SponsorGroup.objects.none(),
         required=False,
-        label=_("Sponsor Group"),
+        label=_("Sponsor group"),
     )
     allow_voucher_access = forms.BooleanField(
         required=False,
-        label=_("Allowed To Access Voucher Data"),
+        label=_("Allowed to access voucher data"),
     )
     allow_lead_access = forms.BooleanField(
         required=False,
-        label=_("Allowed To Access Scanned Lead Data"),
+        label=_("Allowed to access scanned lead data"),
     )
     lead_scanning_scope_by_device = forms.TypedChoiceField(
-        label=_("Lead Scanning Behavior"),
+        label=_("Lead scanning behavior"),
         choices=(
             (
                 False,
@@ -142,19 +142,19 @@ class ExhibitorInfoForm(I18nModelForm):
             "lead_scanning_scope_by_device",
         ]
         labels = {
-            "name": _("Organization Name"),
-            "description": _("Organization Description"),
-            "email": _("Contact Email"),
-            "contact_url": _("Contact Page URL"),
-            "video_url": _("Promotional Video URL"),
-            "slides": _("Promotional Slides"),
+            "name": _("Organization name"),
+            "description": _("Organization description"),
+            "email": _("Contact email"),
+            "contact_url": _("Contact page URL"),
+            "video_url": _("Promotional video URL"),
+            "slides": _("Promotional slides"),
             "logo": _("Logo"),
-            "header_image": _("Header Image"),
-            "url": _("Organization Website"),
-            "is_exhibitor": _("Mark This Partner As An Exhibitor"),
-            "is_sponsor": _("Mark This Partner As An Event Sponsor"),
-            "booth_name": _("Preferred Booth Name"),
-            "lead_scanning_enabled": _("Allow Lead Scanning"),
+            "header_image": _("Header image"),
+            "url": _("Organization website"),
+            "is_exhibitor": _("Mark this partner as an exhibitor"),
+            "is_sponsor": _("Mark this partner as an event sponsor"),
+            "booth_name": _("Preferred booth name"),
+            "lead_scanning_enabled": _("Allow lead scanning"),
         }
 
     PROFILE_SETTING_FIELD_MAP = {
@@ -447,7 +447,7 @@ class SponsorGroupForm(I18nModelForm):
         localized_fields = "__all__"
         fields = ["name", "level"]
         labels = {
-            "name": _("Group Name"),
+            "name": _("Group name"),
         }
 
     def __init__(self, *args, **kwargs):
@@ -652,7 +652,7 @@ class ExhibitionProposalForm(ExhibitionQuestionFieldsMixin, I18nModelForm):
     )
     header_image_url = forms.URLField(
         required=False,
-        label=_("Header Image URL"),
+        label=_("Header image URL"),
         help_text=_("Use an external image URL instead of uploading a header image file."),
     )
 
@@ -696,17 +696,17 @@ class ExhibitionProposalForm(ExhibitionQuestionFieldsMixin, I18nModelForm):
             "notes",
         ]
         labels = {
-            "name": _("Organization Name"),
-            "description": _("Organization Description"),
-            "email": _("Contact Email"),
-            "contact_url": _("Contact Page URL"),
-            "video_url": _("Promotional Video URL"),
-            "slides": _("Promotional Slides"),
+            "name": _("Organization name"),
+            "description": _("Organization description"),
+            "email": _("Contact email"),
+            "contact_url": _("Contact page URL"),
+            "video_url": _("Promotional video URL"),
+            "slides": _("Promotional slides"),
             "logo": _("Logo"),
-            "header_image": _("Header Image"),
-            "url": _("Organization Website"),
-            "booth_name": _("Preferred Booth Name"),
-            "notes": _("Message To The Organizers"),
+            "header_image": _("Header image"),
+            "url": _("Organization website"),
+            "booth_name": _("Preferred booth name"),
+            "notes": _("Message to the organizers"),
         }
         widgets = {
             "notes": forms.Textarea(attrs={"rows": 4}),
@@ -980,7 +980,7 @@ class ExhibitionProposalReviewForm(I18nModelForm):
     sponsor_group = forms.ModelChoiceField(
         queryset=SponsorGroup.objects.none(),
         required=False,
-        label=_("Sponsor Group"),
+        label=_("Sponsor group"),
     )
 
     class Meta:
@@ -995,11 +995,11 @@ class ExhibitionProposalReviewForm(I18nModelForm):
             "review_notes",
         ]
         labels = {
-            "is_exhibitor": _("Approve As Exhibitor"),
-            "is_sponsor": _("Approve As Sponsor"),
+            "is_exhibitor": _("Approve as exhibitor"),
+            "is_sponsor": _("Approve as sponsor"),
             "booth_id": _("Booth ID"),
-            "booth_name": _("Booth Name"),
-            "review_notes": _("Internal Review Notes"),
+            "booth_name": _("Booth name"),
+            "review_notes": _("Internal review notes"),
         }
         widgets = {
             "review_notes": forms.Textarea(attrs={"rows": 4}),
@@ -1029,7 +1029,7 @@ class ExhibitionProposalReviewNotesForm(I18nModelForm):
         localized_fields = "__all__"
         fields = ["review_notes"]
         labels = {
-            "review_notes": _("Internal Review Notes"),
+            "review_notes": _("Internal review notes"),
         }
         widgets = {
             "review_notes": forms.Textarea(attrs={"rows": 4}),
@@ -1055,9 +1055,9 @@ class ExhibitionQuestionForm(I18nModelForm):
             "active",
         ]
         labels = {
-            "variant": _("Field Type"),
-            "question": _("Custom Question"),
-            "help_text": _("Help Text"),
+            "variant": _("Field type"),
+            "question": _("Custom question"),
+            "help_text": _("Help text"),
             "required": _("Required"),
             "active": _("Active"),
         }

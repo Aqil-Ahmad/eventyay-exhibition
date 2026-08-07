@@ -513,6 +513,20 @@ class ProposalLinkFormsetMixin:
     def proposal_field_is_active(self, key):
         return self.get_proposal_field_settings()[key]["active"]
 
+    def proposal_field_is_required(self, key):
+        return self.get_proposal_field_settings()[key]["required"]
+
+    @staticmethod
+    def _formset_has_entries(formset):
+        if formset is None:
+            return True
+        for form in formset.forms:
+            if not form.cleaned_data or form.cleaned_data.get("DELETE"):
+                continue
+            if any(value for name, value in form.cleaned_data.items() if name != "DELETE"):
+                return True
+        return False
+
     def get_formset_instance(self):
         obj = getattr(self, "object", None)
         if obj is not None:
@@ -540,11 +554,32 @@ class ProposalLinkFormsetMixin:
             self.get_extra_link_formset() if self.proposal_field_is_active("extra_links") else None
         )
 
-        if (
+        valid = (
             form.is_valid()
             and (self.social_media_formset is None or self.social_media_formset.is_valid())
             and (self.extra_links_formset is None or self.extra_links_formset.is_valid())
+        )
+
+        if (
+            valid
+            and self.proposal_field_is_required("social_links")
+            and not self._formset_has_entries(self.social_media_formset)
         ):
+            self.social_media_formset._non_form_errors = self.social_media_formset.error_class(
+                [_("Add at least one social media link.")]
+            )
+            valid = False
+        if (
+            valid
+            and self.proposal_field_is_required("extra_links")
+            and not self._formset_has_entries(self.extra_links_formset)
+        ):
+            self.extra_links_formset._non_form_errors = self.extra_links_formset.error_class(
+                [_("Add at least one extra link.")]
+            )
+            valid = False
+
+        if valid:
             return self.form_valid(form)
         return self.form_invalid(form)
 
