@@ -81,7 +81,7 @@
     width: 8px;
     height: 8px;
     margin-left: 6px;
-    vertical-align: super;
+    vertical-align: middle;
     border-radius: 50%;
     background: #f0ad4e;
 }
