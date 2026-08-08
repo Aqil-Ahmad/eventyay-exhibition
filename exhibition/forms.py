@@ -1,3 +1,5 @@
+from zoneinfo import ZoneInfo
+
 from django import forms
 from django.core.files.storage import default_storage
 from django.core.files.uploadedfile import UploadedFile
@@ -491,6 +493,7 @@ class CallSettingsForm(I18nModelForm):
             "call_private": _(
                 "The call page is not linked anywhere public and can only be opened with the secret link shown below."
             ),
+            "call_deadline": _("Time is interpreted in the event timezone."),
         }
         widgets = {
             "call_deadline": HtmlDateTimeInput,
@@ -504,6 +507,8 @@ class CallSettingsForm(I18nModelForm):
                 sub_widget.attrs.setdefault("rows", 8)
         else:
             widget.attrs.setdefault("rows", 8)
+        if self.event and not self.initial.get("call_deadline"):
+            self.initial["call_deadline"] = timezone.localtime(timezone.now(), ZoneInfo(self.event.timezone))
 
 
 class ExhibitionQuestionFieldsMixin:
@@ -1358,13 +1363,16 @@ class ExhibitionComposeForm(forms.Form):
         label=_("Send at"),
         required=False,
         widget=HtmlDateTimeInput,
-        help_text=_("Leave empty to send immediately or save to the outbox."),
+        help_text=_(
+            "Leave empty to send immediately or save to the outbox. Time is interpreted in the event timezone."
+        ),
     )
 
     def __init__(self, *args, **kwargs):
         self.event = kwargs.pop("event")
         super().__init__(*args, **kwargs)
         self.fields["sponsor_group"].queryset = SponsorGroup.objects.filter(event=self.event).order_by("level", "pk")
+        self.fields["scheduled_at"].initial = timezone.localtime(timezone.now(), ZoneInfo(self.event.timezone))
 
     def clean_scheduled_at(self):
         scheduled_at = self.cleaned_data.get("scheduled_at")
