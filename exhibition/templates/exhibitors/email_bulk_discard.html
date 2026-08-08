@@ -1,0 +1,34 @@
+{% extends "exhibitors/base.html" %}
+{% load i18n %}
+
+{% block title %}{{ request.event.name }} - {% trans "Discard emails" %}{% endblock %}
+
+{% block exhibitors_header %}
+    <h1>{% trans "Discard emails" %}</h1>
+{% endblock %}
+
+{% block exhibitors_content %}
+    <form action="{% url 'plugins:exhibition:email.bulk' organizer=request.event.organizer.slug event=request.event.slug %}" method="post">
+        {% csrf_token %}
+        <input type="hidden" name="op" value="{% if scope == 'all' %}discard_all{% else %}discard{% endif %}">
+        <input type="hidden" name="confirmed" value="1">
+        {% for pk in selected %}
+            <input type="hidden" name="selected" value="{{ pk }}">
+        {% endfor %}
+        <p>
+            {% blocktrans trimmed count counter=count %}
+                Are you sure you want to discard {{ counter }} queued email? This cannot be undone.
+            {% plural %}
+                Are you sure you want to discard {{ counter }} queued emails? This cannot be undone.
+            {% endblocktrans %}
+        </p>
+        <div class="form-group submit-group">
+            <a class="btn btn-default" href="{% url 'plugins:exhibition:email.outbox' organizer=request.event.organizer.slug event=request.event.slug %}">
+                {% trans "Cancel" %}
+            </a>
+            <button type="submit" class="btn btn-danger">
+                <i class="fa fa-trash"></i> {% trans "Discard" %}
+            </button>
+        </div>
+    </form>
+{% endblock %}

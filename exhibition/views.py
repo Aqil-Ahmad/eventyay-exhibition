@@ -7,7 +7,7 @@ from django.core.exceptions import PermissionDenied
 from django.db import transaction
 from django.db.models import Count, Q
 from django.http import Http404, HttpResponse, JsonResponse
-from django.shortcuts import get_object_or_404, redirect
+from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _, ngettext
@@ -1695,38 +1695,70 @@ def group_email_entries(emails):
     return entries
 
 
-class EmailOutboxListView(EventPermissionRequiredMixin, ListView):
+class EmailListMixin:
+    """Shared search and ordering for the outbox and sent lists."""
+
+    context_object_name = "emails"
+    date_field = "created"
+
+    def base_queryset(self):
+        raise NotImplementedError
+
+    def allowed_orderings(self):
+        return {"to_email", "-to_email", "subject", "-subject", self.date_field, "-" + self.date_field}
+
+    def get_queryset(self):
+        queryset = self.base_queryset()
+        query = self.request.GET.get("q", "").strip()
+        if query:
+            queryset = queryset.filter(Q(to_email__icontains=query) | Q(subject__icontains=query))
+        default_ordering = "-" + self.date_field
+        ordering = self.request.GET.get("ordering", default_ordering)
+        if ordering not in self.allowed_orderings():
+            ordering = default_ordering
+        self.current_ordering = ordering
+        return queryset.order_by(ordering)
+
+    partial_template_name = None
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["entries"] = group_email_entries(context["emails"])
+        context["query"] = self.request.GET.get("q", "")
+        context["current_ordering"] = getattr(self, "current_ordering", "-" + self.date_field)
+        context["date_field"] = self.date_field
+        return context
+
+    def get_template_names(self):
+        if self.request.headers.get("x-requested-with") == "XMLHttpRequest":
+            return [self.partial_template_name]
+        return [self.template_name]
+
+
+class EmailOutboxListView(EmailListMixin, EventPermissionRequiredMixin, ListView):
     """Unsent queued emails awaiting organiser review."""
 
     model = ExhibitionEmailQueue
     permission = EMAIL_MANAGE_PERMISSION
     template_name = "exhibitors/email_outbox.html"
-    context_object_name = "emails"
+    partial_template_name = "exhibitors/_email_outbox_body.html"
+    date_field = "created"
 
-    def get_queryset(self):
-        return ExhibitionEmailQueue.objects.filter(event=self.request.event, sent_at__isnull=True).order_by("-created")
-
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        context["entries"] = group_email_entries(context["emails"])
-        return context
+    def base_queryset(self):
+        return ExhibitionEmailQueue.objects.filter(event=self.request.event, sent_at__isnull=True)
 
 
-class EmailSentListView(EventPermissionRequiredMixin, ListView):
+class EmailSentListView(EmailListMixin, EventPermissionRequiredMixin, ListView):
     """Read-only list of already-sent emails."""
 
     model = ExhibitionEmailQueue
     permission = EMAIL_MANAGE_PERMISSION
     template_name = "exhibitors/email_sent.html"
-    context_object_name = "emails"
+    partial_template_name = "exhibitors/_email_sent_body.html"
+    date_field = "sent_at"
 
-    def get_queryset(self):
-        return ExhibitionEmailQueue.objects.filter(event=self.request.event, sent_at__isnull=False).order_by("-sent_at")
-
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        context["entries"] = group_email_entries(context["emails"])
-        return context
+    def base_queryset(self):
+        return ExhibitionEmailQueue.objects.filter(event=self.request.event, sent_at__isnull=False)
 
 
 class EmailEditView(EventPermissionRequiredMixin, UpdateView):
@@ -1839,6 +1871,75 @@ class EmailDeleteView(EventPermissionRequiredMixin, DeleteView):
     def get_success_url(self):
         messages.success(self.request, _("The email has been discarded."))
         return reverse("plugins:exhibition:email.outbox", kwargs=event_kwargs(self.request.event))
+
+
+class EmailBulkActionView(EventPermissionRequiredMixin, View):
+    """Send or discard several queued emails at once (selected rows or all)."""
+
+    permission = EMAIL_MANAGE_PERMISSION
+
+    def target_rows(self, request, scope):
+        base = ExhibitionEmailQueue.objects.filter(event=request.event, sent_at__isnull=True)
+        if scope == "all":
+            return base
+        selected = request.POST.getlist("selected")
+        if not selected:
+            return base.none()
+        batches = [batch for batch in base.filter(pk__in=selected).values_list("batch", flat=True) if batch]
+        return base.filter(Q(pk__in=selected) | Q(batch__in=batches))
+
+    def post(self, request, *args, **kwargs):
+        op = request.POST.get("op", "")
+        action = "send" if op.startswith("send") else "discard" if op.startswith("discard") else None
+        scope = "all" if op.endswith("_all") else "selected"
+        outbox_url = redirect("plugins:exhibition:email.outbox", **event_kwargs(request.event))
+
+        if action is None:
+            return outbox_url
+
+        rows = self.target_rows(request, scope)
+
+        if action == "send":
+            count = 0
+            for row in rows:
+                row.send(requestor=request.user)
+                count += 1
+            if count:
+                messages.success(
+                    request,
+                    ngettext("%(count)d email has been sent.", "%(count)d emails have been sent.", count)
+                    % {"count": count},
+                )
+            else:
+                messages.info(request, _("No emails were selected."))
+            return outbox_url
+
+        if request.POST.get("confirmed"):
+            count = rows.count()
+            rows.delete()
+            if count:
+                messages.success(
+                    request,
+                    ngettext("%(count)d email has been discarded.", "%(count)d emails have been discarded.", count)
+                    % {"count": count},
+                )
+            else:
+                messages.info(request, _("No emails were selected."))
+            return outbox_url
+
+        count = rows.count()
+        if not count:
+            messages.info(request, _("No emails were selected."))
+            return outbox_url
+        return render(
+            request,
+            "exhibitors/email_bulk_discard.html",
+            {
+                "count": count,
+                "scope": scope,
+                "selected": request.POST.getlist("selected"),
+            },
+        )
 
 
 class EmailTemplatesView(EventPermissionRequiredMixin, TemplateView):
