@@ -144,7 +144,7 @@ class ExhibitorInfoForm(I18nModelForm):
         labels = {
             "name": _("Organization name"),
             "description": _("Organization description"),
-            "email": _("Contact email"),
+            "email": _("E-mail"),
             "contact_url": _("Contact page URL"),
             "video_url": _("Promotional video URL"),
             "slides": _("Promotional slides"),
@@ -698,7 +698,7 @@ class ExhibitionProposalForm(ExhibitionQuestionFieldsMixin, I18nModelForm):
         labels = {
             "name": _("Organization name"),
             "description": _("Organization description"),
-            "email": _("Contact email"),
+            "email": _("E-mail"),
             "contact_url": _("Contact page URL"),
             "video_url": _("Promotional video URL"),
             "slides": _("Promotional slides"),
