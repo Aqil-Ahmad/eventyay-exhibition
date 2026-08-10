@@ -5,6 +5,7 @@
 {% block custom_header %}
     {{ block.super }}
     <link rel="stylesheet" href="{% static 'exhibition/css/dragsort-table.css' %}">
+    <link rel="stylesheet" href="{% static 'exhibition/css/list-controls.css' %}">
     <script defer src="{% static 'orga/js/dragsort.js' %}"></script>
     <script defer src="{% static 'exhibition/js/copy-key.js' %}"></script>
 {% endblock %}
@@ -19,10 +20,13 @@
     {% else %}
         {% url 'plugins:exhibition:add' organizer=request.event.organizer.slug event=request.event.slug as add_url %}
     {% endif %}
+    {% include "exhibitors/_filter_form.html" %}
     {% if exhibitors|length == 0 %}
         <div class="empty-collection">
             <p>
-                {% if partner_type == 'sponsor' %}
+                {% if filter_form.filtered %}
+                    {% blocktrans trimmed %}No partners match your filters.{% endblocktrans %}
+                {% elif partner_type == 'sponsor' %}
                     {% blocktrans trimmed %}You don't have any sponsors yet.{% endblocktrans %}
                 {% elif partner_type == 'exhibitor' %}
                     {% blocktrans trimmed %}You don't have any exhibitors yet.{% endblocktrans %}
@@ -31,7 +35,7 @@
                 {% endif %}
             </p>
 
-            {% if "can_change_event_settings" in request.eventpermset %}
+            {% if "can_change_event_settings" in request.eventpermset and not filter_form.filtered %}
                 <a href="{{ add_url }}" class="btn btn-primary btn-lg"><i class="fa fa-plus"></i>
                     {% if partner_type == 'sponsor' %}{% trans "Add a Sponsor" %}{% elif partner_type == 'exhibitor' %}{% trans "Add an Exhibitor" %}{% else %}{% trans "Add an Exhibitor or Sponsor" %}{% endif %}
                 </a>
@@ -46,21 +50,30 @@
             {% endif %}
         </p>
 
+        {% if not reorder_enabled and "can_change_event_settings" in request.eventpermset %}
+            <p class="text-muted partner-reorder-hint">
+                <i class="fa fa-info-circle"></i>
+                {% trans "Drag-and-drop ordering is available only on the unfiltered, single-page list." %}
+            </p>
+        {% endif %}
+
+        {% trans "Name" as label_name %}
+        {% trans "Booth" as label_booth %}
         {% if partner_type == 'sponsor' %}
             <div class="table-responsive">
                 <table class="table table-hover dragsort-table">
                     <thead>
                     <tr>
-                        <th>{% trans "Name" %}</th>
+                        <th>{% include "exhibitors/_sort_header.html" with field="name" label=label_name %}</th>
                         <th>{% trans "Group" %}</th>
                         <th class="action-col-2"></th>
                     </tr>
                     </thead>
                     {% for section in sponsor_group_sections %}
                         {% if section.partners %}
-                            <tbody dragsort-url="{% url 'plugins:exhibition:sponsors.reorder' organizer=request.event.organizer.slug event=request.event.slug %}?group_id={% if section.group %}{{ section.group.pk }}{% else %}none{% endif %}">
+                            <tbody {% if reorder_enabled %}dragsort-url="{% url 'plugins:exhibition:sponsors.reorder' organizer=request.event.organizer.slug event=request.event.slug %}?group_id={% if section.group %}{{ section.group.pk }}{% else %}none{% endif %}"{% endif %}>
                             {% for e in section.partners %}
-                                {% include "exhibitors/_partner_row.html" with e=e partner_type=partner_type %}
+                                {% include "exhibitors/_partner_row.html" with e=e partner_type=partner_type reorder_enabled=reorder_enabled %}
                             {% endfor %}
                             </tbody>
                         {% endif %}
@@ -72,19 +85,20 @@
                 <table class="table table-hover dragsort-table">
                     <thead>
                     <tr>
-                        <th>{% trans "Name" %}</th>
+                        <th>{% include "exhibitors/_sort_header.html" with field="name" label=label_name %}</th>
                         {% if not partner_type %}<th>{% trans "Group" %}</th>{% endif %}
-                        <th>{% trans "Booth" %}</th>
+                        <th>{% include "exhibitors/_sort_header.html" with field="booth" label=label_booth %}</th>
                         <th class="action-col-2"></th>
                     </tr>
                     </thead>
-                    <tbody {% if partner_type == 'exhibitor' %}dragsort-url="{% url 'plugins:exhibition:exhibitors.reorder' organizer=request.event.organizer.slug event=request.event.slug %}"{% endif %}>
+                    <tbody {% if partner_type == 'exhibitor' and reorder_enabled %}dragsort-url="{% url 'plugins:exhibition:exhibitors.reorder' organizer=request.event.organizer.slug event=request.event.slug %}"{% endif %}>
                     {% for e in exhibitors %}
-                        {% include "exhibitors/_partner_row.html" with e=e partner_type=partner_type %}
+                        {% include "exhibitors/_partner_row.html" with e=e partner_type=partner_type reorder_enabled=reorder_enabled %}
                     {% endfor %}
                     </tbody>
                 </table>
             </div>
         {% endif %}
+        {% include "pretixcontrol/pagination.html" %}
     {% endif %}
 {% endblock %}

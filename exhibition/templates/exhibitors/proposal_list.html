@@ -7,6 +7,7 @@
 {% block custom_header %}
     {{ block.super }}
     <link rel="stylesheet" href="{% static 'exhibition/css/proposal-actions.css' %}">
+    <link rel="stylesheet" href="{% static 'exhibition/css/list-controls.css' %}">
 {% endblock %}
 
 {% block exhibitors_header %}
@@ -14,6 +15,11 @@
 {% endblock %}
 
 {% block exhibitors_content %}
+    {% trans "Name" as label_name %}
+    {% trans "Submitter" as label_submitter %}
+    {% trans "State" as label_state %}
+    {% trans "Updated" as label_updated %}
+    {% include "exhibitors/_filter_form.html" %}
     {% if proposals %}
         <div class="proposal-action-feedback" data-proposal-feedback></div>
         <div class="table-responsive"
@@ -42,11 +48,11 @@
                             </label>
                         </th>
                     {% endif %}
-                    <th>{% trans "Name" %}</th>
-                    <th>{% trans "Submitter" %}</th>
+                    <th>{% include "exhibitors/_sort_header.html" with field="name" label=label_name %}</th>
+                    <th>{% include "exhibitors/_sort_header.html" with field="submitter" label=label_submitter %}</th>
                     <th>{% trans "Type" %}</th>
-                    <th>{% trans "State" %}</th>
-                    <th>{% trans "Updated" %}</th>
+                    <th>{% include "exhibitors/_sort_header.html" with field="state" label=label_state %}</th>
+                    <th>{% include "exhibitors/_sort_header.html" with field="updated" label=label_updated %}</th>
                     <th class="text-right">{% trans "Actions" %}</th>
                 </tr>
                 </thead>
@@ -148,7 +154,11 @@
         {% endif %}
     {% else %}
         <div class="empty-collection">
-            <p>{% trans "No exhibition requests have been submitted yet." %}</p>
+            {% if filter_form.filtered %}
+                <p>{% trans "No exhibition requests match your filters." %}</p>
+            {% else %}
+                <p>{% trans "No exhibition requests have been submitted yet." %}</p>
+            {% endif %}
         </div>
     {% endif %}
     {% include "pretixcontrol/pagination.html" %}

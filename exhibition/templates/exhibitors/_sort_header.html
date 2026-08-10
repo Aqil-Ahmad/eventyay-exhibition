@@ -1,11 +1,11 @@
 {% load i18n %}
 {% load urlreplace %}
 {{ label }}
-<span class="email-sort">
-    <a data-ajax href="?{% url_replace request 'ordering' field 'page' '1' %}"
+<span class="list-sort">
+    <a href="?{% url_replace request 'ordering' field 'page' '1' %}"
        class="{% if filter_form.current_ordering == field %}text-primary{% else %}text-muted{% endif %}"
        aria-label="{% trans 'Sort ascending' %}"><i class="fa fa-caret-up"></i></a>
-    <a data-ajax href="?{% url_replace request 'ordering' '-'|add:field 'page' '1' %}"
+    <a href="?{% url_replace request 'ordering' '-'|add:field 'page' '1' %}"
        class="{% if filter_form.current_ordering == '-'|add:field %}text-primary{% else %}text-muted{% endif %}"
        aria-label="{% trans 'Sort descending' %}"><i class="fa fa-caret-down"></i></a>
 </span>

@@ -1,0 +1,18 @@
+{% load i18n %}
+<form method="get" class="form-inline email-search" data-ajax>
+    <div class="input-group">
+        {{ filter_form.query }}
+    </div>
+    <input type="hidden" name="ordering" value="{{ filter_form.current_ordering }}">
+    <div class="filter-actions">
+        <button class="btn btn-primary" type="submit">
+            <span class="fa fa-search" aria-hidden="true"></span>
+            {% trans "Search" %}
+        </button>
+        <a href="{{ request.path }}" class="btn btn-default btn-clear-filter"
+           aria-label="{% trans 'Clear search' %}" title="{% trans 'Clear search' %}">
+            <span class="fa fa-eraser" aria-hidden="true"></span>
+            <span class="sr-only">{% trans "Clear search" %}</span>
+        </a>
+    </div>
+</form>
