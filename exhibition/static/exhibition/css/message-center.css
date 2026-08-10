@@ -23,37 +23,11 @@
     text-align: center;
 }
 
-.email-search {
-    display: flex;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: 6px;
-    margin-bottom: 15px;
-}
-
-.email-search .filter-actions {
-    display: flex;
-    gap: 6px;
-}
-
-.email-search .form-control {
-    border-radius: 4px;
-}
-
 .email-bulk-toolbar {
     margin-bottom: 10px;
     display: flex;
     flex-wrap: wrap;
     gap: 6px;
-}
-
-.email-sort {
-    white-space: nowrap;
-    margin-left: 4px;
-}
-
-.email-sort a {
-    text-decoration: none;
 }
 
 .email-list-loading {

@@ -30,7 +30,7 @@
 
     function onSubmit(event) {
         var form = event.target;
-        if (!form.matches || !form.matches("form.email-search")) {
+        if (!form.matches || !form.matches("#email-list form[data-ajax]")) {
             return;
         }
         event.preventDefault();
