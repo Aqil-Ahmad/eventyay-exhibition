@@ -11,7 +11,7 @@ FLAG_CHOICES = (
     ("0", _("Disabled")),
 )
 
-PARTNER_TYPE_CHOICES = (
+ORGANIZATION_TYPE_CHOICES = (
     ("", _("All types")),
     ("exhibitor", _("Exhibitor only")),
     ("sponsor", _("Sponsor only")),
@@ -23,12 +23,12 @@ def sponsor_group_queryset(event):
     return SponsorGroup.objects.filter(event=event)
 
 
-def apply_partner_type(queryset, partner_type):
-    if partner_type == "exhibitor":
+def apply_organization_type(queryset, organization_type):
+    if organization_type == "exhibitor":
         return queryset.filter(is_exhibitor=True, is_sponsor=False)
-    if partner_type == "sponsor":
+    if organization_type == "sponsor":
         return queryset.filter(is_sponsor=True, is_exhibitor=False)
-    if partner_type == "both":
+    if organization_type == "both":
         return queryset.filter(is_exhibitor=True, is_sponsor=True)
     return queryset
 
@@ -86,9 +86,9 @@ class ProposalFilterForm(ExhibitionFilterForm):
         choices=(("", _("All states")),) + tuple(ExhibitionProposalState.choices),
         required=False,
     )
-    partner_type = forms.ChoiceField(
+    organization_type = forms.ChoiceField(
         label=_("Type"),
-        choices=PARTNER_TYPE_CHOICES,
+        choices=ORGANIZATION_TYPE_CHOICES,
         required=False,
     )
 
@@ -117,7 +117,7 @@ class ProposalFilterForm(ExhibitionFilterForm):
         if fdata.get("state"):
             queryset = queryset.filter(state=fdata["state"])
 
-        queryset = apply_partner_type(queryset, fdata.get("partner_type"))
+        queryset = apply_organization_type(queryset, fdata.get("organization_type"))
         return self.apply_ordering(queryset)
 
 
@@ -129,14 +129,14 @@ class ExhibitorFilterForm(ExhibitionFilterForm):
     }
 
     query = forms.CharField(
-        label=_("Search partners…"),
-        widget=search_widget(_("Search partners…"), _("Search partners")),
+        label=_("Search organizations…"),
+        widget=search_widget(_("Search organizations…"), _("Search organizations")),
         required=False,
     )
     active = forms.ChoiceField(
         label=_("Visibility"),
         choices=(
-            ("", _("All partners")),
+            ("", _("All organizations")),
             ("1", _("Active")),
             ("0", _("Inactive")),
         ),
@@ -164,11 +164,11 @@ class ExhibitorFilterForm(ExhibitionFilterForm):
         required=False,
     )
 
-    def __init__(self, *args, event=None, partner_type=None, **kwargs):
+    def __init__(self, *args, event=None, organization_type=None, **kwargs):
         self.event = event
-        self.partner_type = partner_type
+        self.organization_type = organization_type
         super().__init__(*args, **kwargs)
-        if partner_type == "exhibitor":
+        if organization_type == "exhibitor":
             del self.fields["sponsor_group"]
         else:
             self.fields["sponsor_group"].queryset = sponsor_group_queryset(event)

@@ -381,7 +381,7 @@ class ExhibitorListView(EventPermissionRequiredMixin, FilteredListMixin, ListVie
         return ExhibitorFilterForm(
             data=self.request.GET,
             event=self.request.event,
-            partner_type=self.partner_type,
+            organization_type=self.partner_type,
         )
 
     def get_queryset(self):

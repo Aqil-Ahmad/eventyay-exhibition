@@ -25,7 +25,7 @@
         <div class="empty-collection">
             <p>
                 {% if filter_form.filtered %}
-                    {% blocktrans trimmed %}No partners match your filters.{% endblocktrans %}
+                    {% blocktrans trimmed %}No organizations match your filters.{% endblocktrans %}
                 {% elif partner_type == 'sponsor' %}
                     {% blocktrans trimmed %}You don't have any sponsors yet.{% endblocktrans %}
                 {% elif partner_type == 'exhibitor' %}
@@ -51,7 +51,7 @@
         </p>
 
         {% if not reorder_enabled and "can_change_event_settings" in request.eventpermset %}
-            <p class="text-muted partner-reorder-hint">
+            <p class="text-muted reorder-hint">
                 <i class="fa fa-info-circle"></i>
                 {% trans "Drag-and-drop ordering is available only on the unfiltered, single-page list." %}
             </p>
