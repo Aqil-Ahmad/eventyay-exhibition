@@ -3,7 +3,7 @@ from django.db import migrations, models
 
 class Migration(migrations.Migration):
     dependencies = [
-        ("exhibition", "0014_exhibitionproposal_profile_edited_at"),
+        ("exhibition", "0015_backfill_lead_access_flags"),
     ]
 
     operations = [
