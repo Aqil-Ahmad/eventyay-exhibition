@@ -702,7 +702,7 @@ class UserProposalEditView(
             send_proposal_confirmation(self.request.event, self.object, self.request.user)
         if self.object.approved_exhibitor_id:
             sync_exhibitor_from_proposal(self.object)
-        messages.success(self.request, _("Your request has been saved."))
+        messages.success(self.request, _("Your changes have been saved."))
         return response
 
     def get_context_data(self, **kwargs):
