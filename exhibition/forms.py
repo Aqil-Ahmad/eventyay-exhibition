@@ -71,7 +71,11 @@ class ExhibitorInfoForm(I18nModelForm):
     )
     allow_lead_access = forms.BooleanField(
         required=False,
-        label=_("Allowed to access scanned lead data"),
+        label=_("Can view and export collected leads"),
+        help_text=_(
+            "Lets this exhibitor retrieve the full list of leads they have already scanned. "
+            "Turn this off to let them keep scanning without seeing the collected attendee data."
+        ),
     )
     lead_scanning_scope_by_device = forms.TypedChoiceField(
         label=_("Lead scanning behavior"),
@@ -154,7 +158,13 @@ class ExhibitorInfoForm(I18nModelForm):
             "is_exhibitor": _("Mark this partner as an exhibitor"),
             "is_sponsor": _("Mark this partner as an event sponsor"),
             "booth_name": _("Preferred booth name"),
-            "lead_scanning_enabled": _("Allow lead scanning"),
+            "lead_scanning_enabled": _("Can scan attendee badges"),
+        }
+        help_texts = {
+            "lead_scanning_enabled": _(
+                "Lets this exhibitor sign in to the lead scanning app and scan attendees at their booth. "
+                "Turn this off to block scanning entirely."
+            ),
         }
 
     PROFILE_SETTING_FIELD_MAP = {
