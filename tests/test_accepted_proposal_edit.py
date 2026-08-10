@@ -81,6 +81,7 @@ def test_form_valid_syncs_accepted_proposal_and_marks_edited(event):
         _settings_with_required_email(event)
         proposal, exhibitor = _accepted_proposal(event)
         assert proposal.profile_edited_at is None
+        assert proposal.accepted_profile_snapshot is None
 
         request = RequestFactory().post(
             "/",
@@ -104,3 +105,8 @@ def test_form_valid_syncs_accepted_proposal_and_marks_edited(event):
         assert proposal.state == ExhibitionProposalState.ACCEPTED
         assert proposal.profile_edited_at is not None
         assert exhibitor.email == "new@example.com"
+
+        assert proposal.accepted_profile_snapshot["email"] == "old@example.com"
+        changes = {change["label"]: change for change in proposal.profile_field_changes()}
+        assert changes["Contact email"]["old"] == "old@example.com"
+        assert changes["Contact email"]["new"] == "new@example.com"
