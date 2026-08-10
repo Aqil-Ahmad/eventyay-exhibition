@@ -5,6 +5,7 @@
 {% block custom_header %}
     {{ block.super }}
     <link rel="stylesheet" href="{% static 'exhibition/css/message-center.css' %}">
+    <script defer src="{% static 'exhibition/js/message-center.js' %}"></script>
 {% endblock %}
 
 {% block title %}{{ request.event.name }} - {% trans "Sent emails" %}{% endblock %}
@@ -14,34 +15,7 @@
 {% endblock %}
 
 {% block exhibitors_content %}
-    <div class="table-responsive">
-        <table class="table table-hover">
-            <thead>
-            <tr>
-                <th>{% trans "Recipient" %}</th>
-                <th>{% trans "Subject" %}</th>
-                <th>{% trans "Sent" %}</th>
-            </tr>
-            </thead>
-            <tbody>
-            {% for entry in entries %}
-                <tr>
-                    <td>
-                        <span class="email-recipients" title="{{ entry.recipients|join:', ' }}">{{ entry.recipients|join:", " }}</span>
-                        {% if entry.is_batch %}
-                            <span class="label label-default">{{ entry.recipients|length }}</span>
-                        {% endif %}
-                    </td>
-                    <td>{{ entry.subject }}</td>
-                    <td class="email-created">{{ entry.sent_at }}</td>
-                </tr>
-            {% empty %}
-                <tr>
-                    <td colspan="3">{% trans "No emails have been sent yet." %}</td>
-                </tr>
-            {% endfor %}
-            </tbody>
-        </table>
+    <div id="email-list">
+        {% include "exhibitors/_email_sent_body.html" %}
     </div>
-    {% include "pretixcontrol/pagination.html" %}
 {% endblock %}

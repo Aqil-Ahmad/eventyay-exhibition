@@ -5,6 +5,7 @@
 {% block custom_header %}
     {{ block.super }}
     <link rel="stylesheet" href="{% static 'exhibition/css/message-center.css' %}">
+    <script defer src="{% static 'exhibition/js/message-center.js' %}"></script>
 {% endblock %}
 
 {% block title %}{{ request.event.name }} - {% trans "Email outbox" %}{% endblock %}
@@ -17,71 +18,7 @@
     <p class="text-muted">
         {% trans "Emails waiting to be sent. Review, edit, or discard them before sending." %}
     </p>
-    <div class="table-responsive">
-        <table class="table table-hover">
-            <thead>
-            <tr>
-                <th>{% trans "Recipient" %}</th>
-                <th>{% trans "Subject" %}</th>
-                <th>{% trans "Created" %}</th>
-                <th>{% trans "Scheduled" %}</th>
-                <th>{% trans "Actions" %}</th>
-            </tr>
-            </thead>
-            <tbody>
-            {% for entry in entries %}
-                <tr>
-                    <td>
-                        <span class="email-recipients" title="{{ entry.recipients|join:', ' }}">{{ entry.recipients|join:", " }}</span>
-                        {% if entry.is_batch %}
-                            <span class="label label-default">{{ entry.recipients|length }}</span>
-                        {% endif %}
-                    </td>
-                    <td>
-                        <a href="{% url 'plugins:exhibition:email.edit' organizer=request.event.organizer.slug event=request.event.slug pk=entry.pk %}">
-                            {{ entry.subject }}
-                        </a>
-                    </td>
-                    <td class="email-created">{{ entry.created }}</td>
-                    <td class="email-scheduled">
-                        {% if entry.scheduled_at %}
-                            <span class="label label-info">{{ entry.scheduled_at }}</span>
-                        {% else %}
-                            <span class="text-muted">—</span>
-                        {% endif %}
-                    </td>
-                    <td class="email-actions">
-                        <div class="btn-toolbar" role="toolbar">
-                            <div class="btn-group" role="group">
-                                <form method="post" action="{% url 'plugins:exhibition:email.send' organizer=request.event.organizer.slug event=request.event.slug pk=entry.pk %}">
-                                    {% csrf_token %}
-                                    <button type="submit" class="btn btn-sm btn-primary" title="{% trans 'Send this email' %}">
-                                        <i class="fa fa-mail-forward"></i>
-                                    </button>
-                                </form>
-                            </div>
-                            <div class="btn-group" role="group">
-                                <a class="btn btn-sm btn-info" title="{% trans 'Edit this email' %}"
-                                   href="{% url 'plugins:exhibition:email.edit' organizer=request.event.organizer.slug event=request.event.slug pk=entry.pk %}">
-                                    <i class="fa fa-edit"></i>
-                                </a>
-                            </div>
-                            <div class="btn-group" role="group">
-                                <a class="btn btn-sm btn-danger" title="{% trans 'Delete this email' %}"
-                                   href="{% url 'plugins:exhibition:email.delete' organizer=request.event.organizer.slug event=request.event.slug pk=entry.pk %}">
-                                    <i class="fa fa-trash"></i>
-                                </a>
-                            </div>
-                        </div>
-                    </td>
-                </tr>
-            {% empty %}
-                <tr>
-                    <td colspan="5">{% trans "The outbox is empty." %}</td>
-                </tr>
-            {% endfor %}
-            </tbody>
-        </table>
+    <div id="email-list">
+        {% include "exhibitors/_email_outbox_body.html" %}
     </div>
-    {% include "pretixcontrol/pagination.html" %}
 {% endblock %}

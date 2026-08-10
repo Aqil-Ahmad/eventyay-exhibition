@@ -1,0 +1,10 @@
+{% load i18n %}
+{{ label }}
+<span class="email-sort">
+    <a data-ajax href="?q={{ query|urlencode }}&ordering={{ field }}"
+       class="{% if current_ordering == field %}text-primary{% else %}text-muted{% endif %}"
+       aria-label="{% trans 'Sort ascending' %}"><i class="fa fa-caret-up"></i></a>
+    <a data-ajax href="?q={{ query|urlencode }}&ordering=-{{ field }}"
+       class="{% if current_ordering == '-'|add:field %}text-primary{% else %}text-muted{% endif %}"
+       aria-label="{% trans 'Sort descending' %}"><i class="fa fa-caret-down"></i></a>
+</span>

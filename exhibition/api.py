@@ -24,11 +24,20 @@ from .social_links import SOCIAL_LINK_SPECS
 
 UNSET = object()
 
+LEAD_SCANNING_DISABLED_ERROR = "Lead scanning is not enabled for this exhibitor"
+LEAD_ACCESS_DISABLED_ERROR = "This exhibitor is not allowed to access collected lead data"
 VOUCHER_ACCESS_DISABLED_ERROR = "This exhibitor is not allowed to access voucher redemption data"
 
 
 def _forbidden(error):
     return Response({"success": False, "error": error}, status=status.HTTP_403_FORBIDDEN)
+
+
+def _visible_attendee(attendee_data, exhibitor):
+    if exhibitor.allow_lead_access:
+        return attendee_data
+    attendee_data = attendee_data or {}
+    return {"note": attendee_data.get("note", ""), "tags": attendee_data.get("tags", [])}
 
 
 def get_allowed_attendee_data(order_position, settings):
@@ -400,6 +409,10 @@ class LeadCreateView(views.APIView):
                 {"success": False, "error": "Invalid exhibitor key"},
                 status=status.HTTP_401_UNAUTHORIZED,
             )
+
+        if not exhibitor.lead_scanning_enabled:
+            return _forbidden(LEAD_SCANNING_DISABLED_ERROR)
+
         settings = ExhibitorSettings.objects.get_or_create(event=exhibitor.event)[0]
 
         # Get attendee details
@@ -421,7 +434,7 @@ class LeadCreateView(views.APIView):
                 {
                     "success": False,
                     "error": "Lead already scanned",
-                    "attendee": attendee_data,
+                    "attendee": _visible_attendee(attendee_data, exhibitor),
                 },
                 status=status.HTTP_409_CONFLICT,
             )
@@ -443,7 +456,7 @@ class LeadCreateView(views.APIView):
         )
 
         return Response(
-            {"success": True, "lead_id": lead.id, "attendee": attendee_data},
+            {"success": True, "lead_id": lead.id, "attendee": _visible_attendee(attendee_data, exhibitor)},
             status=status.HTTP_201_CREATED,
         )
 
@@ -459,6 +472,9 @@ class LeadRetrieveView(views.APIView):
                 {"success": False, "error": "Invalid exhibitor key"},
                 status=status.HTTP_401_UNAUTHORIZED,
             )
+
+        if not exhibitor.allow_lead_access:
+            return _forbidden(LEAD_ACCESS_DISABLED_ERROR)
 
         # Fetch all leads associated with the exhibitor
         leads = Lead.objects.filter(exhibitor=exhibitor).values(
@@ -520,13 +536,17 @@ class TagListView(views.APIView):
         key = request.headers.get("Exhibitor")
         try:
             exhibitor = ExhibitorInfo.objects.get(key=key)
-            tags = ExhibitorTag.objects.filter(exhibitor=exhibitor)
-            return Response({"success": True, "tags": [tag.name for tag in tags]})
         except ExhibitorInfo.DoesNotExist:
             return Response(
                 {"success": False, "error": "Invalid exhibitor key"},
                 status=status.HTTP_401_UNAUTHORIZED,
             )
+
+        if not exhibitor.lead_scanning_enabled:
+            return _forbidden(LEAD_SCANNING_DISABLED_ERROR)
+
+        tags = ExhibitorTag.objects.filter(exhibitor=exhibitor)
+        return Response({"success": True, "tags": [tag.name for tag in tags]})
 
 
 class LeadUpdateView(views.APIView):
@@ -542,6 +562,9 @@ class LeadUpdateView(views.APIView):
                 {"success": False, "error": "Invalid exhibitor key"},
                 status=status.HTTP_401_UNAUTHORIZED,
             )
+
+        if not exhibitor.lead_scanning_enabled:
+            return _forbidden(LEAD_SCANNING_DISABLED_ERROR)
 
         try:
             lead = Lead.objects.get(pseudonymization_id=lead_id, exhibitor=exhibitor)
@@ -569,6 +592,6 @@ class LeadUpdateView(views.APIView):
         lead.save()
 
         return Response(
-            {"success": True, "lead_id": lead.id, "attendee": lead.attendee},
+            {"success": True, "lead_id": lead.id, "attendee": _visible_attendee(lead.attendee, exhibitor)},
             status=status.HTTP_200_OK,
         )

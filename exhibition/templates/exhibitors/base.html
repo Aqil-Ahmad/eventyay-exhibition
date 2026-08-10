@@ -1,5 +1,6 @@
 {% extends 'pretixcontrol/base.html' %}
 {% load i18n %}
+{% load exhibition_email %}
 
 {% block title %}{{ request.event.name }} - {% trans "Exhibitors & Sponsors" %}{% endblock %}
 
@@ -58,13 +59,13 @@
   {% endif %}
   {% if 'can_change_event_settings' in request.eventpermset or 'can_view_orders' in request.eventpermset %}
     <li>
-      <a href="{% url 'plugins:exhibition:exhibitors' organizer=request.event.organizer.slug event=request.event.slug %}" {% if url_name == 'exhibitors' or url_name == 'exhibitors.add' or url_name == 'info' or url_name == 'add' or url_name == 'edit' and request.GET.type != 'sponsor' or url_name == 'delete' and request.GET.type != 'sponsor' or url_name == 'copy_key' and request.GET.type != 'sponsor' %}class="active"{% endif %}>
+      <a href="{% url 'plugins:exhibition:exhibitors' organizer=request.event.organizer.slug event=request.event.slug %}" {% if url_name == 'exhibitors' or url_name == 'exhibitors.add' or url_name == 'info' or url_name == 'add' or url_name == 'edit' and request.GET.type != 'sponsor' or url_name == 'delete' and request.GET.type != 'sponsor' %}class="active"{% endif %}>
         <span class="fa fa-fw fa-map-pin"></span>
         <span class="sidebar-text">{% trans "Exhibitors" %}</span>
       </a>
     </li>
     <li>
-      <a href="{% url 'plugins:exhibition:sponsors' organizer=request.event.organizer.slug event=request.event.slug %}" {% if url_name == 'sponsors' or url_name == 'sponsors.add' or url_name == 'edit' and request.GET.type == 'sponsor' or url_name == 'delete' and request.GET.type == 'sponsor' or url_name == 'copy_key' and request.GET.type == 'sponsor' %}class="active"{% endif %}>
+      <a href="{% url 'plugins:exhibition:sponsors' organizer=request.event.organizer.slug event=request.event.slug %}" {% if url_name == 'sponsors' or url_name == 'sponsors.add' or url_name == 'edit' and request.GET.type == 'sponsor' or url_name == 'delete' and request.GET.type == 'sponsor' %}class="active"{% endif %}>
         <span class="fa fa-fw fa-star"></span>
         <span class="sidebar-text">{% trans "Sponsors" %}</span>
       </a>
@@ -72,9 +73,11 @@
   {% endif %}
   {% if 'can_change_event_settings' in request.eventpermset or 'can_change_exhibition_proposals' in request.eventpermset or 'is_exhibition_reviewer' in request.eventpermset %}
     <li>
+      {% pending_email_count request.event as pending_emails %}
       <a href="{% url 'plugins:exhibition:email.outbox' organizer=request.event.organizer.slug event=request.event.slug %}" class="has-children">
         <span class="fa fa-fw fa-envelope"></span>
         <span class="sidebar-text">{% trans "Message center" %}</span>
+        {% if pending_emails %}<span class="badge">{{ pending_emails }}</span>{% endif %}
       </a>
       <a href="#" class="arrow">
         <span class="fa arrow"></span>
@@ -88,6 +91,7 @@
         <li>
           <a href="{% url 'plugins:exhibition:email.outbox' organizer=request.event.organizer.slug event=request.event.slug %}" {% if url_name == 'email.outbox' or url_name == 'email.edit' or url_name == 'email.delete' %}class="active"{% endif %}>
             <span class="sidebar-text">{% trans "Outbox" %}</span>
+            {% if pending_emails %}<span class="badge">{{ pending_emails }}</span>{% endif %}
           </a>
         </li>
         <li>
