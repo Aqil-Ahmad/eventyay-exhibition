@@ -736,6 +736,9 @@ class UserProposalEditView(
                 form.instance.submitted = form.instance.submitted or timezone.now()
         else:
             form.instance.profile_edited_at = timezone.now()
+            if not form.instance.accepted_profile_snapshot:
+                baseline = ExhibitionProposal.objects.get(pk=form.instance.pk)
+                form.instance.accepted_profile_snapshot = baseline.submitter_profile_values()
         response = super().form_valid(form)
         self.save_link_formsets()
         if (
@@ -745,7 +748,7 @@ class UserProposalEditView(
             send_proposal_confirmation(self.request.event, self.object, self.request.user)
         if self.object.approved_exhibitor_id:
             sync_exhibitor_from_proposal(self.object)
-        messages.success(self.request, _("Your request has been saved."))
+        messages.success(self.request, _("Your changes have been saved."))
         return response
 
     def get_context_data(self, **kwargs):
@@ -1124,6 +1127,7 @@ class ProposalDetailView(EventPermissionRequiredMixin, UpdateView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context["answers"] = self.object.answers.select_related("question").prefetch_related("options")
+        context["profile_changes"] = self.object.profile_field_changes() if self.object.edited_after_acceptance else []
         context["can_manage"] = self.can_manage()
         context["can_review"] = self.can_review()
         context["can_edit_exhibitor"] = self.can_edit_exhibitor()
