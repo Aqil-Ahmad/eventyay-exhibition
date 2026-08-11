@@ -71,3 +71,22 @@
 .proposal-action-feedback:not(:empty) {
     margin-bottom: 12px;
 }
+
+.proposal-state-cell {
+    white-space: nowrap;
+}
+
+.proposal-edited-dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    margin-left: 6px;
+    vertical-align: middle;
+    border-radius: 50%;
+    background: #f0ad4e;
+}
+
+.proposal-edited-dot:hover,
+.proposal-edited-dot:focus {
+    background: #df8a13;
+}

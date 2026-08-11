@@ -86,12 +86,14 @@
                                 {% endif %}
                             {% endwith %}
                         </td>
-                        <td data-proposal-state>
-                            {{ proposal.get_state_display }}
+                        <td class="proposal-state-cell">
+                            <span data-proposal-state>{{ proposal.get_state_display }}</span>
                             {% if proposal.edited_after_acceptance %}
-                                <span class="label label-warning" title="{% blocktrans with when=proposal.profile_edited_at|date:'SHORT_DATETIME_FORMAT' %}Profile edited by the applicant on {{ when }}, after acceptance.{% endblocktrans %}">
-                                    {% trans "Edited after acceptance" %}
-                                </span>
+                                {% trans "Edited after acceptance, see detail view for changes." as edited_hint %}
+                                <a class="proposal-edited-dot"
+                                   href="{% url 'plugins:exhibition:proposal.detail' organizer=request.event.organizer.slug event=request.event.slug code=proposal.code %}#post-acceptance-changes"
+                                   title="{{ edited_hint }}"
+                                   aria-label="{{ edited_hint }}"></a>
                             {% endif %}
                         </td>
                         <td>{{ proposal.updated|date:"SHORT_DATETIME_FORMAT" }}</td>
