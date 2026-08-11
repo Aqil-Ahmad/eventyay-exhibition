@@ -25,6 +25,7 @@ from . import mail as mail_helpers
 from .forms import (
     CallSettingsForm,
     ExhibitionComposeForm,
+    ExhibitionDefaultFieldForm,
     ExhibitionEmailQueueForm,
     ExhibitionMailTemplatesForm,
     ExhibitionProposalExtraLinkFormSet,
@@ -52,6 +53,7 @@ from .models import (
     SponsorGroup,
     generate_booth_id,
     get_next_sponsor_group_level,
+    storable_proposal_field_settings,
 )
 from .social_links import serialize_social_link
 from .utils import (
@@ -1263,7 +1265,7 @@ class ExhibitionQuestionListView(EventPermissionRequiredMixin, ListView):
                     "sort_kind": 0,
                     "dragsort_id": key,
                     "input_prefix": key,
-                    "label": definition["label"],
+                    "label": field_settings[key]["label"],
                     "active": field_settings[key]["active"],
                     "required": field_settings[key]["required"],
                     "supports_required": definition.get("supports_required", True),
@@ -1349,7 +1351,7 @@ class ExhibitionQuestionListView(EventPermissionRequiredMixin, ListView):
             if field.get("supports_required") is False:
                 proposal_field_settings[key]["required"] = False
 
-        settings.proposal_field_settings = proposal_field_settings
+        settings.proposal_field_settings = storable_proposal_field_settings(proposal_field_settings)
         settings.save(update_fields=["proposal_field_settings"])
 
         questions = list(ExhibitionQuestion.objects.filter(event=request.event))
@@ -1393,7 +1395,7 @@ class ExhibitionQuestionListView(EventPermissionRequiredMixin, ListView):
             question.position = position
             reordered_questions.append(question)
             position += 1
-        settings.proposal_field_settings = proposal_field_settings
+        settings.proposal_field_settings = storable_proposal_field_settings(proposal_field_settings)
         settings.save(update_fields=["proposal_field_settings"])
         if reordered_questions:
             ExhibitionQuestion.objects.bulk_update(reordered_questions, ["position"])
@@ -1451,6 +1453,76 @@ class ExhibitionQuestionDeleteView(EventPermissionRequiredMixin, DeleteView):
             "plugins:exhibition:call.questions",
             kwargs=event_kwargs(self.request.event),
         )
+
+
+class DefaultFieldMixin(EventPermissionRequiredMixin):
+    permission = "can_change_settings"
+
+    def dispatch(self, request, *args, **kwargs):
+        if kwargs.get("key") not in PROPOSAL_DEFAULT_FIELD_KEYS:
+            raise Http404(_("The requested form field does not exist."))
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_exhibition_settings(self):
+        return ExhibitorSettings.objects.get_or_create(event=self.request.event)[0]
+
+    def get_field_setting(self):
+        return self.get_exhibition_settings().normalized_proposal_field_settings[self.kwargs["key"]]
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["field_setting"] = self.get_field_setting()
+        return context
+
+    def get_success_url(self):
+        return reverse(
+            "plugins:exhibition:call.questions",
+            kwargs=event_kwargs(self.request.event),
+        )
+
+
+class ExhibitionDefaultFieldEditView(DefaultFieldMixin, FormView):
+    form_class = ExhibitionDefaultFieldForm
+    template_name = "exhibitors/call_default_field_form.html"
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        field_setting = self.get_field_setting()
+        kwargs["field_setting"] = field_setting
+        kwargs.setdefault(
+            "initial",
+            {
+                "label": field_setting["custom_label"] or "",
+                "help_text": field_setting["custom_help_text"] or "",
+            },
+        )
+        return kwargs
+
+    def form_valid(self, form):
+        settings = self.get_exhibition_settings()
+        proposal_field_settings = settings.normalized_proposal_field_settings
+        key = self.kwargs["key"]
+        proposal_field_settings[key]["custom_label"] = form.cleaned_data["label"].strip() or None
+        proposal_field_settings[key]["custom_help_text"] = form.cleaned_data["help_text"].strip() or None
+        settings.proposal_field_settings = storable_proposal_field_settings(proposal_field_settings)
+        settings.save(update_fields=["proposal_field_settings"])
+        messages.success(self.request, _("Your changes have been saved."))
+        return redirect(self.get_success_url())
+
+
+class ExhibitionDefaultFieldResetView(DefaultFieldMixin, TemplateView):
+    template_name = "exhibitors/call_default_field_reset.html"
+
+    def post(self, request, *args, **kwargs):
+        settings = self.get_exhibition_settings()
+        proposal_field_settings = settings.normalized_proposal_field_settings
+        key = kwargs["key"]
+        proposal_field_settings[key]["custom_label"] = None
+        proposal_field_settings[key]["custom_help_text"] = None
+        settings.proposal_field_settings = storable_proposal_field_settings(proposal_field_settings)
+        settings.save(update_fields=["proposal_field_settings"])
+        messages.success(request, _("The field has been reset to its default."))
+        return redirect(self.get_success_url())
 
 
 class ExhibitorCreateView(ExhibitorLinkFormsetMixin, EventPermissionRequiredMixin, CreateView):

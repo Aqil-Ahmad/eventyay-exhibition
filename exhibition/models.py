@@ -168,8 +168,24 @@ def default_proposal_field_settings():
             "active": field.get("active", True),
             "required": field.get("required", False),
             "position": index,
+            "label": None,
+            "help_text": None,
         }
         for index, field in enumerate(PROPOSAL_DEFAULT_FIELDS)
+    }
+
+
+def storable_proposal_field_settings(normalized):
+    """Strip the derived keys added by normalization so only raw overrides are persisted."""
+    return {
+        key: {
+            "active": value["active"],
+            "required": value["required"],
+            "position": value["position"],
+            "label": value["custom_label"],
+            "help_text": value["custom_help_text"],
+        }
+        for key, value in normalized.items()
     }
 
 
@@ -229,6 +245,13 @@ class ExhibitorSettings(models.Model):
             normalized[key]["active"] = bool(stored_field.get("active", normalized[key]["active"]))
             normalized[key]["required"] = bool(stored_field.get("required", normalized[key]["required"]))
             normalized[key]["position"] = stored_field.get("position", index)
+            custom_label = (stored_field.get("label") or "").strip() or None
+            custom_help_text = (stored_field.get("help_text") or "").strip() or None
+            normalized[key]["custom_label"] = custom_label
+            normalized[key]["custom_help_text"] = custom_help_text
+            normalized[key]["label"] = custom_label or field["label"]
+            normalized[key]["help_text"] = custom_help_text or ""
+            normalized[key]["default_label"] = field["label"]
             if field.get("active_locked"):
                 normalized[key]["active"] = True
             if field.get("required_locked"):

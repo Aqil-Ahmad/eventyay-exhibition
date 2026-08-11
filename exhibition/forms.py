@@ -222,11 +222,15 @@ class ExhibitorInfoForm(I18nModelForm):
     def _apply_profile_field_settings(self):
         for key, field_names in self.PROFILE_SETTING_FIELD_MAP.items():
             if self.profile_key_is_active(key):
+                setting = self.profile_field_settings[key]
+                first_field = self.fields.get(field_names[0]) if field_names else None
+                if first_field is not None and setting.get("custom_label"):
+                    first_field.label = setting["custom_label"]
                 if key in self.PROFILE_COMPOSITE_KEYS or key == "booth_name":
                     continue
                 for field_name in field_names:
                     if field_name in self.fields:
-                        self.fields[field_name].required = self.profile_field_settings[key]["required"]
+                        self.fields[field_name].required = setting["required"]
             else:
                 self._drop_fields(field_names)
 
@@ -772,10 +776,16 @@ class ExhibitionProposalForm(ExhibitionQuestionFieldsMixin, I18nModelForm):
                     self.fields.pop(field_name, None)
                 continue
 
-            for field_name in form_fields:
+            setting = self.proposal_field_settings.get(key, {})
+            for index, field_name in enumerate(form_fields):
                 field = self.fields.get(field_name)
                 if field is None:
                     continue
+                if index == 0:
+                    if setting.get("custom_label"):
+                        field.label = setting["custom_label"]
+                    if setting.get("custom_help_text"):
+                        field.help_text = setting["custom_help_text"]
                 field._required = is_required
                 if key in file_field_keys or key == "booth_name":
                     continue
@@ -1034,6 +1044,29 @@ class ExhibitionProposalReviewNotesForm(I18nModelForm):
         widgets = {
             "review_notes": forms.Textarea(attrs={"rows": 4}),
         }
+
+
+class ExhibitionDefaultFieldForm(forms.Form):
+    label = forms.CharField(
+        required=False,
+        max_length=200,
+        label=_("Field label"),
+    )
+    help_text = forms.CharField(
+        required=False,
+        max_length=500,
+        label=_("Help text"),
+        help_text=_("Shown below the field on the exhibitor form."),
+        widget=forms.Textarea(attrs={"rows": 3}),
+    )
+
+    def __init__(self, *args, **kwargs):
+        self.field_setting = kwargs.pop("field_setting")
+        super().__init__(*args, **kwargs)
+        self.fields["label"].help_text = _("Leave empty to use the default: %(label)s") % {
+            "label": self.field_setting["default_label"]
+        }
+        self.fields["label"].widget.attrs.setdefault("placeholder", self.field_setting["default_label"])
 
 
 class ExhibitionQuestionForm(I18nModelForm):

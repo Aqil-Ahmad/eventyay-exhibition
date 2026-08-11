@@ -20,6 +20,8 @@ from .views import (
     EmailSentListView,
     EmailTemplatePreviewView,
     EmailTemplatesView,
+    ExhibitionDefaultFieldEditView,
+    ExhibitionDefaultFieldResetView,
     ExhibitionQuestionCreateView,
     ExhibitionQuestionDeleteView,
     ExhibitionQuestionEditView,
@@ -198,6 +200,16 @@ urlpatterns = [
         "exhibitors/event/<orgslug:organizer>/<slug:event>/call/questions/<int:pk>/delete",
         ExhibitionQuestionDeleteView.as_view(),
         name="call.questions.delete",
+    ),
+    path(
+        "exhibitors/event/<orgslug:organizer>/<slug:event>/call/fields/<slug:key>/edit",
+        ExhibitionDefaultFieldEditView.as_view(),
+        name="call.fields.edit",
+    ),
+    path(
+        "exhibitors/event/<orgslug:organizer>/<slug:event>/call/fields/<slug:key>/reset",
+        ExhibitionDefaultFieldResetView.as_view(),
+        name="call.fields.reset",
     ),
     path(
         "exhibitors/event/<orgslug:organizer>/<slug:event>/add",
