@@ -8,6 +8,7 @@
     {{ block.super }}
     <link rel="stylesheet" href="{% static 'exhibition/css/proposal-actions.css' %}">
     <link rel="stylesheet" href="{% static 'exhibition/css/list-controls.css' %}">
+    <script defer src="{% static 'exhibition/js/list-filters.js' %}"></script>
 {% endblock %}
 
 {% block exhibitors_header %}
@@ -20,13 +21,20 @@
     {% trans "State" as label_state %}
     {% trans "Updated" as label_updated %}
     {% include "exhibitors/_filter_form.html" %}
+    <div data-ajax-results-region data-filter-count="{{ advanced_filter_count }}">
     {% if proposals %}
         <div class="proposal-action-feedback" data-proposal-feedback></div>
         <div class="table-responsive"
              data-proposal-actions-url="{% url 'plugins:exhibition:proposal.actions' organizer=request.event.organizer.slug event=request.event.slug %}"
              data-proposal-list>
             {% if can_manage %}
-                <div class="proposal-bulk-bar">
+                <div class="proposal-bulk-bar"
+                     data-proposal-total="{{ page_obj.paginator.count }}"
+                     data-proposal-reason-none="{% trans 'Select at least one request.' %}"
+                     data-proposal-reason-approve="{% trans 'None of the selected requests can be approved.' %}"
+                     data-proposal-reason-reject="{% trans 'None of the selected requests can be rejected.' %}"
+                     data-proposal-skip-approve="{% trans '{count} selected requests cannot be approved and will be skipped.' %}"
+                     data-proposal-skip-reject="{% trans '{count} selected requests cannot be rejected and will be skipped.' %}">
                     <span class="proposal-bulk-count text-muted" data-proposal-selected-count></span>
                     <span class="proposal-bulk-buttons">
                         <button type="button" class="btn btn-success btn-sm proposal-action-btn proposal-action-approve" data-proposal-bulk="approve" disabled>
@@ -37,13 +45,14 @@
                         </button>
                     </span>
                 </div>
+                <p class="proposal-bulk-hint text-muted" data-proposal-bulk-hint hidden></p>
             {% endif %}
             <table class="table table-hover">
                 <thead>
                 <tr>
                     {% if can_manage %}
                         <th class="proposal-select-col">
-                            <label class="batch-select-label" aria-label="{% trans 'Select all proposals' %}">
+                            <label class="batch-select-label" aria-label="{% trans 'Select all matching requests' %}">
                                 <input type="checkbox" data-proposal-select-all>
                             </label>
                         </th>
@@ -60,11 +69,10 @@
                 {% for proposal in proposals %}
                     <tr data-proposal-row="{{ proposal.code }}">
                         {% if can_manage %}
-                            <td class="proposal-select-col text-center" data-proposal-select-cell>
-                                {% if proposal.bulk_selectable %}
-                                    <input type="checkbox" class="proposal-select" value="{{ proposal.code }}"
-                                           data-proposal-checkbox aria-label="{% trans 'Select proposal' %}">
-                                {% endif %}
+                            <td class="proposal-select-col text-center">
+                                <input type="checkbox" class="proposal-select" value="{{ proposal.code }}"
+                                       data-proposal-checkbox data-proposal-bulk-actions="{{ proposal.bulk_actions|join:' ' }}"
+                                       aria-label="{% trans 'Select request' %}">
                             </td>
                         {% endif %}
                         <td>
@@ -133,25 +141,6 @@
                 </tbody>
             </table>
         </div>
-        {% if can_manage %}
-            <div data-proposal-i18n
-                 data-confirm-approve="{% trans 'Approve the selected requests and create their partner profiles?' %}"
-                 data-confirm-reject="{% trans 'Reject the selected requests?' %}"
-                 data-confirm-reject-one="{% trans 'Reject this request?' %}"
-                 data-confirm-withdraw-one="{% trans 'Withdraw this request?' %}"
-                 data-confirm-reopen-one="{% trans 'Reopen this request for review?' %}"
-                 data-label-approve="{% trans 'Approve' %}"
-                 data-label-reject="{% trans 'Reject' %}"
-                 data-label-withdraw="{% trans 'Withdraw' %}"
-                 data-label-reopen="{% trans 'Reopen for review' %}"
-                 data-error="{% trans 'The action could not be completed. Please try again.' %}"
-                 data-selected="{% trans 'selected' %}"
-                 data-select-aria="{% trans 'Select proposal' %}"
-                 data-confirm-title="{% trans 'Please confirm' %}"
-                 data-confirm-label="{% trans 'Confirm' %}"
-                 data-cancel-label="{% trans 'Cancel' %}"></div>
-            <script defer src="{% static 'exhibition/js/proposal-actions.js' %}"></script>
-        {% endif %}
     {% else %}
         <div class="empty-collection">
             {% if filter_form.filtered %}
@@ -162,4 +151,25 @@
         </div>
     {% endif %}
     {% include "pretixcontrol/pagination.html" %}
+    </div>
+    {% if can_manage %}
+        <div data-proposal-i18n
+             data-confirm-approve="{% trans 'Approve the selected requests and create their partner profiles?' %}"
+             data-confirm-reject="{% trans 'Reject the selected requests?' %}"
+             data-confirm-reject-one="{% trans 'Reject this request?' %}"
+             data-confirm-withdraw-one="{% trans 'Withdraw this request?' %}"
+             data-confirm-reopen-one="{% trans 'Reopen this request for review?' %}"
+             data-label-approve="{% trans 'Approve' %}"
+             data-label-reject="{% trans 'Reject' %}"
+             data-label-withdraw="{% trans 'Withdraw' %}"
+             data-label-reopen="{% trans 'Reopen for review' %}"
+             data-error="{% trans 'The action could not be completed. Please try again.' %}"
+             data-selected="{% trans 'selected' %}"
+             data-confirm-approve-all="{% trans 'Approve every request matching the current filters, including those on other pages?' %}"
+             data-confirm-reject-all="{% trans 'Reject every request matching the current filters, including those on other pages?' %}"
+             data-confirm-title="{% trans 'Please confirm' %}"
+             data-confirm-label="{% trans 'Confirm' %}"
+             data-cancel-label="{% trans 'Cancel' %}"></div>
+        <script defer src="{% static 'exhibition/js/proposal-actions.js' %}"></script>
+    {% endif %}
 {% endblock %}

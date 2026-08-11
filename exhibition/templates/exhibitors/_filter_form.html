@@ -1,7 +1,7 @@
 {% load i18n %}
 {% load bootstrap3 %}
 <div class="advanced-filter-search" data-advanced-filter-search>
-    <form class="filter-form advanced-filter-search-form" action="" method="get"{% if ajax %} data-ajax{% endif %}>
+    <form class="{% if not ajax %}filter-form {% endif %}advanced-filter-search-form" action="" method="get"{% if ajax %} data-ajax{% endif %}>
         <input type="hidden" name="ordering" value="{{ filter_form.current_ordering }}">
         <div class="advanced-filter-search-bar">
             <div class="input-group advanced-filter-search-query-group">
@@ -27,9 +27,7 @@
                             aria-expanded="{% if advanced_filters_open %}true{% else %}false{% endif %}">
                         <span class="fa fa-sliders" aria-hidden="true"></span>
                         {% trans "Filters" %}
-                        {% if advanced_filter_count %}
-                            <span class="badge">{{ advanced_filter_count }}</span>
-                        {% endif %}
+                        <span class="badge" data-filter-count-badge{% if not advanced_filter_count %} hidden{% endif %}>{{ advanced_filter_count }}</span>
                     </button>
                 {% endif %}
             </div>

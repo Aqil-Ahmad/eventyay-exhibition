@@ -1067,9 +1067,7 @@ class ProposalListView(EventPermissionRequiredMixin, FilteredListMixin, ListView
         if can_manage:
             for proposal in context["proposals"]:
                 proposal.review_actions = proposal.available_review_actions()
-                proposal.bulk_selectable = proposal.can_transition_to(
-                    ExhibitionProposalState.ACCEPTED
-                ) or proposal.can_transition_to(ExhibitionProposalState.REJECTED)
+                proposal.bulk_actions = proposal.available_bulk_actions()
         return context
 
 
@@ -1185,17 +1183,30 @@ class ProposalActionView(EventPermissionRequiredMixin, View):
     permission = ("can_change_event_settings", "can_change_exhibition_proposals")
     valid_actions = set(PROPOSAL_REVIEW_ACTIONS)
 
+    def get_proposals(self, request, select_all, codes):
+        """Every request matching the active filters when selecting across pages, else the checked rows."""
+        queryset = ExhibitionProposal.objects.filter(event=request.event).select_related("approved_exhibitor")
+        if not select_all:
+            return queryset.filter(code__in=codes)
+        filter_form = ProposalFilterForm(
+            data=request.POST,
+            hide_emails=should_hide_applicant_emails(request.user, request.event, request=request),
+        )
+        if filter_form.is_valid():
+            queryset = filter_form.filter_qs(queryset)
+        return queryset
+
     def post(self, request, *args, **kwargs):
         action = request.POST.get("action")
         codes = request.POST.getlist("proposal")
-        if action not in self.valid_actions or not codes:
+        select_all = request.POST.get("all") == "1"
+        if action not in self.valid_actions or not (codes or select_all):
             return self.respond(request, False, _("No valid action was selected."), [], 0)
 
         target_state = PROPOSAL_REVIEW_ACTIONS[action]
-        proposals = ExhibitionProposal.objects.filter(event=request.event, code__in=codes).select_related(
-            "approved_exhibitor"
-        )
+        proposals = self.get_proposals(request, select_all, codes)
         results = []
+        changed = 0
         skipped = 0
         with transaction.atomic():
             for proposal in proposals:
@@ -1203,17 +1214,26 @@ class ProposalActionView(EventPermissionRequiredMixin, View):
                     skipped += 1
                     continue
                 self.apply_action(proposal, action)
+                changed += 1
+                if select_all:
+                    continue
                 results.append(
                     {
                         "code": proposal.code,
                         "state": proposal.state,
                         "state_display": proposal.get_state_display(),
                         "actions": proposal.available_review_actions(),
-                        "bulk_selectable": proposal.can_transition_to(ExhibitionProposalState.ACCEPTED)
-                        or proposal.can_transition_to(ExhibitionProposalState.REJECTED),
+                        "bulk_actions": proposal.available_bulk_actions(),
                     }
                 )
-        return self.respond(request, True, self.build_message(action, len(results), skipped), results, skipped)
+        return self.respond(
+            request,
+            True,
+            self.build_message(action, changed, skipped),
+            results,
+            skipped,
+            reload=select_all and changed > 0,
+        )
 
     def apply_action(self, proposal, action):
         if action == "approve":
@@ -1245,10 +1265,10 @@ class ProposalActionView(EventPermissionRequiredMixin, View):
             message = f"{message} {skipped_message}"
         return message
 
-    def respond(self, request, ok, message, results, skipped):
+    def respond(self, request, ok, message, results, skipped, reload=False):
         if request.headers.get("x-requested-with") == "XMLHttpRequest":
             return JsonResponse(
-                {"ok": ok, "message": str(message), "results": results, "skipped": skipped},
+                {"ok": ok, "message": str(message), "results": results, "skipped": skipped, "reload": reload},
                 status=200 if ok else 400,
             )
         if ok:

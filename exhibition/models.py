@@ -452,6 +452,8 @@ PROPOSAL_REVIEW_ACTIONS = {
     "reopen": ExhibitionProposalState.SUBMITTED,
 }
 
+PROPOSAL_BULK_ACTIONS = ("approve", "reject")
+
 
 class ExhibitionProposal(models.Model):
     code = models.CharField(
@@ -552,6 +554,11 @@ class ExhibitionProposal(models.Model):
 
     def available_review_actions(self):
         return [action for action, target in PROPOSAL_REVIEW_ACTIONS.items() if self.can_transition_to(target)]
+
+    def available_bulk_actions(self):
+        return [
+            action for action in PROPOSAL_BULK_ACTIONS if self.can_transition_to(PROPOSAL_REVIEW_ACTIONS[action])
+        ]
 
     def set_partner_active(self, active):
         if self.approved_exhibitor_id and self.approved_exhibitor.active != active:

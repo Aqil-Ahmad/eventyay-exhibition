@@ -146,7 +146,7 @@ def test_post_skips_proposal_not_eligible_for_action(event):
 
 
 @pytest.mark.django_db
-def test_post_returns_updated_actions_and_bulk_selectable(event):
+def test_post_returns_updated_actions_and_bulk_actions(event):
     with scopes_disabled():
         proposal = _proposal(event, "json@e.com")
         view, request = _action_post_view(event, "approve", [proposal.code], email="org-json@e.com")
@@ -156,4 +156,4 @@ def test_post_returns_updated_actions_and_bulk_selectable(event):
         result = payload["results"][0]
         assert result["state"] == "accepted"
         assert set(result["actions"]) == {"reject", "withdraw", "reopen"}
-        assert result["bulk_selectable"] is True
+        assert result["bulk_actions"] == ["reject"]

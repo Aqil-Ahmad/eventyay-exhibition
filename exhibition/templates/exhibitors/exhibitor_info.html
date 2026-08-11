@@ -6,6 +6,7 @@
     {{ block.super }}
     <link rel="stylesheet" href="{% static 'exhibition/css/dragsort-table.css' %}">
     <link rel="stylesheet" href="{% static 'exhibition/css/list-controls.css' %}">
+    <script defer src="{% static 'exhibition/js/list-filters.js' %}"></script>
     <script defer src="{% static 'orga/js/dragsort.js' %}"></script>
     <script defer src="{% static 'exhibition/js/copy-key.js' %}"></script>
 {% endblock %}
@@ -21,6 +22,7 @@
         {% url 'plugins:exhibition:add' organizer=request.event.organizer.slug event=request.event.slug as add_url %}
     {% endif %}
     {% include "exhibitors/_filter_form.html" %}
+    <div data-ajax-results-region data-filter-count="{{ advanced_filter_count }}">
     {% if exhibitors|length == 0 %}
         <div class="empty-collection">
             <p>
@@ -101,4 +103,5 @@
         {% endif %}
         {% include "pretixcontrol/pagination.html" %}
     {% endif %}
+    </div>
 {% endblock %}
