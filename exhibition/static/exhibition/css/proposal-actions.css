@@ -12,6 +12,12 @@
     margin-left: auto;
 }
 
+.proposal-bulk-hint {
+    margin-top: -6px;
+    margin-bottom: 12px;
+}
+
+
 .proposal-bulk-count {
     min-width: 70px;
 }

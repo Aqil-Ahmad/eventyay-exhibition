@@ -14,7 +14,7 @@
         return cookieValue
     }
 
-    document.addEventListener('DOMContentLoaded', function () {
+    function init() {
         var container = document.querySelector('[data-proposal-list]')
         if (!container) {
             return
@@ -29,6 +29,21 @@
         var selectAll = container.querySelector('[data-proposal-select-all]')
         var bulkButtons = container.querySelectorAll('[data-proposal-bulk]')
         var countLabel = container.querySelector('[data-proposal-selected-count]')
+        var bulkBar = container.querySelector('.proposal-bulk-bar')
+        var bulkHint = container.querySelector('[data-proposal-bulk-hint]')
+        var bulkReasons = bulkBar ? bulkBar.dataset : {}
+        var selectAllAcrossPages = false
+
+        function allResultsSelected() {
+            return selectAllAcrossPages && selectedBoxes().length > 0
+        }
+
+        function filterParams() {
+            var params = new URLSearchParams(window.location.search)
+            params.delete('page')
+            params.delete('page_size')
+            return params
+        }
 
         var actionConfig = {
             approve: { icon: 'fa-check', cls: 'proposal-action-approve', variant: 'btn-success', label: i18n.labelApprove },
@@ -41,31 +56,63 @@
             return Array.prototype.slice.call(container.querySelectorAll('[data-proposal-checkbox]'))
         }
 
-        function selectedCodes() {
-            return checkboxes()
-                .filter(function (box) {
-                    return box.checked
-                })
-                .map(function (box) {
-                    return box.value
-                })
+        function selectedBoxes() {
+            return checkboxes().filter(function (box) {
+                return box.checked
+            })
+        }
+
+        function eligibleFor(action) {
+            return selectedBoxes().filter(function (box) {
+                var actions = (box.dataset.proposalBulkActions || '').split(' ')
+                return actions.indexOf(action) !== -1
+            })
+        }
+
+        function selectedCodes(action) {
+            return eligibleFor(action).map(function (box) {
+                return box.value
+            })
+        }
+
+        function capitalize(word) {
+            return word.charAt(0).toUpperCase() + word.slice(1)
         }
 
         function refreshSelection() {
             var boxes = checkboxes()
-            var selected = boxes.filter(function (box) {
-                return box.checked
-            })
-            var count = selected.length
+            var count = selectedBoxes().length
+            var pageFullySelected = boxes.length > 0 && count === boxes.length
+            var acrossPages = allResultsSelected()
+            var hints = []
             bulkButtons.forEach(function (button) {
-                button.disabled = count === 0
+                var action = button.dataset.proposalBulk
+                var eligible = acrossPages ? count : eligibleFor(action).length
+                button.disabled = eligible === 0
+                if (!count) {
+                    button.title = bulkReasons.proposalReasonNone || ''
+                } else if (!eligible) {
+                    button.title = bulkReasons['proposalReason' + capitalize(action)] || ''
+                } else {
+                    button.removeAttribute('title')
+                    var skipped = acrossPages ? 0 : count - eligible
+                    var template = bulkReasons['proposalSkip' + capitalize(action)]
+                    if (skipped > 0 && template) {
+                        hints.push(template.replace('{count}', skipped))
+                    }
+                }
             })
+            if (bulkHint) {
+                bulkHint.textContent = hints.join(' ')
+                bulkHint.hidden = hints.length === 0
+            }
             if (countLabel) {
-                countLabel.textContent = count ? count + ' ' + (i18n.selected || '') : ''
+                var shown = acrossPages ? bulkReasons.proposalTotal : count
+                countLabel.textContent = count ? shown + ' ' + (i18n.selected || '') : ''
             }
             if (selectAll) {
-                selectAll.checked = boxes.length > 0 && count === boxes.length
-                selectAll.indeterminate = count > 0 && count < boxes.length
+                selectAll.checked = pageFullySelected
+                selectAll.indeterminate = count > 0 && !pageFullySelected
             }
         }
 
@@ -117,24 +164,12 @@
         }
 
         function rebuildCheckbox(row, result) {
-            var cell = row.querySelector('[data-proposal-select-cell]')
-            if (!cell) {
+            var box = row.querySelector('[data-proposal-checkbox]')
+            if (!box) {
                 return
             }
-            var existing = cell.querySelector('[data-proposal-checkbox]')
-            if (result.bulk_selectable && !existing) {
-                var box = document.createElement('input')
-                box.type = 'checkbox'
-                box.className = 'proposal-select'
-                box.value = result.code
-                box.setAttribute('data-proposal-checkbox', '')
-                if (i18n.selectAria) {
-                    box.setAttribute('aria-label', i18n.selectAria)
-                }
-                cell.appendChild(box)
-            } else if (!result.bulk_selectable && existing) {
-                existing.remove()
-            }
+            box.checked = false
+            box.setAttribute('data-proposal-bulk-actions', (result.bulk_actions || []).join(' '))
         }
 
         function updateRow(result) {
@@ -152,23 +187,33 @@
 
         function setBusy(busy) {
             bulkButtons.forEach(function (button) {
-                button.disabled = busy || selectedCodes().length === 0
+                var pending = allResultsSelected()
+                    ? selectedBoxes().length === 0
+                    : selectedCodes(button.dataset.proposalBulk).length === 0
+                button.disabled = busy || pending
             })
             container.querySelectorAll('[data-proposal-action]').forEach(function (button) {
                 button.disabled = busy
             })
         }
 
-        function submitAction(action, codes) {
-            if (!codes.length) {
+        function submitAction(action, codes, acrossPages) {
+            if (!acrossPages && !codes.length) {
                 return
             }
             setBusy(true)
             var body = new URLSearchParams()
             body.append('action', action)
-            codes.forEach(function (code) {
-                body.append('proposal', code)
-            })
+            if (acrossPages) {
+                body.append('all', '1')
+                filterParams().forEach(function (value, key) {
+                    body.append(key, value)
+                })
+            } else {
+                codes.forEach(function (code) {
+                    body.append('proposal', code)
+                })
+            }
             fetch(actionUrl, {
                 method: 'POST',
                 headers: {
@@ -185,6 +230,10 @@
                 })
                 .then(function (payload) {
                     if (payload.ok && payload.data.ok) {
+                        if (payload.data.reload) {
+                            refreshResults(payload.data.message)
+                            return
+                        }
                         payload.data.results.forEach(updateRow)
                         showFeedback(true, payload.data.message)
                     } else {
@@ -200,13 +249,13 @@
                 })
         }
 
-        function confirmFor(action, isBulk) {
+        function confirmFor(action, isBulk, acrossPages) {
             if (isBulk) {
                 if (action === 'approve') {
-                    return i18n.confirmApprove
+                    return acrossPages ? i18n.confirmApproveAll : i18n.confirmApprove
                 }
                 if (action === 'reject') {
-                    return i18n.confirmReject
+                    return acrossPages ? i18n.confirmRejectAll : i18n.confirmReject
                 }
                 return null
             }
@@ -266,13 +315,14 @@
         bulkButtons.forEach(function (button) {
             button.addEventListener('click', function () {
                 var action = button.dataset.proposalBulk
-                var codes = selectedCodes()
-                if (!codes.length) {
+                var acrossPages = allResultsSelected()
+                var codes = selectedCodes(action)
+                if (!acrossPages && !codes.length) {
                     return
                 }
-                requestConfirmation(action, confirmFor(action, true)).then(function (confirmed) {
+                requestConfirmation(action, confirmFor(action, true, acrossPages)).then(function (confirmed) {
                     if (confirmed) {
-                        submitAction(action, codes)
+                        submitAction(action, codes, acrossPages)
                     }
                 })
             })
@@ -280,6 +330,7 @@
 
         if (selectAll) {
             selectAll.addEventListener('change', function () {
+                selectAllAcrossPages = selectAll.checked
                 checkboxes().forEach(function (box) {
                     box.checked = selectAll.checked
                 })
@@ -289,10 +340,63 @@
 
         container.addEventListener('change', function (event) {
             if (event.target.matches('[data-proposal-checkbox]')) {
+                selectAllAcrossPages = false
                 refreshSelection()
             }
         })
 
         refreshSelection()
-    })
+    }
+
+    function announce(message) {
+        var feedback = document.querySelector('[data-proposal-feedback]')
+        if (!feedback || !message) {
+            return
+        }
+        feedback.innerHTML = ''
+        var alert = document.createElement('div')
+        alert.className = 'alert alert-success'
+        alert.textContent = message
+        feedback.appendChild(alert)
+    }
+
+    function refreshResults(message) {
+        var region = document.querySelector('[data-ajax-results-region]')
+        if (!region) {
+            window.location.reload()
+            return
+        }
+        region.style.opacity = '0.5'
+        fetch(window.location.href, {
+            credentials: 'same-origin',
+            headers: { 'X-Requested-With': 'XMLHttpRequest' },
+        })
+            .then(function (response) {
+                return response.text()
+            })
+            .then(function (html) {
+                var fresh = new DOMParser()
+                    .parseFromString(html, 'text/html')
+                    .querySelector('[data-ajax-results-region]')
+                if (!fresh) {
+                    window.location.reload()
+                    return
+                }
+                region.replaceWith(fresh)
+                fresh.dispatchEvent(
+                    new CustomEvent('eventyay:ajax-results-replaced', { bubbles: true, detail: { container: fresh } })
+                )
+                announce(message)
+            })
+            .catch(function () {
+                window.location.reload()
+            })
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', init)
+    } else {
+        init()
+    }
+    document.addEventListener('eventyay:ajax-results-replaced', init)
 })()

@@ -1,0 +1,12 @@
+.list-sort {
+    white-space: nowrap;
+    margin-left: 4px;
+}
+
+.list-sort a {
+    text-decoration: none;
+}
+
+.reorder-hint {
+    margin-bottom: 12px;
+}

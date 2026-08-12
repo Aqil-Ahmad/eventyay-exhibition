@@ -5,11 +5,12 @@ from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.exceptions import PermissionDenied
 from django.db import transaction
-from django.db.models import Count, Q
+from django.db.models import Count, Min, Q
 from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
+from django.utils.functional import cached_property
 from django.utils.translation import gettext_lazy as _, ngettext
 from django.views import View
 from django.views.generic import DeleteView, DetailView, FormView, ListView, TemplateView
@@ -18,10 +19,17 @@ from eventyay.base.services.system_questions import (
     get_system_question_base_state,
 )
 from eventyay.base.templatetags.rich_text import rich_text
+from eventyay.control.forms.filter import advanced_filter_count, advanced_filters_open_from_get
 from eventyay.control.permissions import EventPermissionRequiredMixin
-from eventyay.control.views import CreateView, UpdateView
+from eventyay.control.views import CreateView, PaginationMixin, UpdateView
 
 from . import mail as mail_helpers
+from .filters import (
+    EmailFilterForm,
+    ExhibitorFilterForm,
+    ProposalFilterForm,
+    PublicExhibitorFilterForm,
+)
 from .forms import (
     CallSettingsForm,
     ExhibitionComposeForm,
@@ -137,6 +145,29 @@ class PublicCallEnabledMixin:
         if self.enforce_private and settings.call_private and not self.has_private_call_access(settings):
             raise Http404()
         return super().dispatch(request, *args, **kwargs)
+
+
+class FilteredListMixin(PaginationMixin):
+    """Wires a control-panel FilterForm and pagination into a ListView."""
+
+    def build_filter_form(self):
+        raise NotImplementedError
+
+    @cached_property
+    def filter_form(self):
+        return self.build_filter_form()
+
+    def apply_filters(self, queryset):
+        if self.filter_form.is_valid():
+            return self.filter_form.filter_qs(queryset)
+        return queryset
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["filter_form"] = self.filter_form
+        context["advanced_filters_open"] = advanced_filters_open_from_get(self.filter_form)
+        context["advanced_filter_count"] = advanced_filter_count(self.filter_form)
+        return context
 
 
 class SettingsView(EventPermissionRequiredMixin, ListView):
@@ -339,24 +370,34 @@ class SettingsView(EventPermissionRequiredMixin, ListView):
         return redirect(self.get_settings_url(active_tab))
 
 
-class ExhibitorListView(EventPermissionRequiredMixin, ListView):
+class ExhibitorListView(EventPermissionRequiredMixin, FilteredListMixin, ListView):
     model = ExhibitorInfo
     permission = ("can_change_event_settings", "can_view_orders")
     template_name = "exhibitors/exhibitor_info.html"
     context_object_name = "exhibitors"
     partner_type = None
 
+    def build_filter_form(self):
+        return ExhibitorFilterForm(
+            data=self.request.GET,
+            event=self.request.event,
+            organization_type=self.partner_type,
+        )
+
     def get_queryset(self):
         queryset = ExhibitorInfo.objects.filter(event=self.request.event).select_related("sponsor_group")
         if self.partner_type == "sponsor":
-            return queryset.filter(is_sponsor=True).order_by("sponsor_position", "name", "pk")
+            queryset = queryset.filter(is_sponsor=True).order_by("sponsor_position", "name", "pk")
         elif self.partner_type == "exhibitor":
-            return queryset.filter(is_exhibitor=True).order_by("exhibitor_position", "name", "pk")
-        return queryset
+            queryset = queryset.filter(is_exhibitor=True).order_by("exhibitor_position", "name", "pk")
+        else:
+            queryset = queryset.order_by("name", "pk")
+        return self.apply_filters(queryset)
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context["partner_type"] = self.partner_type
+        context["reorder_enabled"] = not self.filter_form.filtered and not context["is_paginated"]
         if self.partner_type == "sponsor":
             context["sponsor_group_sections"] = self.build_sponsor_group_sections(context["exhibitors"])
         return context
@@ -377,12 +418,17 @@ class PublicExhibitorListView(ListView):
     template_name = "exhibitors/public_list.html"
     context_object_name = "exhibitors"
 
+    @cached_property
+    def filter_form(self):
+        return PublicExhibitorFilterForm(data=self.request.GET, event=self.request.event)
+
     def get_queryset(self):
-        return public_exhibitors_queryset(self.request.event)
+        return self.filter_form.filter_qs(public_exhibitors_queryset(self.request.event))
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context["event"] = self.request.event
+        context["filter_form"] = self.filter_form
         context["social_image"] = self.request.event.visible_header_image_url
         add_external_image_csp_sources(
             self.request,
@@ -987,18 +1033,26 @@ class CallTextPreviewView(EventPermissionRequiredMixin, View):
         return JsonResponse({"msgs": msgs})
 
 
-class ProposalListView(EventPermissionRequiredMixin, ListView):
+class ProposalListView(EventPermissionRequiredMixin, FilteredListMixin, ListView):
     model = ExhibitionProposal
     permission = ("can_change_event_settings", "can_change_exhibition_proposals", "is_exhibition_reviewer")
     template_name = "exhibitors/proposal_list.html"
     context_object_name = "proposals"
 
+    @cached_property
+    def hide_applicant_emails(self):
+        return should_hide_applicant_emails(self.request.user, self.request.event, request=self.request)
+
+    def build_filter_form(self):
+        return ProposalFilterForm(data=self.request.GET, hide_emails=self.hide_applicant_emails)
+
     def get_queryset(self):
-        return (
+        queryset = (
             ExhibitionProposal.objects.filter(event=self.request.event)
             .select_related("user", "sponsor_group", "approved_exhibitor")
-            .order_by("-updated", "-created")
+            .order_by("-updated", "-created", "-pk")
         )
+        return self.apply_filters(queryset)
 
     def can_manage(self):
         return self.request.user.has_event_permission(
@@ -1010,17 +1064,13 @@ class ProposalListView(EventPermissionRequiredMixin, ListView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context["hide_applicant_emails"] = should_hide_applicant_emails(
-            self.request.user, self.request.event, request=self.request
-        )
+        context["hide_applicant_emails"] = self.hide_applicant_emails
         can_manage = self.can_manage()
         context["can_manage"] = can_manage
         if can_manage:
             for proposal in context["proposals"]:
                 proposal.review_actions = proposal.available_review_actions()
-                proposal.bulk_selectable = proposal.can_transition_to(
-                    ExhibitionProposalState.ACCEPTED
-                ) or proposal.can_transition_to(ExhibitionProposalState.REJECTED)
+                proposal.bulk_actions = proposal.available_bulk_actions()
         return context
 
 
@@ -1137,17 +1187,30 @@ class ProposalActionView(EventPermissionRequiredMixin, View):
     permission = ("can_change_event_settings", "can_change_exhibition_proposals")
     valid_actions = set(PROPOSAL_REVIEW_ACTIONS)
 
+    def get_proposals(self, request, select_all, codes):
+        """Every request matching the active filters when selecting across pages, else the checked rows."""
+        queryset = ExhibitionProposal.objects.filter(event=request.event).select_related("approved_exhibitor")
+        if not select_all:
+            return queryset.filter(code__in=codes)
+        filter_form = ProposalFilterForm(
+            data=request.POST,
+            hide_emails=should_hide_applicant_emails(request.user, request.event, request=request),
+        )
+        if filter_form.is_valid():
+            queryset = filter_form.filter_qs(queryset)
+        return queryset
+
     def post(self, request, *args, **kwargs):
         action = request.POST.get("action")
         codes = request.POST.getlist("proposal")
-        if action not in self.valid_actions or not codes:
+        select_all = request.POST.get("all") == "1"
+        if action not in self.valid_actions or not (codes or select_all):
             return self.respond(request, False, _("No valid action was selected."), [], 0)
 
         target_state = PROPOSAL_REVIEW_ACTIONS[action]
-        proposals = ExhibitionProposal.objects.filter(event=request.event, code__in=codes).select_related(
-            "approved_exhibitor"
-        )
+        proposals = self.get_proposals(request, select_all, codes)
         results = []
+        changed = 0
         skipped = 0
         with transaction.atomic():
             for proposal in proposals:
@@ -1155,17 +1218,26 @@ class ProposalActionView(EventPermissionRequiredMixin, View):
                     skipped += 1
                     continue
                 self.apply_action(proposal, action)
+                changed += 1
+                if select_all:
+                    continue
                 results.append(
                     {
                         "code": proposal.code,
                         "state": proposal.state,
                         "state_display": proposal.get_state_display(),
                         "actions": proposal.available_review_actions(),
-                        "bulk_selectable": proposal.can_transition_to(ExhibitionProposalState.ACCEPTED)
-                        or proposal.can_transition_to(ExhibitionProposalState.REJECTED),
+                        "bulk_actions": proposal.available_bulk_actions(),
                     }
                 )
-        return self.respond(request, True, self.build_message(action, len(results), skipped), results, skipped)
+        return self.respond(
+            request,
+            True,
+            self.build_message(action, changed, skipped),
+            results,
+            skipped,
+            reload=select_all and changed > 0,
+        )
 
     def apply_action(self, proposal, action):
         if action == "approve":
@@ -1197,10 +1269,10 @@ class ProposalActionView(EventPermissionRequiredMixin, View):
             message = f"{message} {skipped_message}"
         return message
 
-    def respond(self, request, ok, message, results, skipped):
+    def respond(self, request, ok, message, results, skipped, reload=False):
         if request.headers.get("x-requested-with") == "XMLHttpRequest":
             return JsonResponse(
-                {"ok": ok, "message": str(message), "results": results, "skipped": skipped},
+                {"ok": ok, "message": str(message), "results": results, "skipped": skipped, "reload": reload},
                 status=200 if ok else 400,
             )
         if ok:
@@ -1699,37 +1771,52 @@ def group_email_entries(emails):
     return entries
 
 
-class EmailListMixin:
-    """Shared search and ordering for the outbox and sent lists."""
+class EmailListMixin(FilteredListMixin):
+    """Shared search, ordering and batch-aware pagination for the outbox and sent lists."""
 
     context_object_name = "emails"
     date_field = "created"
+    partial_template_name = None
 
     def base_queryset(self):
         raise NotImplementedError
 
-    def allowed_orderings(self):
-        return {"to_email", "-to_email", "subject", "-subject", self.date_field, "-" + self.date_field}
+    def build_filter_form(self):
+        return EmailFilterForm(data=self.request.GET, date_field=self.date_field)
+
+    def batch_representatives(self, base, matched):
+        """One row per message: the lowest-numbered row of each batch, plus every unbatched row."""
+        batches = matched.filter(batch__isnull=False).order_by().values("batch")
+        representatives = base.filter(batch__in=batches).order_by().values("batch").annotate(first=Min("pk"))
+        return base.filter(
+            Q(pk__in=matched.filter(batch__isnull=True).order_by().values("pk"))
+            | Q(pk__in=representatives.values("first"))
+        )
 
     def get_queryset(self):
-        queryset = self.base_queryset()
-        query = self.request.GET.get("q", "").strip()
-        if query:
-            queryset = queryset.filter(Q(to_email__icontains=query) | Q(subject__icontains=query))
-        default_ordering = "-" + self.date_field
-        ordering = self.request.GET.get("ordering", default_ordering)
-        if ordering not in self.allowed_orderings():
-            ordering = default_ordering
-        self.current_ordering = ordering
-        return queryset.order_by(ordering)
+        base = self.base_queryset()
+        queryset = self.batch_representatives(base, self.apply_filters(base))
+        if self.filter_form.is_valid() and self.filter_form.cleaned_data.get("ordering"):
+            return self.filter_form.apply_ordering(queryset)
+        return queryset.order_by("-" + self.date_field, "-pk")
 
-    partial_template_name = None
+    def expand_batches(self, representatives):
+        """Restore every recipient row of the batches shown on the current page."""
+        rows = list(representatives)
+        batches = [row.batch for row in rows if row.batch]
+        if not batches:
+            return rows
+        siblings = {}
+        for email in self.base_queryset().filter(batch__in=batches).order_by("pk"):
+            siblings.setdefault(email.batch, []).append(email)
+        expanded = []
+        for row in rows:
+            expanded.extend(siblings.get(row.batch, [row]) if row.batch else [row])
+        return expanded
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context["entries"] = group_email_entries(context["emails"])
-        context["query"] = self.request.GET.get("q", "")
-        context["current_ordering"] = getattr(self, "current_ordering", "-" + self.date_field)
+        context["entries"] = group_email_entries(self.expand_batches(context["emails"]))
         context["date_field"] = self.date_field
         return context
 

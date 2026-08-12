@@ -1,5 +1,5 @@
 {% load i18n %}
-<tr {% if "can_change_event_settings" in request.eventpermset %}dragsort-id="{{ e.id }}"{% endif %}>
+<tr {% if reorder_enabled and "can_change_event_settings" in request.eventpermset %}dragsort-id="{{ e.id }}"{% endif %}>
     <td>
         {% if "can_change_event_settings" in request.eventpermset %}
             <strong><a href="{% url "plugins:exhibition:edit" organizer=request.event.organizer.slug event=request.event.slug pk=e.id %}?type={{ partner_type }}">
@@ -34,9 +34,11 @@
             <a href="{% url "plugins:exhibition:edit" organizer=request.event.organizer.slug event=request.event.slug pk=e.id %}?type={{ partner_type }}" class="btn btn-default btn-sm"><i class="fa fa-edit"></i></a>
             <button type="button" class="btn btn-default btn-sm exhibitor-copy-key" data-url="{% url "plugins:exhibition:copy_key" organizer=request.event.organizer.slug event=request.event.slug pk=e.id %}" data-copied-label="{% trans "Copied!" %}" data-failed-label="{% trans "Copy failed" %}" title="{% trans "Key" %}" data-toggle="tooltip"><i class="fa fa-copy"></i></button>
             <a href="{% url "plugins:exhibition:delete" organizer=request.event.organizer.slug event=request.event.slug pk=e.id %}?type={{ partner_type }}" class="btn btn-delete btn-danger btn-sm"><i class="fa fa-trash"></i></a>
-            <button type="button" draggable="true" class="btn btn-primary btn-sm dragsort-button" title="{% trans 'Move' %}" aria-label="{% trans 'Move' %}">
-                <i class="fa fa-arrows"></i>
-            </button>
+            {% if reorder_enabled %}
+                <button type="button" draggable="true" class="btn btn-primary btn-sm dragsort-button" title="{% trans 'Move' %}" aria-label="{% trans 'Move' %}">
+                    <i class="fa fa-arrows"></i>
+                </button>
+            {% endif %}
         {% endif %}
     </td>
 </tr>

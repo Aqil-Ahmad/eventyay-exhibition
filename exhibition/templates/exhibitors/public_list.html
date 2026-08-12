@@ -14,6 +14,24 @@
     <main aria-label="{% trans 'Exhibition' %}">
         <section class="front-page exhibition-public-page" aria-labelledby="exhibition-heading">
             <h2 id="exhibition-heading">{% trans "Exhibition" %}</h2>
+            <form method="get" action="" class="exhibition-public-filter" role="search">
+                <div class="exhibition-public-filter-field">
+                    {{ filter_form.query }}
+                </div>
+                {% if filter_form.has_group_choices %}
+                    <div class="exhibition-public-filter-field">
+                        <label class="sr-only" for="{{ filter_form.sponsor_group.id_for_label }}">{{ filter_form.sponsor_group.label }}</label>
+                        {{ filter_form.sponsor_group }}
+                    </div>
+                {% endif %}
+                <button type="submit" class="btn btn-primary exhibition-public-filter-submit">
+                    <i class="fa fa-search" aria-hidden="true"></i>
+                    {% trans "Search" %}
+                </button>
+                <a href="{{ request.path }}" class="btn btn-default exhibition-public-filter-reset">
+                    {% trans "Reset" %}
+                </a>
+            </form>
             {% if exhibitors %}
                 <div class="exhibition-public-grid">
                     {% for exhibitor in exhibitors %}
@@ -32,6 +50,8 @@
                         </a>
                     {% endfor %}
                 </div>
+            {% elif filter_form.query.value or filter_form.sponsor_group.value %}
+                <p>{% trans "No exhibitors match your search." %}</p>
             {% else %}
                 <p>{% trans "No exhibitors are currently available." %}</p>
             {% endif %}
