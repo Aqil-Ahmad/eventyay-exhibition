@@ -35,3 +35,9 @@ body.dragging .dragsort-button {
 .partner-select-col .batch-select-label {
     margin-bottom: 0;
 }
+
+[data-partner-download-link].disabled {
+    opacity: 0.5;
+    pointer-events: none;
+    cursor: not-allowed;
+}

@@ -35,6 +35,10 @@
                 selectAll.checked = boxes.length > 0 && selected.length === boxes.length
                 selectAll.indeterminate = selected.length > 0 && selected.length < boxes.length
             }
+            if (downloadLink) {
+                downloadLink.classList.toggle('disabled', selected.length === 0)
+                downloadLink.setAttribute('aria-disabled', selected.length === 0 ? 'true' : 'false')
+            }
         }
 
         if (selectAll) {
@@ -54,11 +58,11 @@
 
         if (downloadLink && baseHref) {
             downloadLink.addEventListener('click', function (event) {
+                event.preventDefault()
                 var selected = selectedValues()
                 if (!selected.length) {
                     return
                 }
-                event.preventDefault()
                 var params = selected
                     .map(function (value) {
                         return 'pk=' + encodeURIComponent(value)
