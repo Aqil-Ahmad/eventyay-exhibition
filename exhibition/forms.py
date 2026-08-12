@@ -1,5 +1,3 @@
-from zoneinfo import ZoneInfo
-
 from django import forms
 from django.core.files.storage import default_storage
 from django.core.files.uploadedfile import UploadedFile
@@ -507,8 +505,13 @@ class CallSettingsForm(I18nModelForm):
                 sub_widget.attrs.setdefault("rows", 8)
         else:
             widget.attrs.setdefault("rows", 8)
-        if self.event and not self.initial.get("call_deadline"):
-            self.initial["call_deadline"] = timezone.localtime(timezone.now(), ZoneInfo(self.event.timezone))
+        if self.event:
+            self.fields["call_deadline"].widget.attrs.update(
+                {
+                    "data-schedule-datetime": "1",
+                    "data-event-timezone": self.event.timezone,
+                }
+            )
 
 
 class ExhibitionQuestionFieldsMixin:
