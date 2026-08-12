@@ -1,5 +1,5 @@
 (function () {
-    document.addEventListener('DOMContentLoaded', function () {
+    function init() {
         var scope = document.querySelector('[data-partner-select-scope]')
         if (!scope) {
             return
@@ -73,5 +73,12 @@
         }
 
         refreshSelection()
-    })
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', init)
+    } else {
+        init()
+    }
+    document.addEventListener('eventyay:ajax-results-replaced', init)
 })()
