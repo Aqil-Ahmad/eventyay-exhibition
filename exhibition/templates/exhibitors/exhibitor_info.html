@@ -9,6 +9,7 @@
     <script defer src="{% static 'exhibition/js/list-filters.js' %}"></script>
     <script defer src="{% static 'orga/js/dragsort.js' %}"></script>
     <script defer src="{% static 'exhibition/js/copy-key.js' %}"></script>
+    <script defer src="{% static 'exhibition/js/partner-select.js' %}"></script>
 {% endblock %}
 {% block exhibitors_header %}
     <h1>{% if partner_type == 'sponsor' %}{% trans "Sponsors" %}{% elif partner_type == 'exhibitor' %}{% trans "Exhibitors" %}{% else %}{% trans "Exhibitors & Sponsors" %}{% endif %}</h1>
@@ -44,11 +45,17 @@
             {% endif %}
         </div>
     {% else %}
+        <div data-partner-select-scope data-selected-label="{% trans "selected" %}">
         <p>
             {% if "can_change_event_settings" in request.eventpermset %}
                 <a href="{{ add_url }}" class="btn btn-default"><i class="fa fa-plus"></i>
                     {% if partner_type == 'sponsor' %}{% trans "Add a Sponsor" %}{% elif partner_type == 'exhibitor' %}{% trans "Add an Exhibitor" %}{% else %}{% trans "Add an Exhibitor or Sponsor" %}{% endif %}
                 </a>
+                <a href="?download=yes" class="btn btn-default" title="{% trans "Download access keys as CSV" %}" data-partner-download-link>
+                    <i class="fa fa-download"></i>
+                    {% if partner_type == 'sponsor' %}{% trans "Download sponsor keys" %}{% elif partner_type == 'exhibitor' %}{% trans "Download exhibitor keys" %}{% else %}{% trans "Download access keys" %}{% endif %}
+                </a>
+                <span class="text-muted" data-partner-selected-count></span>
             {% endif %}
         </p>
 
@@ -66,6 +73,13 @@
                 <table class="table table-hover dragsort-table">
                     <thead>
                     <tr>
+                        {% if "can_change_event_settings" in request.eventpermset %}
+                            <th class="partner-select-col">
+                                <label class="batch-select-label" aria-label="{% trans 'Select all partners' %}">
+                                    <input type="checkbox" data-partner-select-all>
+                                </label>
+                            </th>
+                        {% endif %}
                         <th>{% include "exhibitors/_sort_header.html" with field="name" label=label_name %}</th>
                         <th>{% trans "Group" %}</th>
                         <th class="action-col-2"></th>
@@ -87,6 +101,13 @@
                 <table class="table table-hover dragsort-table">
                     <thead>
                     <tr>
+                        {% if "can_change_event_settings" in request.eventpermset %}
+                            <th class="partner-select-col">
+                                <label class="batch-select-label" aria-label="{% trans 'Select all partners' %}">
+                                    <input type="checkbox" data-partner-select-all>
+                                </label>
+                            </th>
+                        {% endif %}
                         <th>{% include "exhibitors/_sort_header.html" with field="name" label=label_name %}</th>
                         {% if not partner_type %}<th>{% trans "Group" %}</th>{% endif %}
                         <th>{% include "exhibitors/_sort_header.html" with field="booth" label=label_booth %}</th>
@@ -102,6 +123,7 @@
             </div>
         {% endif %}
         {% include "pretixcontrol/pagination.html" %}
+        </div>
     {% endif %}
     </div>
 {% endblock %}

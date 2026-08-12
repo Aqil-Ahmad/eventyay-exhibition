@@ -21,6 +21,7 @@ from eventyay.base.services.system_questions import (
     get_system_question_base_state,
 )
 from eventyay.base.templatetags.rich_text import rich_text
+from eventyay.common.utils.language import localize_event_text
 from eventyay.control.forms.filter import advanced_filter_count, advanced_filters_open_from_get
 from eventyay.control.permissions import EventPermissionRequiredMixin
 from eventyay.control.views import CreateView, PaginationMixin, UpdateView
@@ -114,6 +115,14 @@ def send_proposal_confirmation(event, proposal, requestor):
 def queue_exhibitor_access_mail(event, exhibitor, requestor):
     """Queue the access-credentials email for organiser review in the outbox."""
     return mail_helpers.queue_exhibitor_access_email(event, exhibitor, requestor=requestor)
+
+
+def access_newly_granted(exhibitor, previous=None):
+    """True when lead scanning or voucher access is enabled and was not before."""
+    previous = previous or {}
+    return (exhibitor.lead_scanning_enabled and not previous.get("lead_scanning_enabled")) or (
+        exhibitor.allow_voucher_access and not previous.get("allow_voucher_access")
+    )
 
 
 def partner_type_of(exhibitor):
@@ -399,6 +408,43 @@ class ExhibitorListView(EventPermissionRequiredMixin, FilteredListMixin, ListVie
         else:
             queryset = queryset.order_by("name", "pk")
         return self.apply_filters(queryset)
+
+    def get(self, request, *args, **kwargs):
+        if request.GET.get("download") == "yes":
+            if not request.user.has_event_permission(
+                request.event.organizer, request.event, "can_change_event_settings", request=request
+            ):
+                raise PermissionDenied()
+            return self.download_keys_csv()
+        return super().get(request, *args, **kwargs)
+
+    def download_keys_csv(self):
+        queryset = self.get_queryset()
+        selected_pks = self.request.GET.getlist("pk")
+        if selected_pks:
+            queryset = queryset.filter(pk__in=selected_pks)
+
+        output = io.StringIO()
+        writer = csv.writer(output, quoting=csv.QUOTE_NONNUMERIC, delimiter=",")
+        writer.writerow([_("Name"), _("Booth ID"), _("Booth name"), _("Email"), _("Access key")])
+        for exhibitor in queryset:
+            writer.writerow(
+                [
+                    localize_event_text(exhibitor.name) or str(exhibitor.name),
+                    exhibitor.booth_id or "",
+                    exhibitor.localized_booth_name,
+                    exhibitor.email or "",
+                    exhibitor.key,
+                ]
+            )
+        filename = {
+            "sponsor": "sponsor-keys.csv",
+            "exhibitor": "exhibitor-keys.csv",
+        }.get(self.partner_type, "partner-keys.csv")
+        response = HttpResponse(output.getvalue().encode("utf-8"), content_type="text/csv; charset=utf-8")
+        response["Content-Disposition"] = f'attachment; filename="{filename}"'
+        response["Cache-Control"] = "no-store"
+        return response
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -1632,7 +1678,7 @@ class ExhibitorCreateView(ExhibitorLinkFormsetMixin, EventPermissionRequiredMixi
 
         response = super().form_valid(form)
         self.save_link_formsets()
-        if form.instance.lead_scanning_enabled and queue_exhibitor_access_mail(
+        if access_newly_granted(form.instance) and queue_exhibitor_access_mail(
             self.request.event, self.object, self.request.user
         ):
             messages.info(self.request, _("An access-credentials email was placed in the outbox."))
@@ -1673,9 +1719,11 @@ class ExhibitorEditView(ExhibitorLinkFormsetMixin, EventPermissionRequiredMixin,
 
     @transaction.atomic
     def form_valid(self, form):
-        was_lead_scanning_enabled = (
-            ExhibitorInfo.objects.filter(pk=self.object.pk).values_list("lead_scanning_enabled", flat=True).first()
-        )
+        previous = (
+            ExhibitorInfo.objects.filter(pk=self.object.pk)
+            .values("lead_scanning_enabled", "allow_voucher_access")
+            .first()
+        ) or {}
 
         # Generate booth_id only for exhibitors if none exists.
         if (
@@ -1687,10 +1735,8 @@ class ExhibitorEditView(ExhibitorLinkFormsetMixin, EventPermissionRequiredMixin,
 
         response = super().form_valid(form)
         self.save_link_formsets()
-        if (
-            form.instance.lead_scanning_enabled
-            and not was_lead_scanning_enabled
-            and queue_exhibitor_access_mail(self.request.event, self.object, self.request.user)
+        if access_newly_granted(form.instance, previous) and queue_exhibitor_access_mail(
+            self.request.event, self.object, self.request.user
         ):
             messages.info(self.request, _("An access-credentials email was placed in the outbox."))
         return response

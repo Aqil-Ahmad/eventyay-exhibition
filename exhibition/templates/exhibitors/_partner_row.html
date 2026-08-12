@@ -1,5 +1,10 @@
 {% load i18n %}
 <tr {% if reorder_enabled and "can_change_event_settings" in request.eventpermset %}dragsort-id="{{ e.id }}"{% endif %}>
+    {% if "can_change_event_settings" in request.eventpermset %}
+        <td class="partner-select-col">
+            <input type="checkbox" value="{{ e.id }}" data-partner-checkbox aria-label="{% blocktrans trimmed with name=e.name %}Select {{ name }}{% endblocktrans %}">
+        </td>
+    {% endif %}
     <td>
         {% if "can_change_event_settings" in request.eventpermset %}
             <strong><a href="{% url "plugins:exhibition:edit" organizer=request.event.organizer.slug event=request.event.slug pk=e.id %}?type={{ partner_type }}">
