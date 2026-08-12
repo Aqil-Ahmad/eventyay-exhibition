@@ -419,10 +419,15 @@ class ExhibitorListView(EventPermissionRequiredMixin, FilteredListMixin, ListVie
         return super().get(request, *args, **kwargs)
 
     def download_keys_csv(self):
+        queryset = self.get_queryset()
+        selected_pks = self.request.GET.getlist("pk")
+        if selected_pks:
+            queryset = queryset.filter(pk__in=selected_pks)
+
         output = io.StringIO()
         writer = csv.writer(output, quoting=csv.QUOTE_NONNUMERIC, delimiter=",")
         writer.writerow([_("Name"), _("Booth ID"), _("Booth name"), _("Email"), _("Access key")])
-        for exhibitor in self.get_queryset():
+        for exhibitor in queryset:
             writer.writerow(
                 [
                     localize_event_text(exhibitor.name) or str(exhibitor.name),

@@ -27,3 +27,11 @@
 body.dragging .dragsort-button {
     transform: translate(-9999px);
 }
+
+.partner-select-col {
+    width: 32px;
+}
+
+.partner-select-col .batch-select-label {
+    margin-bottom: 0;
+}
