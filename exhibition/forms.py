@@ -1380,7 +1380,7 @@ class ExhibitionMailTemplatesForm(SettingsForm):
         mail_helpers.PROPOSAL_NEW: _("Request received (confirmation)"),
         mail_helpers.PROPOSAL_ACCEPTED: _("Request accepted"),
         mail_helpers.PROPOSAL_REJECTED: _("Request rejected"),
-        mail_helpers.EXHIBITOR_ACCESS: _("Exhibitor access code"),
+        mail_helpers.EXHIBITOR_ACCESS: _("Exhibitor lead scanning key"),
     }
 
     def __init__(self, *args, **kwargs):

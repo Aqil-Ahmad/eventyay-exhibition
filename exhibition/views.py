@@ -1863,7 +1863,7 @@ class EmailTemplatesView(EventPermissionRequiredMixin, TemplateView):
                 (mail_helpers.PROPOSAL_NEW, _("Request received (confirmation)")),
                 (mail_helpers.PROPOSAL_ACCEPTED, _("Request accepted")),
                 (mail_helpers.PROPOSAL_REJECTED, _("Request rejected")),
-                (mail_helpers.EXHIBITOR_ACCESS, _("Exhibitor access code")),
+                (mail_helpers.EXHIBITOR_ACCESS, _("Exhibitor lead scanning key")),
             )
         ]
         context["email_placeholders"] = mail_helpers.PLACEHOLDER_DOCS

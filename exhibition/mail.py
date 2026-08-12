@@ -84,15 +84,21 @@ DEFAULT_TEMPLATES = {
         ),
     ),
     EXHIBITOR_ACCESS: (
-        LazyI18nString.from_gettext(gettext_noop("Your exhibitor access code")),
+        LazyI18nString.from_gettext(gettext_noop("Lead Scanning Access for {event_name}")),
         LazyI18nString.from_gettext(
             gettext_noop(
                 "Hello {exhibitor_name},\n\n"
-                "Your exhibitor account for {event_name} has been created.\n\n"
-                "Booth: {booth_id}\n"
-                "Access code: {exhibitor_access_code}\n\n"
+                "Please use the information below to activate the **Lead Scanning app**:\n\n"
+                "1. Open the **Web App**: access.eventyay.com\n"
+                "2. Enter the **Device Token(s)**:\n"
+                "    - Device 1: {device_1_token}\n"
+                "    - Device 2: {device_2_token}\n\n"
+                "    *Please enter each Device Token manually. Each token is unique to one device. "
+                "If you set up additional devices, each device will require its own Device Token.*\n\n"
+                "3. Enter the **Exhibitor Key**: {exhibitor_access_code}\n\n"
+                "Please share these details with the team members who will be scanning leads at the event.\n\n"
                 "Best regards,\n"
-                "The {event_name} team"
+                "The {event_name} Team"
             )
         ),
     ),
