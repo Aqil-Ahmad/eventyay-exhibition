@@ -223,6 +223,13 @@
     </fieldset>
     {% endif %}
 
+    {% if form.allow_voucher_access %}
+    <fieldset id="voucher-section">
+        <legend>{% trans "Vouchers" %}</legend>
+        {% bootstrap_field form.allow_voucher_access layout="control" %}
+    </fieldset>
+    {% endif %}
+
     <fieldset>
         <legend>{% trans "Internal notes" %}</legend>
         {% bootstrap_field form.comment layout="control" %}

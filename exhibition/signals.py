@@ -1,4 +1,5 @@
 from django.db.models import Prefetch
+from django.db.models.signals import pre_delete
 from django.dispatch import receiver
 from django.template.loader import get_template
 from django.templatetags.static import static
@@ -17,7 +18,7 @@ from eventyay.presale.signals import (
 )
 
 from .mail import proposal_public_url
-from .models import ExhibitionProposal, ExhibitorInfo, ExhibitorSettings, SponsorGroup
+from .models import ExhibitionProposal, ExhibitorInfo, ExhibitorSettings, ExhibitorVoucher, SponsorGroup
 from .utils import add_external_image_csp_sources, public_exhibitors_queryset
 
 
@@ -215,6 +216,12 @@ def exhibition_mail_placeholders(sender, **kwargs):
             "a1b2c3d4",
         ),
     ]
+
+
+@receiver(pre_delete, sender=ExhibitorInfo, dispatch_uid="exhibition_exhibitor_voucher_cleanup")
+def delete_exhibitor_vouchers(sender, instance, **kwargs):
+    for link in ExhibitorVoucher.objects.filter(exhibitor=instance, voucher__redeemed=0).select_related("voucher"):
+        link.voucher.delete()
 
 
 @receiver(user_menu_items, dispatch_uid="exhibition_user_menu_item")

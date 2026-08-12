@@ -2,7 +2,7 @@ from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
 from eventyay.api.serializers.i18n import I18nAwareModelSerializer
-from eventyay.base.models import OrderPosition
+from eventyay.base.models import Order, OrderPosition
 from eventyay.common.urls import normalize_url_scheme
 from i18nfield.strings import LazyI18nString
 from rest_framework import serializers, status, views, viewsets
@@ -14,6 +14,7 @@ from .models import (
     ExhibitorSettings,
     ExhibitorSocialLink,
     ExhibitorTag,
+    ExhibitorVoucher,
     Lead,
     SponsorGroup,
     generate_booth_id,
@@ -25,6 +26,7 @@ UNSET = object()
 
 LEAD_SCANNING_DISABLED_ERROR = "Lead scanning is not enabled for this exhibitor"
 LEAD_ACCESS_DISABLED_ERROR = "This exhibitor is not allowed to access collected lead data"
+VOUCHER_ACCESS_DISABLED_ERROR = "This exhibitor is not allowed to access voucher redemption data"
 
 
 def _forbidden(error):
@@ -36,6 +38,41 @@ def _visible_attendee(attendee_data, exhibitor):
         return attendee_data
     attendee_data = attendee_data or {}
     return {"note": attendee_data.get("note", ""), "tags": attendee_data.get("tags", [])}
+
+
+def get_allowed_attendee_data(order_position, settings):
+    attendee_data = {}
+    if settings.is_field_allowed("attendee_name"):
+        attendee_data["name"] = order_position.attendee_name
+    if settings.is_field_allowed("attendee_email"):
+        attendee_data["email"] = order_position.attendee_email
+    if settings.is_field_allowed("system_company"):
+        attendee_data["company"] = order_position.company
+    if settings.is_field_allowed("system_job_title"):
+        attendee_data["job_title"] = order_position.job_title
+    if settings.is_field_allowed("system_street"):
+        address_parts = [
+            order_position.street,
+            order_position.zipcode,
+            order_position.city,
+            str(order_position.country) if order_position.country else "",
+        ]
+        attendee_data["address"] = ", ".join(part for part in address_parts if part)
+
+    answers = {answer.question_id: answer for answer in order_position.answers.all()}
+    required_questions = order_position.order.event.questions.filter(required=True, active=True).order_by(
+        "position", "id"
+    )
+    question_data = []
+    for question in required_questions:
+        if not settings.is_field_allowed(f"question_{question.pk}"):
+            continue
+        answer = answers.get(question.pk)
+        question_data.append({"question": str(question.question), "answer": str(answer.answer) if answer else ""})
+    if question_data:
+        attendee_data["questions"] = question_data
+
+    return attendee_data
 
 
 def _localize_i18n_value(value, locale):
@@ -453,6 +490,45 @@ class LeadRetrieveView(views.APIView):
         )
 
         return Response({"success": True, "leads": list(leads)}, status=status.HTTP_200_OK)
+
+
+class VoucherRedemptionRetrieveView(views.APIView):
+    def get(self, request, *args, **kwargs):
+        key = request.headers.get("Exhibitor")
+        try:
+            exhibitor = ExhibitorInfo.objects.get(
+                key=key,
+                event__slug=kwargs.get("event"),
+                event__organizer__slug=kwargs.get("organizer"),
+            )
+        except ExhibitorInfo.DoesNotExist:
+            return Response(
+                {"success": False, "error": "Invalid exhibitor key"},
+                status=status.HTTP_401_UNAUTHORIZED,
+            )
+
+        if not exhibitor.allow_voucher_access:
+            return _forbidden(VOUCHER_ACCESS_DISABLED_ERROR)
+
+        settings = ExhibitorSettings.objects.get_or_create(event=exhibitor.event)[0]
+        voucher_ids = ExhibitorVoucher.objects.filter(exhibitor=exhibitor).values_list("voucher_id", flat=True)
+        positions = (
+            OrderPosition.objects.filter(voucher_id__in=voucher_ids)
+            .exclude(order__status=Order.STATUS_CANCELED)
+            .select_related("order", "voucher")
+            .order_by("-order__datetime")
+        )
+        redemptions = [
+            {
+                "voucher_code": position.voucher.code,
+                "redeemed_at": position.order.datetime,
+                "order_status": position.order.status,
+                "attendee": get_allowed_attendee_data(position, settings),
+            }
+            for position in positions
+        ]
+
+        return Response({"success": True, "redemptions": redemptions}, status=status.HTTP_200_OK)
 
 
 class TagListView(views.APIView):
