@@ -1,15 +1,15 @@
 (function () {
     document.addEventListener("DOMContentLoaded", function () {
-        var input = document.querySelector("[data-schedule-datetime]")
-        if (!input) return
+        document.querySelectorAll("[data-schedule-fill-now]").forEach(function (button) {
+            var input = document.getElementById(button.dataset.scheduleFillNow)
+            if (!input) return
 
-        var timeZone = input.dataset.eventTimezone
-        if (!timeZone) return
+            var timeZone = input.dataset.eventTimezone
+            if (!timeZone) return
 
-        input.addEventListener("focus", function () {
-            if (!input.value) {
+            button.addEventListener("click", function () {
                 input.value = formatNowInTimeZone(timeZone)
-            }
+            })
         })
     })
 
