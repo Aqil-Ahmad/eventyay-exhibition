@@ -4,6 +4,7 @@ from types import SimpleNamespace
 
 import pytest
 from django.conf import settings as django_settings
+from django.contrib.messages.storage.fallback import FallbackStorage
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import RequestFactory
 from django_scopes import scopes_disabled
@@ -21,6 +22,8 @@ from exhibition.models import (
 )
 from exhibition.views import (
     CallTextPreviewView,
+    ExhibitionDefaultFieldEditView,
+    ExhibitionDefaultFieldResetView,
     ExhibitionQuestionListView,
     ExhibitorListView,
     SettingsView,
@@ -284,8 +287,7 @@ def test_save_field_order_persists_new_order(event):
     view.save_field_order(settings, "social_links,logo,header_image,name")
 
     settings.refresh_from_db()
-    assert settings.ordered_proposal_field_keys[:3] == ["logo", "header_image", "name"]
-    assert settings.ordered_proposal_field_keys[-2:] == ["social_links", "extra_links"]
+    assert settings.ordered_proposal_field_keys[:4] == ["social_links", "logo", "header_image", "name"]
     assert set(settings.ordered_proposal_field_keys) == set(PROPOSAL_DEFAULT_FIELD_KEYS)
 
 
@@ -298,6 +300,101 @@ def test_proposal_form_reflects_saved_field_order(event):
     form = ExhibitionProposalForm(event=event)
     field_names = list(form.fields.keys())
     assert field_names.index("description") < field_names.index("name")
+
+
+@pytest.mark.django_db
+def test_proposal_items_interleaves_reordered_formset_field(event):
+    settings = make_exhibitor_settings(event)
+    stored = settings.proposal_field_settings
+    stored["social_links"]["active"] = True
+    settings.save(update_fields=["proposal_field_settings"])
+
+    view = ExhibitionQuestionListView()
+    view.save_field_order(settings, "social_links,name")
+
+    form = ExhibitionProposalForm(event=event)
+    items = form.proposal_items
+    assert items[0]["kind"] == "social_links"
+    assert items[1]["kind"] == "field"
+    assert items[1]["key"] == "name"
+    assert items[1]["field"].name == "name"
+
+
+@pytest.mark.django_db
+def test_required_dropdown_value_persists_as_boolean(event):
+    settings = make_exhibitor_settings(event)
+    view = ExhibitionQuestionListView()
+    request = RequestFactory().post("/", data={"url_active": "on", "url_required": "required"})
+    request.event = event
+    request.session = {}
+    setattr(request, "_messages", FallbackStorage(request))
+    view.request = request
+    view.post(request)
+
+    settings.refresh_from_db()
+    assert settings.normalized_proposal_field_settings["url"]["required"] is True
+
+
+def _default_field_request(event, method="post", data=None):
+    factory = RequestFactory()
+    request = getattr(factory, method)("/", data=data or {})
+    request.event = event
+    request.session = {}
+    setattr(request, "_messages", FallbackStorage(request))
+    return request
+
+
+@pytest.mark.django_db
+def test_default_field_edit_overrides_label_and_help_text(event):
+    settings = make_exhibitor_settings(event)
+    view = ExhibitionDefaultFieldEditView()
+    view.request = _default_field_request(event)
+    view.kwargs = {"key": "name"}
+    form = view.get_form_class()(
+        data={"label": "University name", "help_text": "Use the official name."},
+        field_setting=view.get_field_setting(),
+    )
+    assert form.is_valid(), form.errors
+    view.form_valid(form)
+
+    settings.refresh_from_db()
+    normalized = settings.normalized_proposal_field_settings
+    assert normalized["name"]["label"] == "University name"
+    assert normalized["name"]["help_text"] == "Use the official name."
+
+    proposal_form = ExhibitionProposalForm(event=event)
+    assert str(proposal_form.fields["name"].label) == "University name"
+    assert str(proposal_form.fields["name"].help_text) == "Use the official name."
+
+
+@pytest.mark.django_db
+def test_default_field_reset_restores_builtin_label(event):
+    settings = make_exhibitor_settings(event)
+    stored = settings.proposal_field_settings
+    stored["name"]["label"] = "University name"
+    settings.save(update_fields=["proposal_field_settings"])
+
+    view = ExhibitionDefaultFieldResetView()
+    view.request = _default_field_request(event)
+    view.kwargs = {"key": "name"}
+    view.post(view.request, key="name")
+
+    settings.refresh_from_db()
+    normalized = settings.normalized_proposal_field_settings
+    assert normalized["name"]["custom_label"] is None
+    assert str(normalized["name"]["label"]) == "Organization name"
+
+
+@pytest.mark.django_db
+def test_saving_settings_does_not_freeze_default_labels_as_overrides(event):
+    settings = make_exhibitor_settings(event)
+    view = ExhibitionQuestionListView()
+    view.request = _default_field_request(event, data={"url_active": "on"})
+    view.post(view.request)
+
+    settings.refresh_from_db()
+    assert settings.proposal_field_settings["url"]["label"] is None
+    assert settings.normalized_proposal_field_settings["url"]["custom_label"] is None
 
 
 @pytest.mark.django_db

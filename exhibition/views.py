@@ -35,6 +35,7 @@ from .filters import (
 from .forms import (
     CallSettingsForm,
     ExhibitionComposeForm,
+    ExhibitionDefaultFieldForm,
     ExhibitionEmailQueueForm,
     ExhibitionMailTemplatesForm,
     ExhibitionProposalExtraLinkFormSet,
@@ -53,7 +54,6 @@ from .forms import (
 from .models import (
     PROPOSAL_DEFAULT_FIELD_KEYS,
     PROPOSAL_DEFAULT_FIELDS,
-    PROPOSAL_FORMSET_FIELD_KEYS,
     PROPOSAL_REVIEW_ACTIONS,
     ExhibitionEmailQueue,
     ExhibitionProposal,
@@ -65,6 +65,7 @@ from .models import (
     SponsorGroup,
     generate_booth_id,
     get_next_sponsor_group_level,
+    storable_proposal_field_settings,
 )
 from .social_links import serialize_social_link
 from .utils import (
@@ -565,6 +566,20 @@ class ProposalLinkFormsetMixin:
     def proposal_field_is_active(self, key):
         return self.get_proposal_field_settings()[key]["active"]
 
+    def proposal_field_is_required(self, key):
+        return self.get_proposal_field_settings()[key]["required"]
+
+    @staticmethod
+    def _formset_has_entries(formset):
+        if formset is None:
+            return True
+        for form in formset.forms:
+            if not form.cleaned_data or form.cleaned_data.get("DELETE"):
+                continue
+            if any(value for name, value in form.cleaned_data.items() if name != "DELETE"):
+                return True
+        return False
+
     def get_formset_instance(self):
         obj = getattr(self, "object", None)
         if obj is not None:
@@ -592,11 +607,32 @@ class ProposalLinkFormsetMixin:
             self.get_extra_link_formset() if self.proposal_field_is_active("extra_links") else None
         )
 
-        if (
+        valid = (
             form.is_valid()
             and (self.social_media_formset is None or self.social_media_formset.is_valid())
             and (self.extra_links_formset is None or self.extra_links_formset.is_valid())
+        )
+
+        if (
+            valid
+            and self.proposal_field_is_required("social_links")
+            and not self._formset_has_entries(self.social_media_formset)
         ):
+            self.social_media_formset._non_form_errors = self.social_media_formset.error_class(
+                [_("Add at least one social media link.")]
+            )
+            valid = False
+        if (
+            valid
+            and self.proposal_field_is_required("extra_links")
+            and not self._formset_has_entries(self.extra_links_formset)
+        ):
+            self.extra_links_formset._non_form_errors = self.extra_links_formset.error_class(
+                [_("Add at least one extra link.")]
+            )
+            valid = False
+
+        if valid:
             return self.form_valid(form)
         return self.form_invalid(form)
 
@@ -612,8 +648,6 @@ class ProposalLinkFormsetMixin:
         )
         context["social_link_prefixes"] = social_link_prefixes()
         context["settings"] = self.get_exhibition_settings()
-        context["show_social_links"] = self.proposal_field_is_active("social_links")
-        context["show_extra_links"] = self.proposal_field_is_active("extra_links")
         context.setdefault("can_edit", True)
         return context
 
@@ -1302,32 +1336,28 @@ class ExhibitionQuestionListView(EventPermissionRequiredMixin, ListView):
         field_settings = settings.normalized_proposal_field_settings
         answer_counts = self.get_default_field_answer_counts()
         field_definitions = {field["key"]: field for field in PROPOSAL_DEFAULT_FIELDS}
-        formset_keys = set(PROPOSAL_FORMSET_FIELD_KEYS)
 
-        orderable_rows = []
+        rows = []
         for key in PROPOSAL_DEFAULT_FIELD_KEYS:
-            if key in formset_keys:
-                continue
             definition = field_definitions[key]
-            orderable_rows.append(
+            rows.append(
                 {
                     "sort_position": field_settings[key]["position"],
                     "sort_kind": 0,
                     "dragsort_id": key,
                     "input_prefix": key,
-                    "label": definition["label"],
+                    "label": field_settings[key]["label"],
                     "active": field_settings[key]["active"],
                     "required": field_settings[key]["required"],
                     "supports_required": definition.get("supports_required", True),
                     "active_locked": definition.get("active_locked", False),
                     "required_locked": definition.get("required_locked", False),
                     "answer_count": answer_counts.get(key, 0),
-                    "orderable": True,
                     "is_custom": False,
                 }
             )
         for question in context["questions"]:
-            orderable_rows.append(
+            rows.append(
                 {
                     "sort_position": question.position,
                     "sort_kind": 1,
@@ -1340,30 +1370,12 @@ class ExhibitionQuestionListView(EventPermissionRequiredMixin, ListView):
                     "active_locked": False,
                     "required_locked": False,
                     "answer_count": question.answer_count,
-                    "orderable": True,
                     "is_custom": True,
                     "pk": question.pk,
                 }
             )
-        orderable_rows.sort(key=lambda row: (row["sort_position"], row["sort_kind"]))
-
-        formset_rows = [
-            {
-                "dragsort_id": key,
-                "input_prefix": key,
-                "label": field_definitions[key]["label"],
-                "active": field_settings[key]["active"],
-                "required": field_settings[key]["required"],
-                "supports_required": field_definitions[key].get("supports_required", True),
-                "active_locked": field_definitions[key].get("active_locked", False),
-                "required_locked": field_definitions[key].get("required_locked", False),
-                "answer_count": answer_counts.get(key, 0),
-                "orderable": False,
-                "is_custom": False,
-            }
-            for key in PROPOSAL_FORMSET_FIELD_KEYS
-        ]
-        context["proposal_fields"] = orderable_rows + formset_rows
+        rows.sort(key=lambda row: (row["sort_position"], row["sort_kind"]))
+        context["proposal_fields"] = rows
         return context
 
     def get_default_field_answer_counts(self):
@@ -1415,18 +1427,18 @@ class ExhibitionQuestionListView(EventPermissionRequiredMixin, ListView):
             proposal_field_settings[key]["active"] = is_active
             proposal_field_settings[key]["required"] = is_active and (
                 field.get("required_locked")
-                or (field.get("supports_required", True) and request.POST.get(f"{key}_required") == "on")
+                or (field.get("supports_required", True) and request.POST.get(f"{key}_required") == "required")
             )
             if field.get("supports_required") is False:
                 proposal_field_settings[key]["required"] = False
 
-        settings.proposal_field_settings = proposal_field_settings
+        settings.proposal_field_settings = storable_proposal_field_settings(proposal_field_settings)
         settings.save(update_fields=["proposal_field_settings"])
 
         questions = list(ExhibitionQuestion.objects.filter(event=request.event))
         for question in questions:
             question.active = request.POST.get(f"question_{question.pk}_active") == "on"
-            question.required = request.POST.get(f"question_{question.pk}_required") == "on"
+            question.required = request.POST.get(f"question_{question.pk}_required") == "required"
         if questions:
             ExhibitionQuestion.objects.bulk_update(questions, ["active", "required"])
 
@@ -1435,8 +1447,7 @@ class ExhibitionQuestionListView(EventPermissionRequiredMixin, ListView):
 
     def save_field_order(self, settings, order_str):
         proposal_field_settings = settings.normalized_proposal_field_settings
-        orderable_keys = [key for key in PROPOSAL_DEFAULT_FIELD_KEYS if key not in PROPOSAL_FORMSET_FIELD_KEYS]
-        orderable_key_set = set(orderable_keys)
+        orderable_key_set = set(PROPOSAL_DEFAULT_FIELD_KEYS)
         questions = {question.pk: question for question in ExhibitionQuestion.objects.filter(event=settings.event)}
         seen_keys = set()
         seen_question_pks = set()
@@ -1453,7 +1464,7 @@ class ExhibitionQuestionListView(EventPermissionRequiredMixin, ListView):
                 seen_question_pks.add(question.pk)
                 reordered_questions.append(question)
                 position += 1
-        for key in orderable_keys:
+        for key in PROPOSAL_DEFAULT_FIELD_KEYS:
             if key not in seen_keys:
                 proposal_field_settings[key]["position"] = position
                 position += 1
@@ -1465,10 +1476,7 @@ class ExhibitionQuestionListView(EventPermissionRequiredMixin, ListView):
             question.position = position
             reordered_questions.append(question)
             position += 1
-        for key in PROPOSAL_FORMSET_FIELD_KEYS:
-            proposal_field_settings[key]["position"] = position
-            position += 1
-        settings.proposal_field_settings = proposal_field_settings
+        settings.proposal_field_settings = storable_proposal_field_settings(proposal_field_settings)
         settings.save(update_fields=["proposal_field_settings"])
         if reordered_questions:
             ExhibitionQuestion.objects.bulk_update(reordered_questions, ["position"])
@@ -1526,6 +1534,76 @@ class ExhibitionQuestionDeleteView(EventPermissionRequiredMixin, DeleteView):
             "plugins:exhibition:call.questions",
             kwargs=event_kwargs(self.request.event),
         )
+
+
+class DefaultFieldMixin(EventPermissionRequiredMixin):
+    permission = "can_change_settings"
+
+    def dispatch(self, request, *args, **kwargs):
+        if kwargs.get("key") not in PROPOSAL_DEFAULT_FIELD_KEYS:
+            raise Http404(_("The requested form field does not exist."))
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_exhibition_settings(self):
+        return ExhibitorSettings.objects.get_or_create(event=self.request.event)[0]
+
+    def get_field_setting(self):
+        return self.get_exhibition_settings().normalized_proposal_field_settings[self.kwargs["key"]]
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["field_setting"] = self.get_field_setting()
+        return context
+
+    def get_success_url(self):
+        return reverse(
+            "plugins:exhibition:call.questions",
+            kwargs=event_kwargs(self.request.event),
+        )
+
+
+class ExhibitionDefaultFieldEditView(DefaultFieldMixin, FormView):
+    form_class = ExhibitionDefaultFieldForm
+    template_name = "exhibitors/call_default_field_form.html"
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        field_setting = self.get_field_setting()
+        kwargs["field_setting"] = field_setting
+        kwargs.setdefault(
+            "initial",
+            {
+                "label": field_setting["custom_label"] or "",
+                "help_text": field_setting["custom_help_text"] or "",
+            },
+        )
+        return kwargs
+
+    def form_valid(self, form):
+        settings = self.get_exhibition_settings()
+        proposal_field_settings = settings.normalized_proposal_field_settings
+        key = self.kwargs["key"]
+        proposal_field_settings[key]["custom_label"] = form.cleaned_data["label"].strip() or None
+        proposal_field_settings[key]["custom_help_text"] = form.cleaned_data["help_text"].strip() or None
+        settings.proposal_field_settings = storable_proposal_field_settings(proposal_field_settings)
+        settings.save(update_fields=["proposal_field_settings"])
+        messages.success(self.request, _("Your changes have been saved."))
+        return redirect(self.get_success_url())
+
+
+class ExhibitionDefaultFieldResetView(DefaultFieldMixin, TemplateView):
+    template_name = "exhibitors/call_default_field_reset.html"
+
+    def post(self, request, *args, **kwargs):
+        settings = self.get_exhibition_settings()
+        proposal_field_settings = settings.normalized_proposal_field_settings
+        key = kwargs["key"]
+        proposal_field_settings[key]["custom_label"] = None
+        proposal_field_settings[key]["custom_help_text"] = None
+        settings.proposal_field_settings = storable_proposal_field_settings(proposal_field_settings)
+        settings.save(update_fields=["proposal_field_settings"])
+        messages.success(request, _("The field has been reset to its default."))
+        return redirect(self.get_success_url())
 
 
 class ExhibitorCreateView(ExhibitorLinkFormsetMixin, EventPermissionRequiredMixin, CreateView):

@@ -58,13 +58,13 @@ class ExhibitorInfoForm(I18nModelForm):
     )
     header_image_url = forms.URLField(
         required=False,
-        label=_("Header Image URL"),
+        label=_("Header image URL"),
         help_text=_("Use an external image URL instead of uploading a header image file."),
     )
     sponsor_group = forms.ModelChoiceField(
         queryset=SponsorGroup.objects.none(),
         required=False,
-        label=_("Sponsor Group"),
+        label=_("Sponsor group"),
     )
     allow_voucher_access = forms.BooleanField(
         required=False,
@@ -151,15 +151,15 @@ class ExhibitorInfoForm(I18nModelForm):
             "lead_scanning_scope_by_device",
         ]
         labels = {
-            "name": _("Organization Name"),
-            "description": _("Organization Description"),
-            "email": _("Contact email"),
-            "contact_url": _("Contact Page URL"),
-            "video_url": _("Promotional Video URL"),
-            "slides": _("Promotional Slides"),
+            "name": _("Organization name"),
+            "description": _("Organization description"),
+            "email": _("E-mail"),
+            "contact_url": _("Contact page URL"),
+            "video_url": _("Promotional video URL"),
+            "slides": _("Promotional slides"),
             "logo": _("Logo"),
-            "header_image": _("Header Image"),
-            "url": _("Organization Website"),
+            "header_image": _("Header image"),
+            "url": _("Organization website"),
             "is_exhibitor": _("Mark this partner as an exhibitor"),
             "is_sponsor": _("Mark this partner as an event sponsor"),
             "booth_name": _("Preferred booth name"),
@@ -236,11 +236,15 @@ class ExhibitorInfoForm(I18nModelForm):
     def _apply_profile_field_settings(self):
         for key, field_names in self.PROFILE_SETTING_FIELD_MAP.items():
             if self.profile_key_is_active(key):
+                setting = self.profile_field_settings[key]
+                first_field = self.fields.get(field_names[0]) if field_names else None
+                if first_field is not None and setting.get("custom_label"):
+                    first_field.label = setting["custom_label"]
                 if key in self.PROFILE_COMPOSITE_KEYS or key == "booth_name":
                     continue
                 for field_name in field_names:
                     if field_name in self.fields:
-                        self.fields[field_name].required = self.profile_field_settings[key]["required"]
+                        self.fields[field_name].required = setting["required"]
             else:
                 self._drop_fields(field_names)
 
@@ -514,7 +518,7 @@ class SponsorGroupForm(I18nModelForm):
         localized_fields = "__all__"
         fields = ["name", "level"]
         labels = {
-            "name": _("Group Name"),
+            "name": _("Group name"),
         }
 
     def __init__(self, *args, **kwargs):
@@ -719,7 +723,7 @@ class ExhibitionProposalForm(ExhibitionQuestionFieldsMixin, I18nModelForm):
     )
     header_image_url = forms.URLField(
         required=False,
-        label=_("Header Image URL"),
+        label=_("Header image URL"),
         help_text=_("Use an external image URL instead of uploading a header image file."),
     )
 
@@ -763,15 +767,15 @@ class ExhibitionProposalForm(ExhibitionQuestionFieldsMixin, I18nModelForm):
             "notes",
         ]
         labels = {
-            "name": _("Organization Name"),
-            "description": _("Organization Description"),
-            "email": _("Contact email"),
-            "contact_url": _("Contact Page URL"),
-            "video_url": _("Promotional Video URL"),
-            "slides": _("Promotional Slides"),
+            "name": _("Organization name"),
+            "description": _("Organization description"),
+            "email": _("E-mail"),
+            "contact_url": _("Contact page URL"),
+            "video_url": _("Promotional video URL"),
+            "slides": _("Promotional slides"),
             "logo": _("Logo"),
-            "header_image": _("Header Image"),
-            "url": _("Organization Website"),
+            "header_image": _("Header image"),
+            "url": _("Organization website"),
             "booth_name": _("Preferred booth name"),
             "notes": _("Message to the organizers"),
         }
@@ -787,13 +791,16 @@ class ExhibitionProposalForm(ExhibitionQuestionFieldsMixin, I18nModelForm):
         super().__init__(*args, **kwargs)
         self.event = event or getattr(instance, "event", None)
         self.exhibition_settings = None
+        self.proposal_field_settings = {}
         self.active_proposal_fields = {}
         self.required_proposal_fields = {}
         if self.event:
             self.exhibition_settings = ExhibitorSettings.objects.get_or_create(event=self.event)[0]
-            proposal_field_settings = self.exhibition_settings.normalized_proposal_field_settings
-            self.active_proposal_fields = {key: value["active"] for key, value in proposal_field_settings.items()}
-            self.required_proposal_fields = {key: value["required"] for key, value in proposal_field_settings.items()}
+            self.proposal_field_settings = self.exhibition_settings.normalized_proposal_field_settings
+            self.active_proposal_fields = {key: value["active"] for key, value in self.proposal_field_settings.items()}
+            self.required_proposal_fields = {
+                key: value["required"] for key, value in self.proposal_field_settings.items()
+            }
         for field_name in ("logo", "header_image"):
             if field_name in self.fields:
                 self.fields[field_name].widget.attrs.setdefault("accept", "image/*")
@@ -836,10 +843,16 @@ class ExhibitionProposalForm(ExhibitionQuestionFieldsMixin, I18nModelForm):
                     self.fields.pop(field_name, None)
                 continue
 
-            for field_name in form_fields:
+            setting = self.proposal_field_settings.get(key, {})
+            for index, field_name in enumerate(form_fields):
                 field = self.fields.get(field_name)
                 if field is None:
                     continue
+                if index == 0:
+                    if setting.get("custom_label"):
+                        field.label = setting["custom_label"]
+                    if setting.get("custom_help_text"):
+                        field.help_text = setting["custom_help_text"]
                 field._required = is_required
                 if key in file_field_keys or key == "booth_name":
                     continue
@@ -848,27 +861,50 @@ class ExhibitionProposalForm(ExhibitionQuestionFieldsMixin, I18nModelForm):
                 else:
                     field.required = is_required
 
-    def apply_proposal_field_order(self):
+    def _ordered_proposal_entries(self):
         if not self.exhibition_settings:
-            return
-        field_settings = self.exhibition_settings.normalized_proposal_field_settings
-        formset_keys = set(PROPOSAL_FORMSET_FIELD_KEYS)
+            return []
         entries = []
         for key in PROPOSAL_DEFAULT_FIELD_KEYS:
-            if key in formset_keys:
-                continue
-            entries.append((field_settings[key]["position"], 0, self.setting_field_map.get(key, ())))
+            entries.append((self.proposal_field_settings[key]["position"], 0, key, self.setting_field_map.get(key, ())))
         for field_name, field in self.fields.items():
             question = getattr(field, "question", None)
             if question is not None:
-                entries.append((question.position, 1, (field_name,)))
+                entries.append((question.position, 1, f"question_{question.pk}", (field_name,)))
         entries.sort(key=lambda entry: (entry[0], entry[1]))
-        ordered_field_names = []
-        for _position, _kind, field_names in entries:
-            for field_name in field_names:
-                if field_name in self.fields:
-                    ordered_field_names.append(field_name)
+        return entries
+
+    def apply_proposal_field_order(self):
+        if not self.exhibition_settings:
+            return
+        ordered_field_names = [
+            field_name
+            for _position, _kind, _key, field_names in self._ordered_proposal_entries()
+            for field_name in field_names
+            if field_name in self.fields
+        ]
         self.order_fields(ordered_field_names)
+
+    @property
+    def proposal_items(self):
+        if not self.exhibition_settings:
+            return [{"kind": "field", "key": field_name, "field": self[field_name]} for field_name in self.fields]
+        formset_keys = set(PROPOSAL_FORMSET_FIELD_KEYS)
+        composite_keys = {"slides", "logo", "header_image"}
+        items = []
+        for _position, _kind, key, field_names in self._ordered_proposal_entries():
+            if key in formset_keys:
+                if self.field_setting_is_active(key):
+                    items.append({"kind": key, "key": key})
+                continue
+            visible_field_names = [name for name in field_names if name in self.fields]
+            if not visible_field_names:
+                continue
+            if key in composite_keys:
+                items.append({"kind": key, "key": key})
+            else:
+                items.append({"kind": "field", "key": key, "field": self[visible_field_names[0]]})
+        return items
 
     def field_setting_is_active(self, key):
         return self.active_proposal_fields.get(key, True)
@@ -1021,7 +1057,7 @@ class ExhibitionProposalReviewForm(I18nModelForm):
     sponsor_group = forms.ModelChoiceField(
         queryset=SponsorGroup.objects.none(),
         required=False,
-        label=_("Sponsor Group"),
+        label=_("Sponsor group"),
     )
 
     class Meta:
@@ -1075,6 +1111,29 @@ class ExhibitionProposalReviewNotesForm(I18nModelForm):
         widgets = {
             "review_notes": forms.Textarea(attrs={"rows": 4}),
         }
+
+
+class ExhibitionDefaultFieldForm(forms.Form):
+    label = forms.CharField(
+        required=False,
+        max_length=200,
+        label=_("Field label"),
+    )
+    help_text = forms.CharField(
+        required=False,
+        max_length=500,
+        label=_("Help text"),
+        help_text=_("Shown below the field on the exhibitor form."),
+        widget=forms.Textarea(attrs={"rows": 3}),
+    )
+
+    def __init__(self, *args, **kwargs):
+        self.field_setting = kwargs.pop("field_setting")
+        super().__init__(*args, **kwargs)
+        self.fields["label"].help_text = _("Leave empty to use the default: %(label)s") % {
+            "label": self.field_setting["default_label"]
+        }
+        self.fields["label"].widget.attrs.setdefault("placeholder", self.field_setting["default_label"])
 
 
 class ExhibitionQuestionForm(I18nModelForm):

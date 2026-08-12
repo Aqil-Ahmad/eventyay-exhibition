@@ -9,6 +9,7 @@
     <link rel="stylesheet" href="{% static 'pretixcontrol/css/order-form-toggles.css' %}">
     <link rel="stylesheet" href="{% static 'exhibition/css/dragsort-table.css' %}">
     <script defer src="{% static 'orga/js/dragsort.js' %}"></script>
+    <script defer src="{% static 'exhibition/js/call-questions.js' %}"></script>
 {% endblock %}
 
 {% block exhibitors_header %}
@@ -20,7 +21,7 @@
         {% csrf_token %}
         <fieldset>
             <legend>{% trans "Form fields" %}</legend>
-            <p>{% trans "Choose which fields are shown on the exhibitor form. Custom fields can be reordered alongside the default fields." %}</p>
+            <p>{% trans "Choose which fields are shown on the exhibitor form and drag any row to reorder it." %}</p>
             <div class="table-responsive table-responsive-always mw-100">
                 <table class="table table-hover dragsort-table">
                     <thead>
@@ -34,7 +35,7 @@
                     </thead>
                     <tbody dragsort-url="{% url 'plugins:exhibition:call.questions' organizer=request.event.organizer.slug event=request.event.slug %}">
                     {% for field in proposal_fields %}
-                        <tr {% if field.orderable %}dragsort-id="{{ field.dragsort_id }}"{% endif %}>
+                        <tr dragsort-id="{{ field.dragsort_id }}">
                             <th>
                                 {% if field.is_custom %}
                                     <a href="{% url 'plugins:exhibition:call.questions.edit' organizer=request.event.organizer.slug event=request.event.slug pk=field.pk %}">{{ field.label }}</a>
@@ -44,17 +45,24 @@
                                 {% endif %}
                             </th>
                             <td class="text-center">
-                                <label class="toggle-switch {% if field.active_locked %}always-on{% endif %}" aria-label="{% blocktrans trimmed with field=field.label %}Toggle active state for {{ field }}{% endblocktrans %}">
-                                    <input type="checkbox" name="{{ field.input_prefix }}_active" {% if field.active %}checked{% endif %} {% if field.active_locked %}disabled{% endif %}>
+                                <label class="toggle-switch field-active-toggle {% if field.active_locked %}always-on{% endif %}" aria-label="{% blocktrans trimmed with field=field.label %}Toggle active state for {{ field }}{% endblocktrans %}">
+                                    <input type="checkbox" class="field-active-input" name="{{ field.input_prefix }}_active" {% if field.active %}checked{% endif %} {% if field.active_locked %}disabled{% endif %}>
                                     <span class="toggle-slider"></span>
                                 </label>
                             </td>
                             <td class="text-center">
                                 {% if field.supports_required %}
-                                    <label class="toggle-switch {% if field.required_locked %}always-on{% endif %}" aria-label="{% blocktrans trimmed with field=field.label %}Toggle required state for {{ field }}{% endblocktrans %}">
-                                        <input type="checkbox" name="{{ field.input_prefix }}_required" {% if field.required %}checked{% endif %} {% if field.required_locked %}disabled{% endif %}>
-                                        <span class="toggle-slider"></span>
-                                    </label>
+                                    <div class="required-status-wrapper {% if not field.active %}is-disabled{% endif %}" data-current="{% if field.required %}required{% else %}optional{% endif %}">
+                                        <select class="required-status-dropdown"
+                                                name="{{ field.input_prefix }}_required"
+                                                data-current="{% if field.required %}required{% else %}optional{% endif %}"
+                                                {% if field.required_locked %}data-locked="1"{% endif %}
+                                                {% if field.required_locked or not field.active %}disabled{% endif %}
+                                                aria-label="{% blocktrans trimmed with field=field.label %}Required status for {{ field }}{% endblocktrans %}">
+                                            <option value="optional" {% if not field.required %}selected{% endif %}>{% trans "Optional" %}</option>
+                                            <option value="required" {% if field.required %}selected{% endif %}>{% trans "Required" %}</option>
+                                        </select>
+                                    </div>
                                 {% else %}
                                     <span class="text-muted">-</span>
                                 {% endif %}
@@ -64,16 +72,13 @@
                                 {% if field.is_custom %}
                                     <a class="btn btn-default btn-sm" href="{% url 'plugins:exhibition:call.questions.edit' organizer=request.event.organizer.slug event=request.event.slug pk=field.pk %}" title="{% trans 'Edit' %}"><i class="fa fa-edit"></i></a>
                                     <a class="btn btn-delete btn-danger btn-sm" href="{% url 'plugins:exhibition:call.questions.delete' organizer=request.event.organizer.slug event=request.event.slug pk=field.pk %}" title="{% trans 'Delete' %}"><i class="fa fa-trash"></i></a>
-                                {% endif %}
-                                {% if field.orderable %}
-                                    <button type="button" draggable="true" class="btn btn-primary btn-sm dragsort-button" title="{% trans 'Move field' %}" aria-label="{% trans 'Move field' %}">
-                                        <i class="fa fa-arrows"></i>
-                                    </button>
                                 {% else %}
-                                    <span class="text-muted" title="{% trans 'This field always appears at the end of the form.' %}">
-                                        <i class="fa fa-thumb-tack"></i>
-                                    </span>
+                                    <a class="btn btn-default btn-sm" href="{% url 'plugins:exhibition:call.fields.edit' organizer=request.event.organizer.slug event=request.event.slug key=field.dragsort_id %}" title="{% trans 'Edit' %}"><i class="fa fa-edit"></i></a>
+                                    <a class="btn btn-delete btn-danger btn-sm" href="{% url 'plugins:exhibition:call.fields.reset' organizer=request.event.organizer.slug event=request.event.slug key=field.dragsort_id %}" title="{% trans 'Reset to default' %}"><i class="fa fa-trash"></i></a>
                                 {% endif %}
+                                <button type="button" draggable="true" class="btn btn-primary btn-sm dragsort-button" title="{% trans 'Move field' %}" aria-label="{% trans 'Move field' %}">
+                                    <i class="fa fa-arrows"></i>
+                                </button>
                             </td>
                         </tr>
                     {% endfor %}

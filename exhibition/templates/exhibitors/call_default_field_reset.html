@@ -1,0 +1,28 @@
+{% extends "exhibitors/base.html" %}
+{% load i18n %}
+
+{% block title %}{{ request.event.name }} - {% trans "Reset form field" %}{% endblock %}
+
+{% block exhibitors_header %}
+    <h1>{% trans "Reset form field" %}</h1>
+{% endblock %}
+
+{% block exhibitors_content %}
+    <form action="" method="post">
+        {% csrf_token %}
+        <p>
+            {% blocktrans trimmed with label=field_setting.label default_label=field_setting.default_label %}
+                Are you sure you want to reset "{{ label }}" back to the default "{{ default_label }}"?
+            {% endblocktrans %}
+        </p>
+        <p class="text-muted">
+            {% trans "This clears the custom label and help text. Default fields are part of the form and cannot be deleted; turn the field off with the Active toggle to hide it." %}
+        </p>
+        <div class="form-group submit-group">
+            <button type="submit" class="btn btn-danger">{% trans "Reset" %}</button>
+            <a class="btn btn-default" href="{% url 'plugins:exhibition:call.questions' organizer=request.event.organizer.slug event=request.event.slug %}">
+                {% trans "Cancel" %}
+            </a>
+        </div>
+    </form>
+{% endblock %}

@@ -120,22 +120,22 @@ def proposal_slides_path(instance, filename):
 PROPOSAL_DEFAULT_FIELDS = (
     {
         "key": "name",
-        "label": _("Organization Name"),
+        "label": _("Organization name"),
         "active": True,
         "required": True,
         "active_locked": True,
         "required_locked": True,
     },
-    {"key": "description", "label": _("Organization Description"), "active": True},
+    {"key": "description", "label": _("Organization description"), "active": True},
     {"key": "email", "label": _("Contact email"), "active": False},
-    {"key": "url", "label": _("Organization Website"), "active": False},
-    {"key": "contact_url", "label": _("Contact Page URL"), "active": False},
-    {"key": "video_url", "label": _("Promotional Video URL"), "active": False},
-    {"key": "slides", "label": _("Promotional Slides"), "active": False},
+    {"key": "url", "label": _("Organization website"), "active": False},
+    {"key": "contact_url", "label": _("Contact page URL"), "active": False},
+    {"key": "video_url", "label": _("Promotional video URL"), "active": False},
+    {"key": "slides", "label": _("Promotional slides"), "active": False},
     {"key": "logo", "label": _("Logo"), "active": False},
     {
         "key": "header_image",
-        "label": _("Header Image"),
+        "label": _("Header image"),
         "active": False,
     },
     {"key": "booth_name", "label": _("Preferred booth name"), "active": False},
@@ -146,15 +146,13 @@ PROPOSAL_DEFAULT_FIELDS = (
     },
     {
         "key": "social_links",
-        "label": _("Social Media"),
+        "label": _("Social media"),
         "active": False,
-        "supports_required": False,
     },
     {
         "key": "extra_links",
-        "label": _("Extra Links"),
+        "label": _("Extra links"),
         "active": False,
-        "supports_required": False,
     },
 )
 
@@ -170,8 +168,24 @@ def default_proposal_field_settings():
             "active": field.get("active", True),
             "required": field.get("required", False),
             "position": index,
+            "label": None,
+            "help_text": None,
         }
         for index, field in enumerate(PROPOSAL_DEFAULT_FIELDS)
+    }
+
+
+def storable_proposal_field_settings(normalized):
+    """Strip the derived keys added by normalization so only raw overrides are persisted."""
+    return {
+        key: {
+            "active": value["active"],
+            "required": value["required"],
+            "position": value["position"],
+            "label": value["custom_label"],
+            "help_text": value["custom_help_text"],
+        }
+        for key, value in normalized.items()
     }
 
 
@@ -231,6 +245,13 @@ class ExhibitorSettings(models.Model):
             normalized[key]["active"] = bool(stored_field.get("active", normalized[key]["active"]))
             normalized[key]["required"] = bool(stored_field.get("required", normalized[key]["required"]))
             normalized[key]["position"] = stored_field.get("position", index)
+            custom_label = (stored_field.get("label") or "").strip() or None
+            custom_help_text = (stored_field.get("help_text") or "").strip() or None
+            normalized[key]["custom_label"] = custom_label
+            normalized[key]["custom_help_text"] = custom_help_text
+            normalized[key]["label"] = custom_label or field["label"]
+            normalized[key]["help_text"] = custom_help_text or ""
+            normalized[key]["default_label"] = field["label"]
             if field.get("active_locked"):
                 normalized[key]["active"] = True
             if field.get("required_locked"):
@@ -262,7 +283,7 @@ class ExhibitorSettings(models.Model):
 
 class SponsorGroup(models.Model):
     event = models.ForeignKey(Event, on_delete=models.CASCADE, related_name="sponsor_groups")
-    name = I18nCharField(max_length=120, verbose_name=_("Group Name"))
+    name = I18nCharField(max_length=120, verbose_name=_("Group name"))
     level = models.PositiveIntegerField(default=1, db_index=True, verbose_name=_("Level"))
     show_on_front_page = models.BooleanField(
         default=False,
@@ -298,7 +319,7 @@ class ExhibitorInfo(models.Model):
     logo = models.ImageField(upload_to=exhibitor_logo_path, null=True, blank=True)
     logo_url = models.URLField(verbose_name=_("Logo URL"), null=True, blank=True)
     header_image = models.ImageField(upload_to=exhibitor_header_image_path, null=True, blank=True)
-    header_image_url = models.URLField(verbose_name=_("Header Image URL"), null=True, blank=True)
+    header_image_url = models.URLField(verbose_name=_("Header image URL"), null=True, blank=True)
     key = models.CharField(
         max_length=8,
         default=generate_key,
@@ -320,7 +341,7 @@ class ExhibitorInfo(models.Model):
     )
     booth_name = I18nCharField(
         max_length=100,
-        verbose_name=_("Booth Name"),
+        verbose_name=_("Booth name"),
         blank=True,
     )
     lead_scanning_enabled = models.BooleanField(default=False)
@@ -515,7 +536,7 @@ class ExhibitionProposal(models.Model):
     logo = models.ImageField(upload_to=proposal_logo_path, null=True, blank=True)
     logo_url = models.URLField(verbose_name=_("Logo URL"), null=True, blank=True)
     header_image = models.ImageField(upload_to=proposal_header_image_path, null=True, blank=True)
-    header_image_url = models.URLField(verbose_name=_("Header Image URL"), null=True, blank=True)
+    header_image_url = models.URLField(verbose_name=_("Header image URL"), null=True, blank=True)
     is_sponsor = models.BooleanField(default=False)
     sponsor_group = models.ForeignKey(
         SponsorGroup,
@@ -532,7 +553,7 @@ class ExhibitionProposal(models.Model):
     )
     booth_name = I18nCharField(
         max_length=100,
-        verbose_name=_("Booth Name"),
+        verbose_name=_("Booth name"),
         blank=True,
     )
     notes = models.TextField(
@@ -854,7 +875,7 @@ class Lead(models.Model):
     booth_id = models.CharField(max_length=100, editable=True)
     booth_name = models.CharField(
         max_length=100,
-        verbose_name=_("Booth Name"),
+        verbose_name=_("Booth name"),
     )
 
     def __str__(self):
