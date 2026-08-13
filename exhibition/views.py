@@ -360,7 +360,7 @@ class SettingsView(EventPermissionRequiredMixin, ListView):
                 group = form.save(commit=False)
                 group.event = request.event
                 group.save()
-                group.log_action(LOG_GROUP_ADDED, data={"name": str(group.name)}, user=request.user)
+                group.log_action(LOG_GROUP_ADDED, data={"name": group.localized_name}, user=request.user)
                 messages.success(self.request, _("Sponsor group added."))
                 return redirect(self.get_settings_url("sponsors"))
 
@@ -400,7 +400,7 @@ class SettingsView(EventPermissionRequiredMixin, ListView):
                     _("This sponsor group cannot be deleted while it is assigned to partners."),
                 )
             else:
-                group.log_action(LOG_GROUP_DELETED, data={"name": str(group.name)}, user=request.user)
+                group.log_action(LOG_GROUP_DELETED, data={"name": group.localized_name}, user=request.user)
                 group.delete()
                 messages.success(self.request, _("Sponsor group deleted."))
             return redirect(self.get_settings_url("sponsors"))
@@ -1567,7 +1567,7 @@ class ExhibitionQuestionCreateView(EventPermissionRequiredMixin, CreateView):
         response = super().form_valid(form)
         self.object.log_action(
             LOG_QUESTION_ADDED,
-            data={"question": str(self.object.question)},
+            data={"question": self.object.localized_question},
             user=self.request.user,
         )
         return response
@@ -1620,7 +1620,7 @@ class ExhibitionQuestionDeleteView(EventPermissionRequiredMixin, DeleteView):
     def form_valid(self, form):
         self.object.log_action(
             LOG_QUESTION_DELETED,
-            data={"question": str(self.object.question)},
+            data={"question": self.object.localized_question},
             user=self.request.user,
         )
         return super().form_valid(form)
@@ -1730,7 +1730,7 @@ class ExhibitorCreateView(ExhibitorLinkFormsetMixin, EventPermissionRequiredMixi
         self.save_link_formsets()
         self.object.log_action(
             LOG_PARTNER_ADDED,
-            data={"name": str(self.object.name), "booth_id": self.object.booth_id},
+            data={"name": localize_event_text(self.object.name), "booth_id": self.object.booth_id},
             user=self.request.user,
         )
         if access_newly_granted(form.instance) and queue_exhibitor_access_mail(
@@ -1830,7 +1830,7 @@ class ExhibitorDeleteView(EventPermissionRequiredMixin, DeleteView):
     def form_valid(self, form):
         self.object.log_action(
             LOG_PARTNER_DELETED,
-            data={"name": str(self.object.name), "booth_id": self.object.booth_id},
+            data={"name": localize_event_text(self.object.name), "booth_id": self.object.booth_id},
             user=self.request.user,
         )
         return super().form_valid(form)

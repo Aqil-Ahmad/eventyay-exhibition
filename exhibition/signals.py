@@ -42,6 +42,8 @@ from .models import (
     LOG_SETTINGS_CHANGED,
     PROPOSAL_LOG_ACTIONS,
     ExhibitionProposal,
+    ExhibitionProposalState,
+    ExhibitionQuestion,
     ExhibitorInfo,
     ExhibitorSettings,
     ExhibitorVoucher,
@@ -299,6 +301,14 @@ LOG_ENTRY_LABELS = {
 }
 
 
+def proposal_state_label(value):
+    """Render a stored state slug with its translated label."""
+    try:
+        return ExhibitionProposalState(value).label
+    except ValueError:
+        return value
+
+
 @receiver(signal=logentry_display, dispatch_uid="exhibition_logentry_display")
 def exhibition_logentry_display(sender, logentry, **kwargs):
     if not logentry.action_type.startswith(LOG_PREFIX):
@@ -311,7 +321,10 @@ def exhibition_logentry_display(sender, logentry, **kwargs):
     if logentry.action_type in PROPOSAL_LOG_ACTIONS.values():
         data = logentry.parsed_data
         if data.get("from") and data.get("to"):
-            transition = _("State changed from {old} to {new}.").format(old=data["from"], new=data["to"])
+            transition = _("State changed from {old} to {new}.").format(
+                old=proposal_state_label(data["from"]),
+                new=proposal_state_label(data["to"]),
+            )
             return f"{label} {transition}"
     return label
 
@@ -342,6 +355,15 @@ def exhibition_logentry_object_link(sender, logentry, **kwargs):
                 kwargs={"organizer": sender.organizer.slug, "event": sender.slug, "pk": target.pk},
             ),
             "val": escape(localize_event_text(target.name) or str(target.name)),
+        }
+    elif isinstance(target, ExhibitionQuestion):
+        a_text = _("Exhibitor form question {val}")
+        a_map = {
+            "href": reverse(
+                "plugins:exhibition:call.questions.edit",
+                kwargs={"organizer": sender.organizer.slug, "event": sender.slug, "pk": target.pk},
+            ),
+            "val": escape(target.localized_question),
         }
     elif isinstance(target, SponsorGroup):
         return _("Sponsor group {val}").format(val=escape(target.localized_name))
