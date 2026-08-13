@@ -185,4 +185,12 @@
             {% endif %}
         </div>
     </form>
+    {% if can_manage %}
+        <div class="panel panel-default exhibition-history">
+            <div class="panel-heading">
+                <h3 class="panel-title">{% trans "History" %}</h3>
+            </div>
+            {% include "pretixcontrol/includes/logs.html" with obj=proposal %}
+        </div>
+    {% endif %}
 {% endblock %}

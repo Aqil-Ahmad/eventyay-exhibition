@@ -253,5 +253,13 @@
         </a>
     </div>
 </form>
+{% if action == 'edit' %}
+    <div class="panel panel-default exhibition-history">
+        <div class="panel-heading">
+            <h3 class="panel-title">{% trans "History" %}</h3>
+        </div>
+        {% include "pretixcontrol/includes/logs.html" with obj=object %}
+    </div>
+{% endif %}
 <script type="text/javascript" src="{% static 'exhibition/js/exhibitors-add.js' %}"></script>
 {% endblock %}
