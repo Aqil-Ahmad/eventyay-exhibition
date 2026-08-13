@@ -33,14 +33,6 @@
             {% bootstrap_field form.subject layout="control" %}
             {% bootstrap_field form.body layout="control" %}
             {% bootstrap_field form.scheduled_at layout="control" %}
-            <div class="form-group">
-                <div class="col-md-9 col-md-offset-3">
-                    <button type="button" class="btn btn-default btn-sm"
-                            data-schedule-fill-now="{{ form.scheduled_at.id_for_label }}">
-                        {% trans "Fill in current time" %}
-                    </button>
-                </div>
-            </div>
         </fieldset>
         <fieldset>
             <legend>{% trans "Available placeholders" %}</legend>

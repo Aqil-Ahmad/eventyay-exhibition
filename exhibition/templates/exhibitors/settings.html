@@ -85,14 +85,6 @@ The {event_name} team{% endblocktrans %}
                         </div>
                     </div>
                     {% bootstrap_field call_settings_form.call_deadline layout="control" %}
-                    <div class="form-group">
-                        <div class="col-md-9 col-md-offset-3">
-                            <button type="button" class="btn btn-default btn-sm"
-                                    data-schedule-fill-now="{{ call_settings_form.call_deadline.id_for_label }}">
-                                {% trans "Fill in current time" %}
-                            </button>
-                        </div>
-                    </div>
                     {% bootstrap_field call_settings_form.call_hide_after_deadline layout="control" %}
                     {% bootstrap_field call_settings_form.call_private layout="control" %}
                 </fieldset>

@@ -506,7 +506,12 @@ class CallSettingsForm(I18nModelForm):
         else:
             widget.attrs.setdefault("rows", 8)
         if self.event:
-            self.fields["call_deadline"].widget.attrs["data-event-timezone"] = self.event.timezone
+            self.fields["call_deadline"].widget.attrs.update(
+                {
+                    "data-schedule-datetime": "1",
+                    "data-event-timezone": self.event.timezone,
+                }
+            )
 
 
 class ExhibitionQuestionFieldsMixin:
@@ -1370,7 +1375,12 @@ class ExhibitionComposeForm(forms.Form):
         self.event = kwargs.pop("event")
         super().__init__(*args, **kwargs)
         self.fields["sponsor_group"].queryset = SponsorGroup.objects.filter(event=self.event).order_by("level", "pk")
-        self.fields["scheduled_at"].widget.attrs["data-event-timezone"] = self.event.timezone
+        self.fields["scheduled_at"].widget.attrs.update(
+            {
+                "data-schedule-datetime": "1",
+                "data-event-timezone": self.event.timezone,
+            }
+        )
 
     def clean_scheduled_at(self):
         scheduled_at = self.cleaned_data.get("scheduled_at")
