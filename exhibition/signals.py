@@ -282,12 +282,12 @@ LOG_ENTRY_LABELS = {
     PROPOSAL_LOG_ACTIONS["reject"]: _("Exhibition request rejected."),
     PROPOSAL_LOG_ACTIONS["withdraw"]: _("Exhibition request withdrawn."),
     PROPOSAL_LOG_ACTIONS["reopen"]: _("Exhibition request reopened for review."),
-    LOG_PARTNER_CREATED: _("Partner profile created from an approved request."),
-    LOG_PARTNER_REACTIVATED: _("Partner profile reactivated after re-approval."),
-    LOG_PARTNER_SYNCED: _("Partner profile updated from the submitter's changes."),
-    LOG_PARTNER_ADDED: _("Partner created."),
-    LOG_PARTNER_CHANGED: _("Partner changed."),
-    LOG_PARTNER_DELETED: _("Partner deleted."),
+    LOG_PARTNER_CREATED: _("Organization profile created from an approved request."),
+    LOG_PARTNER_REACTIVATED: _("Organization profile reactivated after re-approval."),
+    LOG_PARTNER_SYNCED: _("Organization profile updated from the submitter's changes."),
+    LOG_PARTNER_ADDED: _("Organization profile created."),
+    LOG_PARTNER_CHANGED: _("Organization profile changed."),
+    LOG_PARTNER_DELETED: _("Organization profile deleted."),
     LOG_SETTINGS_CHANGED: _("Exhibition settings changed."),
     LOG_CALL_SETTINGS_CHANGED: _("Call for exhibitors settings changed."),
     LOG_CALL_SECRET_REGENERATED: _("Private call link regenerated."),
@@ -348,7 +348,7 @@ def exhibition_logentry_object_link(sender, logentry, **kwargs):
             "val": escape(localize_event_text(target.name) or str(target.name)),
         }
     elif isinstance(target, ExhibitorInfo):
-        a_text = _("Partner {val}")
+        a_text = _("Organization profile {val}")
         a_map = {
             "href": reverse(
                 "plugins:exhibition:edit",
