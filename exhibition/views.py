@@ -36,6 +36,7 @@ from .filters import (
 from .forms import (
     CallSettingsForm,
     ExhibitionComposeForm,
+    ExhibitionCustomEmailTemplateForm,
     ExhibitionDefaultFieldForm,
     ExhibitionEmailQueueForm,
     ExhibitionMailTemplatesForm,
@@ -56,6 +57,7 @@ from .models import (
     PROPOSAL_DEFAULT_FIELD_KEYS,
     PROPOSAL_DEFAULT_FIELDS,
     PROPOSAL_REVIEW_ACTIONS,
+    ExhibitionCustomEmailTemplate,
     ExhibitionEmailQueue,
     ExhibitionProposal,
     ExhibitionProposalState,
@@ -1920,9 +1922,22 @@ class EmailComposeView(EventPermissionRequiredMixin, FormView):
         kwargs["event"] = self.request.event
         return kwargs
 
+    def get_initial(self):
+        initial = super().get_initial()
+        template_pk = self.request.GET.get("template")
+        if template_pk:
+            template = ExhibitionCustomEmailTemplate.objects.filter(
+                event=self.request.event, pk=template_pk
+            ).first()
+            if template:
+                initial["subject"] = str(template.subject)
+                initial["body"] = str(template.body)
+        return initial
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context["email_placeholders"] = mail_helpers.PLACEHOLDER_DOCS
+        context["custom_templates"] = ExhibitionCustomEmailTemplate.objects.filter(event=self.request.event)
         return context
 
     def form_valid(self, form):
@@ -2098,6 +2113,11 @@ class EmailEditView(EventPermissionRequiredMixin, UpdateView):
     def get_queryset(self):
         return ExhibitionEmailQueue.objects.filter(event=self.request.event, sent_at__isnull=True)
 
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs["event"] = self.request.event
+        return kwargs
+
     def batch_queryset(self):
         return ExhibitionEmailQueue.objects.filter(
             event=self.request.event, batch=self.object.batch, sent_at__isnull=True
@@ -2111,14 +2131,24 @@ class EmailEditView(EventPermissionRequiredMixin, UpdateView):
             context["recipients"] = [self.object.to_email]
         return context
 
+    def reschedule(self, rows, scheduled_at):
+        from .tasks import send_scheduled_email
+
+        if not scheduled_at:
+            return
+        for row in rows:
+            send_scheduled_email.apply_async(args=[self.request.event.pk, row.pk], eta=scheduled_at)
+
     def form_valid(self, form):
         self.object = form.save(commit=False)
         subject = form.cleaned_data["subject"]
         body = form.cleaned_data["body"]
+        scheduled_at = form.cleaned_data["scheduled_at"]
+        reschedule = "scheduled_at" in form.changed_data
 
         if self.object.batch:
             rows = list(self.batch_queryset())
-            self.batch_queryset().update(subject=subject, body=body)
+            self.batch_queryset().update(subject=subject, body=body, scheduled_at=scheduled_at)
             if "_send" in self.request.POST:
                 for row in rows:
                     row.subject = subject
@@ -2126,6 +2156,8 @@ class EmailEditView(EventPermissionRequiredMixin, UpdateView):
                     row.send(requestor=self.request.user)
                 messages.success(self.request, _("The emails have been saved and sent."))
             else:
+                if reschedule:
+                    self.reschedule(rows, scheduled_at)
                 messages.success(self.request, _("The emails have been saved."))
             return redirect(self.get_success_url())
 
@@ -2134,6 +2166,8 @@ class EmailEditView(EventPermissionRequiredMixin, UpdateView):
             self.object.send(requestor=self.request.user)
             messages.success(self.request, _("The email has been saved and sent."))
         else:
+            if reschedule:
+                self.reschedule([self.object], scheduled_at)
             messages.success(self.request, _("The email has been saved."))
         return redirect(self.get_success_url())
 
@@ -2349,3 +2383,71 @@ class EmailTemplatePreviewView(EventPermissionRequiredMixin, View):
             with language(locale, region):
                 previews[locale] = render(bodies.get(locale, ""))
         return JsonResponse({"previews": previews})
+
+
+class CustomEmailTemplateListView(EventPermissionRequiredMixin, ListView):
+    model = ExhibitionCustomEmailTemplate
+    permission = "can_change_event_settings"
+    template_name = "exhibitors/email_custom_templates.html"
+    context_object_name = "custom_templates"
+
+    def get_queryset(self):
+        return ExhibitionCustomEmailTemplate.objects.filter(event=self.request.event)
+
+
+class CustomEmailTemplateCreateView(EventPermissionRequiredMixin, CreateView):
+    model = ExhibitionCustomEmailTemplate
+    form_class = ExhibitionCustomEmailTemplateForm
+    permission = "can_change_event_settings"
+    template_name = "exhibitors/email_custom_template_form.html"
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs["event"] = self.request.event
+        return kwargs
+
+    def form_valid(self, form):
+        form.instance.event = self.request.event
+        messages.success(self.request, _("Custom template has been created."))
+        return super().form_valid(form)
+
+    def get_success_url(self):
+        return reverse("plugins:exhibition:email.custom_templates", kwargs=event_kwargs(self.request.event))
+
+
+class CustomEmailTemplateEditView(EventPermissionRequiredMixin, UpdateView):
+    model = ExhibitionCustomEmailTemplate
+    form_class = ExhibitionCustomEmailTemplateForm
+    permission = "can_change_event_settings"
+    template_name = "exhibitors/email_custom_template_form.html"
+
+    def get_queryset(self):
+        return ExhibitionCustomEmailTemplate.objects.filter(event=self.request.event)
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs["event"] = self.request.event
+        return kwargs
+
+    def form_valid(self, form):
+        messages.success(self.request, _("Custom template has been saved."))
+        return super().form_valid(form)
+
+    def get_success_url(self):
+        return reverse("plugins:exhibition:email.custom_templates", kwargs=event_kwargs(self.request.event))
+
+
+class CustomEmailTemplateDeleteView(EventPermissionRequiredMixin, DeleteView):
+    model = ExhibitionCustomEmailTemplate
+    permission = "can_change_event_settings"
+    template_name = "exhibitors/email_custom_template_delete.html"
+
+    def get_queryset(self):
+        return ExhibitionCustomEmailTemplate.objects.filter(event=self.request.event)
+
+    def form_valid(self, form):
+        messages.success(self.request, _("Custom template has been deleted."))
+        return super().form_valid(form)
+
+    def get_success_url(self):
+        return reverse("plugins:exhibition:email.custom_templates", kwargs=event_kwargs(self.request.event))

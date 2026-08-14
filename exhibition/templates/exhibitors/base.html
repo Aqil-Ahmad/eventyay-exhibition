@@ -105,6 +105,11 @@
             <span class="sidebar-text">{% trans "Templates" %}</span>
           </a>
         </li>
+        <li>
+          <a href="{% url 'plugins:exhibition:email.custom_templates' organizer=request.event.organizer.slug event=request.event.slug %}" {% if url_name == 'email.custom_templates' or url_name == 'email.custom_templates.add' or url_name == 'email.custom_templates.edit' or url_name == 'email.custom_templates.delete' %}class="active"{% endif %}>
+            <span class="sidebar-text">{% trans "Custom templates" %}</span>
+          </a>
+        </li>
         {% endif %}
       </ul>
     </li>

@@ -12,16 +12,18 @@ from eventyay.common.forms.mixins import (
     EventLocalizedModelChoiceField,
     EventLocalizedModelMultipleChoiceField,
 )
-from eventyay.common.forms.widgets import HtmlDateTimeInput
+from eventyay.common.forms.fields import EmailBodyField, I18nEmailBodyFormField
+from eventyay.common.forms.widgets import EmailEditorWidget, HtmlDateTimeInput, I18nEmailEditorWidget
 from eventyay.common.urls import normalize_url_scheme
 from eventyay.common.utils.language import localize_event_text
-from i18nfield.forms import I18nFormField, I18nTextarea, I18nTextInput
+from i18nfield.forms import I18nFormField, I18nTextInput
 
 from . import mail as mail_helpers
 from .models import (
     PROPOSAL_DEFAULT_FIELD_KEYS,
     PROPOSAL_FORMSET_FIELD_KEYS,
     ExhibitionAnswer,
+    ExhibitionCustomEmailTemplate,
     ExhibitionEmailQueue,
     ExhibitionProposal,
     ExhibitionProposalExtraLink,
@@ -569,12 +571,13 @@ class CallSettingsForm(I18nModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        widget = self.fields["call_text"].widget
-        if isinstance(widget, forms.MultiWidget):
-            for sub_widget in widget.widgets:
-                sub_widget.attrs.setdefault("rows", 8)
-        else:
-            widget.attrs.setdefault("rows", 8)
+        self.fields["call_text"] = I18nFormField(
+            label=self.fields["call_text"].label,
+            required=False,
+            locales=self.event.settings.get("locales") if self.event else None,
+            widget=I18nEmailEditorWidget,
+            widget_kwargs={"attrs": {"rows": 8, "data-tiptap-profile": "richtext"}},
+        )
 
 
 class ExhibitionQuestionFieldsMixin:
@@ -1436,18 +1439,33 @@ def social_link_prefixes() -> dict[str, str]:
 
 
 class ExhibitionEmailQueueForm(forms.ModelForm):
-    """Edit a queued email's recipient / subject / body before sending."""
+    """Edit a queued email's recipient / subject / body / schedule before sending."""
 
     def __init__(self, *args, **kwargs):
-        kwargs.pop("event", None)
+        self.event = kwargs.pop("event", None)
         super().__init__(*args, **kwargs)
+        if self.event:
+            self.fields["scheduled_at"].widget.attrs["data-event-timezone"] = self.event.timezone
 
     class Meta:
         model = ExhibitionEmailQueue
-        fields = ("to_email", "subject", "body")
+        fields = ("to_email", "subject", "body", "scheduled_at")
         widgets = {
-            "body": forms.Textarea(attrs={"rows": 12}),
+            "body": EmailEditorWidget(attrs={"rows": 12}),
+            "scheduled_at": HtmlDateTimeInput,
         }
+        help_texts = {
+            "scheduled_at": _(
+                "Leave empty to keep this in the outbox until sent manually. "
+                "Time is interpreted in the event timezone."
+            ),
+        }
+
+    def clean_scheduled_at(self):
+        scheduled_at = self.cleaned_data.get("scheduled_at")
+        if scheduled_at and scheduled_at <= timezone.now():
+            raise forms.ValidationError(_("The scheduled time must be in the future."))
+        return scheduled_at
 
 
 class ExhibitionComposeForm(forms.Form):
@@ -1479,7 +1497,13 @@ class ExhibitionComposeForm(forms.Form):
         empty_label=_("Any sponsor group"),
     )
     subject = forms.CharField(label=_("Subject"), max_length=255)
-    body = forms.CharField(label=_("Body"), widget=forms.Textarea(attrs={"rows": 12}))
+    body = EmailBodyField(
+        label=_("Body"),
+        widget=EmailEditorWidget(
+            attrs={"rows": 12},
+            placeholders=[token.strip("{}") for token, _doc in mail_helpers.PLACEHOLDER_DOCS],
+        ),
+    )
     scheduled_at = forms.DateTimeField(
         label=_("Send at"),
         required=False,
@@ -1510,6 +1534,9 @@ class ExhibitionMailTemplatesForm(SettingsForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        from eventyay.base.email import get_available_placeholders
+
+        placeholder_names = sorted(get_available_placeholders(self.obj, ["event", "proposal", "exhibitor"]).keys())
         for role in mail_helpers.LIFECYCLE_ROLES:
             default_subject, default_body = mail_helpers.DEFAULT_TEMPLATES[role]
             label = self._ROLE_LABELS[role]
@@ -1520,10 +1547,34 @@ class ExhibitionMailTemplatesForm(SettingsForm):
                 initial=default_subject,
                 locales=self.locales,
             )
-            self.fields[mail_helpers.body_settings_key(role)] = I18nFormField(
+            self.fields[mail_helpers.body_settings_key(role)] = I18nEmailBodyFormField(
                 label=_("%(role)s — body") % {"role": label},
                 required=False,
-                widget=I18nTextarea,
+                placeholders=placeholder_names,
                 initial=default_body,
                 locales=self.locales,
             )
+
+
+class ExhibitionCustomEmailTemplateForm(I18nModelForm):
+    """Organizer-defined email template, independent of the fixed lifecycle templates."""
+
+    class Meta:
+        model = ExhibitionCustomEmailTemplate
+        localized_fields = "__all__"
+        fields = ["name", "subject", "body"]
+        widgets = {
+            "subject": I18nTextInput,
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        from eventyay.base.email import get_available_placeholders
+
+        placeholder_names = sorted(get_available_placeholders(self.event, ["event", "proposal", "exhibitor"]).keys())
+        self.fields["body"] = I18nEmailBodyFormField(
+            label=self.fields["body"].label,
+            required=False,
+            placeholders=placeholder_names,
+            locales=self.event.settings.get("locales") if self.event else None,
+        )

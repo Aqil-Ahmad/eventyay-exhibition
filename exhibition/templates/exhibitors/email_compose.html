@@ -13,6 +13,21 @@
         {% trans "Send an update to a group of applicants. One email is queued per recipient, with placeholders resolved individually." %}
     </p>
 
+    {% if custom_templates %}
+        <form action="" method="get" class="form-inline custom-template-picker">
+            <div class="form-group">
+                <label for="id_template_picker">{% trans "Load from template" %}</label>
+                <select name="template" id="id_template_picker" class="form-control">
+                    <option value="">{% trans "Select a saved template…" %}</option>
+                    {% for template in custom_templates %}
+                        <option value="{{ template.pk }}">{{ template.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <button type="submit" class="btn btn-default">{% trans "Load" %}</button>
+        </form>
+    {% endif %}
+
     <form action="" method="post" class="form-horizontal">
         {% csrf_token %}
         {% bootstrap_form_errors form %}
