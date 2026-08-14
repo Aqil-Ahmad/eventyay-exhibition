@@ -1,3 +1,4 @@
+from django.core.exceptions import FieldDoesNotExist
 from django.db.models import Prefetch
 from django.db.models.signals import pre_delete
 from django.dispatch import receiver
@@ -36,6 +37,7 @@ from .models import (
     LOG_PARTNER_REACTIVATED,
     LOG_PARTNER_SYNCED,
     LOG_PREFIX,
+    LOG_PROPOSAL_CHANGED,
     LOG_QUESTION_ADDED,
     LOG_QUESTION_CHANGED,
     LOG_QUESTION_DELETED,
@@ -282,6 +284,7 @@ LOG_ENTRY_LABELS = {
     PROPOSAL_LOG_ACTIONS["reject"]: _("Exhibition request rejected."),
     PROPOSAL_LOG_ACTIONS["withdraw"]: _("Exhibition request withdrawn."),
     PROPOSAL_LOG_ACTIONS["reopen"]: _("Exhibition request reopened for review."),
+    LOG_PROPOSAL_CHANGED: _("Exhibition request changed."),
     LOG_PARTNER_CREATED: _("Organization profile created from an approved request."),
     LOG_PARTNER_REACTIVATED: _("Organization profile reactivated after re-approval."),
     LOG_PARTNER_SYNCED: _("Organization profile updated from the submitter's changes."),
@@ -299,6 +302,24 @@ LOG_ENTRY_LABELS = {
     LOG_QUESTION_DELETED: _("Exhibitor form question deleted."),
     LOG_EMAIL_SENT: _("Email sent."),
 }
+
+
+def changed_field_labels(logentry):
+    """Render the stored field names of a change entry using their model labels."""
+    names = logentry.parsed_data.get("changed") or []
+    if not names:
+        return ""
+    model = type(logentry.content_object) if logentry.content_object else None
+    labels = []
+    for name in names:
+        label = name.replace("_", " ")
+        if model is not None:
+            try:
+                label = str(model._meta.get_field(name).verbose_name)
+            except (FieldDoesNotExist, AttributeError):
+                pass
+        labels.append(label)
+    return _("Updated: {fields}.").format(fields=", ".join(labels))
 
 
 def proposal_state_label(value):
@@ -326,6 +347,10 @@ def exhibition_logentry_display(sender, logentry, **kwargs):
                 new=proposal_state_label(data["to"]),
             )
             return f"{label} {transition}"
+
+    changed = changed_field_labels(logentry)
+    if changed:
+        return f"{label} {changed}"
     return label
 
 

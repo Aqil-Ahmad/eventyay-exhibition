@@ -60,6 +60,7 @@ from .models import (
     LOG_PARTNER_ADDED,
     LOG_PARTNER_CHANGED,
     LOG_PARTNER_DELETED,
+    LOG_PROPOSAL_CHANGED,
     LOG_QUESTION_ADDED,
     LOG_QUESTION_CHANGED,
     LOG_QUESTION_DELETED,
@@ -855,6 +856,12 @@ class UserProposalEditView(
             and previous_state != ExhibitionProposalState.SUBMITTED
         ):
             send_proposal_confirmation(self.request.event, self.object, self.request.user)
+        if form.changed_data:
+            self.object.log_action(
+                LOG_PROPOSAL_CHANGED,
+                data={"changed": form.changed_data, "by": "submitter"},
+                user=self.request.user,
+            )
         if self.object.approved_exhibitor_id:
             sync_exhibitor_from_proposal(self.object, requestor=self.request.user)
         messages.success(self.request, _("Your changes have been saved."))
@@ -1248,6 +1255,12 @@ class ProposalDetailView(EventPermissionRequiredMixin, UpdateView):
     @transaction.atomic
     def form_valid(self, form):
         self.object = form.save()
+        if form.changed_data:
+            self.object.log_action(
+                LOG_PROPOSAL_CHANGED,
+                data={"changed": form.changed_data},
+                user=self.request.user,
+            )
         action = self.request.POST.get("action", "save")
         if action in PROPOSAL_REVIEW_ACTIONS:
             if not self.can_manage():

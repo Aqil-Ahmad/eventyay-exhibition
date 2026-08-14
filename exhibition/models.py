@@ -486,6 +486,7 @@ PROPOSAL_LOG_ACTIONS = {
     "reopen": f"{LOG_PREFIX}.proposal.reopened",
 }
 
+LOG_PROPOSAL_CHANGED = f"{LOG_PREFIX}.proposal.changed"
 LOG_PARTNER_CREATED = f"{LOG_PREFIX}.partner.created"
 LOG_PARTNER_REACTIVATED = f"{LOG_PREFIX}.partner.reactivated"
 LOG_PARTNER_ADDED = f"{LOG_PREFIX}.partner.added"
