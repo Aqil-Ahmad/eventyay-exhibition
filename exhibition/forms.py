@@ -70,7 +70,7 @@ class ExhibitorInfoForm(I18nModelForm):
         required=False,
         label=_("Can view voucher redemptions"),
         help_text=_(
-            "Lets this exhibitor retrieve the attendees who redeemed vouchers issued to them. "
+            "Lets this exhibitor or sponsor retrieve the attendees who redeemed vouchers issued to them. "
             "Separate from lead scanning, which covers attendees scanned at the booth."
         ),
     )
@@ -232,6 +232,43 @@ class ExhibitorInfoForm(I18nModelForm):
                 key for key in settings.ordered_proposal_field_keys if self.profile_key_is_active(key)
             ]
             self._apply_profile_field_order()
+        self._set_voucher_access_help_text()
+
+    VOUCHER_ACCESS_HELP_TEXTS = {
+        "exhibitor": _(
+            "Lets this exhibitor retrieve the attendees who redeemed vouchers issued to them. "
+            "Separate from lead scanning, which covers attendees scanned at the booth."
+        ),
+        "sponsor": _(
+            "Lets this sponsor retrieve the attendees who redeemed vouchers issued to them. "
+            "Separate from lead scanning, which covers attendees scanned at the booth."
+        ),
+        "both": _(
+            "Lets this exhibitor and sponsor retrieve the attendees who redeemed vouchers issued to them. "
+            "Separate from lead scanning, which covers attendees scanned at the booth."
+        ),
+        "unset": _(
+            "Lets this exhibitor or sponsor retrieve the attendees who redeemed vouchers issued to them. "
+            "Separate from lead scanning, which covers attendees scanned at the booth."
+        ),
+    }
+
+    def _voucher_access_audience(self):
+        if self.partner_type in ("exhibitor", "sponsor"):
+            return self.partner_type
+        if self.instance and self.instance.pk:
+            if self.instance.is_exhibitor and self.instance.is_sponsor:
+                return "both"
+            if self.instance.is_exhibitor:
+                return "exhibitor"
+            if self.instance.is_sponsor:
+                return "sponsor"
+        return "unset"
+
+    def _set_voucher_access_help_text(self):
+        field = self.fields.get("allow_voucher_access")
+        if field is not None:
+            field.help_text = self.VOUCHER_ACCESS_HELP_TEXTS[self._voucher_access_audience()]
 
     def _apply_profile_field_settings(self):
         for key, field_names in self.PROFILE_SETTING_FIELD_MAP.items():
