@@ -1926,9 +1926,7 @@ class EmailComposeView(EventPermissionRequiredMixin, FormView):
         initial = super().get_initial()
         template_pk = self.request.GET.get("template")
         if template_pk:
-            template = ExhibitionCustomEmailTemplate.objects.filter(
-                event=self.request.event, pk=template_pk
-            ).first()
+            template = ExhibitionCustomEmailTemplate.objects.filter(event=self.request.event, pk=template_pk).first()
             if template:
                 initial["subject"] = str(template.subject)
                 initial["body"] = str(template.body)
@@ -2333,7 +2331,9 @@ class EmailTemplatesView(EventPermissionRequiredMixin, TemplateView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         form = kwargs.get("form") or self.get_form()
-        custom_panels = kwargs.get("custom_panels") if kwargs.get("custom_panels") is not None else self.get_custom_panels()
+        custom_panels = kwargs.get("custom_panels")
+        if custom_panels is None:
+            custom_panels = self.get_custom_panels()
         context["form"] = form
         context["template_panels"] = [
             {

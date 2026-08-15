@@ -8,11 +8,11 @@ from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 from eventyay.base.forms import I18nModelForm, SettingsForm
 from eventyay.base.models import PriceModeChoices, Product
+from eventyay.common.forms.fields import EmailBodyField, I18nEmailBodyFormField
 from eventyay.common.forms.mixins import (
     EventLocalizedModelChoiceField,
     EventLocalizedModelMultipleChoiceField,
 )
-from eventyay.common.forms.fields import EmailBodyField, I18nEmailBodyFormField
 from eventyay.common.forms.widgets import EmailEditorWidget, HtmlDateTimeInput, I18nEmailEditorWidget
 from eventyay.common.urls import normalize_url_scheme
 from eventyay.common.utils.language import localize_event_text
@@ -1457,8 +1457,7 @@ class ExhibitionEmailQueueForm(forms.ModelForm):
         }
         help_texts = {
             "scheduled_at": _(
-                "Leave empty to keep this in the outbox until sent manually. "
-                "Time is interpreted in the event timezone."
+                "Leave empty to keep this in the outbox until sent manually. Time is interpreted in the event timezone."
             ),
         }
 
