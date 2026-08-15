@@ -78,5 +78,29 @@
         </div>
     </form>
 
+    <fieldset>
+        <legend>{% trans "Custom templates" %}</legend>
+        <p class="text-muted">
+            {% trans "Save your own reusable subject/body pairs here, then load one when composing a broadcast email." %}
+        </p>
+        {% if custom_templates %}
+            <ul class="list-unstyled custom-template-list">
+                {% for template in custom_templates %}
+                    <li>
+                        <a href="{% url 'plugins:exhibition:email.custom_templates.edit' organizer=request.event.organizer.slug event=request.event.slug pk=template.pk %}">
+                            {{ template.name }}
+                        </a>
+                        <a class="text-danger" href="{% url 'plugins:exhibition:email.custom_templates.delete' organizer=request.event.organizer.slug event=request.event.slug pk=template.pk %}">
+                            <i class="fa fa-trash"></i> <span class="sr-only">{% trans "Delete" %}</span>
+                        </a>
+                    </li>
+                {% endfor %}
+            </ul>
+        {% endif %}
+        <a class="btn btn-default" href="{% url 'plugins:exhibition:email.custom_templates.add' organizer=request.event.organizer.slug event=request.event.slug %}">
+            <i class="fa fa-plus"></i> {% trans "New template" %}
+        </a>
+    </fieldset>
+
     <script type="text/javascript" src="{% static 'exhibition/js/email-templates.js' %}"></script>
 {% endblock %}

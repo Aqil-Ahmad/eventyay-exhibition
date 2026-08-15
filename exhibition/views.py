@@ -2329,6 +2329,7 @@ class EmailTemplatesView(EventPermissionRequiredMixin, TemplateView):
         ]
         context["email_placeholders"] = mail_helpers.PLACEHOLDER_DOCS
         context["locales"] = self.request.event.settings.locales
+        context["custom_templates"] = ExhibitionCustomEmailTemplate.objects.filter(event=self.request.event)
         return context
 
     def post(self, request, *args, **kwargs):
@@ -2385,16 +2386,6 @@ class EmailTemplatePreviewView(EventPermissionRequiredMixin, View):
         return JsonResponse({"previews": previews})
 
 
-class CustomEmailTemplateListView(EventPermissionRequiredMixin, ListView):
-    model = ExhibitionCustomEmailTemplate
-    permission = "can_change_event_settings"
-    template_name = "exhibitors/email_custom_templates.html"
-    context_object_name = "custom_templates"
-
-    def get_queryset(self):
-        return ExhibitionCustomEmailTemplate.objects.filter(event=self.request.event)
-
-
 class CustomEmailTemplateCreateView(EventPermissionRequiredMixin, CreateView):
     model = ExhibitionCustomEmailTemplate
     form_class = ExhibitionCustomEmailTemplateForm
@@ -2412,7 +2403,7 @@ class CustomEmailTemplateCreateView(EventPermissionRequiredMixin, CreateView):
         return super().form_valid(form)
 
     def get_success_url(self):
-        return reverse("plugins:exhibition:email.custom_templates", kwargs=event_kwargs(self.request.event))
+        return reverse("plugins:exhibition:email.templates", kwargs=event_kwargs(self.request.event))
 
 
 class CustomEmailTemplateEditView(EventPermissionRequiredMixin, UpdateView):
@@ -2434,7 +2425,7 @@ class CustomEmailTemplateEditView(EventPermissionRequiredMixin, UpdateView):
         return super().form_valid(form)
 
     def get_success_url(self):
-        return reverse("plugins:exhibition:email.custom_templates", kwargs=event_kwargs(self.request.event))
+        return reverse("plugins:exhibition:email.templates", kwargs=event_kwargs(self.request.event))
 
 
 class CustomEmailTemplateDeleteView(EventPermissionRequiredMixin, DeleteView):
@@ -2450,4 +2441,4 @@ class CustomEmailTemplateDeleteView(EventPermissionRequiredMixin, DeleteView):
         return super().form_valid(form)
 
     def get_success_url(self):
-        return reverse("plugins:exhibition:email.custom_templates", kwargs=event_kwargs(self.request.event))
+        return reverse("plugins:exhibition:email.templates", kwargs=event_kwargs(self.request.event))

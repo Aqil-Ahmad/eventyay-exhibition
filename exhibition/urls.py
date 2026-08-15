@@ -16,7 +16,6 @@ from .views import (
     CustomEmailTemplateCreateView,
     CustomEmailTemplateDeleteView,
     CustomEmailTemplateEditView,
-    CustomEmailTemplateListView,
     EmailBulkActionView,
     EmailComposeView,
     EmailDeleteView,
@@ -272,11 +271,6 @@ urlpatterns = [
         "exhibitors/event/<orgslug:organizer>/<slug:event>/emails/templates/preview",
         EmailTemplatePreviewView.as_view(),
         name="email.templates.preview",
-    ),
-    path(
-        "exhibitors/event/<orgslug:organizer>/<slug:event>/emails/custom-templates",
-        CustomEmailTemplateListView.as_view(),
-        name="email.custom_templates",
     ),
     path(
         "exhibitors/event/<orgslug:organizer>/<slug:event>/emails/custom-templates/add",
