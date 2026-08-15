@@ -16,6 +16,12 @@
 {% endblock %}
 
 {% block exhibitors_content %}
+    <p>
+        <a class="btn btn-default" href="{% url 'plugins:exhibition:email.custom_templates.add' organizer=request.event.organizer.slug event=request.event.slug %}">
+            <i class="fa fa-plus"></i> {% trans "New template" %}
+        </a>
+    </p>
+
     <p class="text-muted">
         {% trans "These templates are used for the confirmation email sent when an applicant submits a request, and for the accept/reject emails you send from the outbox." %}
     </p>
@@ -61,6 +67,50 @@
                     </div>
                 </details>
             {% endfor %}
+
+            {% for panel in custom_panels %}
+                <details class="panel panel-default email-template-panel" data-role="{{ panel.role_slug }}">
+                    <summary class="panel-heading">
+                        <h4 class="panel-title">
+                            <strong>{{ panel.label }}</strong>
+                            <span class="pull-right">
+                                <a href="{% url 'plugins:exhibition:email.custom_templates.delete' organizer=request.event.organizer.slug event=request.event.slug pk=panel.pk %}"
+                                   class="btn btn-sm btn-danger" title="{% trans 'Discard this template' %}">
+                                    <i class="fa fa-trash"></i>
+                                </a>
+                                <i class="fa fa-angle-down collapse-indicator"></i>
+                            </span>
+                        </h4>
+                    </summary>
+                    <div class="panel-body">
+                        {% bootstrap_field panel.form.name layout="control" %}
+                        {% bootstrap_field panel.form.subject layout="control" %}
+                        <div class="form-group preview-panel" data-role="{{ panel.role_slug }}">
+                            <label class="col-md-3 control-label">{{ panel.form.body.label }}</label>
+                            <div class="col-md-9">
+                                <ul class="nav nav-tabs" role="tablist">
+                                    <li role="presentation" class="active">
+                                        <a data-toggle="tab" href="#{{ panel.role_slug }}_edit"><i class="fa fa-pencil-square-o fa-fw"></i> {% trans "Edit" %}</a>
+                                    </li>
+                                    <li role="presentation">
+                                        <a data-toggle="tab" href="#{{ panel.role_slug }}_preview" data-template-preview-tab><i class="fa fa-tv fa-fw"></i> {% trans "Preview" %}</a>
+                                    </li>
+                                </ul>
+                                <div class="tab-content">
+                                    <div id="{{ panel.role_slug }}_edit" class="tab-pane fade in active">
+                                        {% bootstrap_field panel.form.body show_label=False form_group_class="" %}
+                                    </div>
+                                    <div id="{{ panel.role_slug }}_preview" class="tab-pane mail-preview-group">
+                                        {% for locale in locales %}
+                                            <div lang="{{ locale }}" class="mail-preview"></div>
+                                        {% endfor %}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </details>
+            {% endfor %}
         </div>
 
         <fieldset>
@@ -77,30 +127,6 @@
             <button type="submit" class="btn btn-primary btn-save">{% trans "Save" %}</button>
         </div>
     </form>
-
-    <fieldset>
-        <legend>{% trans "Custom templates" %}</legend>
-        <p class="text-muted">
-            {% trans "Save your own reusable subject/body pairs here, then load one when composing a broadcast email." %}
-        </p>
-        {% if custom_templates %}
-            <ul class="list-unstyled custom-template-list">
-                {% for template in custom_templates %}
-                    <li>
-                        <a href="{% url 'plugins:exhibition:email.custom_templates.edit' organizer=request.event.organizer.slug event=request.event.slug pk=template.pk %}">
-                            {{ template.name }}
-                        </a>
-                        <a class="text-danger" href="{% url 'plugins:exhibition:email.custom_templates.delete' organizer=request.event.organizer.slug event=request.event.slug pk=template.pk %}">
-                            <i class="fa fa-trash"></i> <span class="sr-only">{% trans "Delete" %}</span>
-                        </a>
-                    </li>
-                {% endfor %}
-            </ul>
-        {% endif %}
-        <a class="btn btn-default" href="{% url 'plugins:exhibition:email.custom_templates.add' organizer=request.event.organizer.slug event=request.event.slug %}">
-            <i class="fa fa-plus"></i> {% trans "New template" %}
-        </a>
-    </fieldset>
 
     <script type="text/javascript" src="{% static 'exhibition/js/email-templates.js' %}"></script>
 {% endblock %}

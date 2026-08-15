@@ -105,3 +105,19 @@
 .call-secret-hint {
     font-size: 12px;
 }
+
+.email-template-panel .panel-title .collapse-indicator {
+    margin-left: 15px;
+}
+
+.custom-template-picker {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-bottom: 15px;
+}
+
+.custom-template-picker .control-label {
+    margin: 0;
+}

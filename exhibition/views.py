@@ -2302,7 +2302,7 @@ class EmailBulkActionView(EventPermissionRequiredMixin, View):
 
 
 class EmailTemplatesView(EventPermissionRequiredMixin, TemplateView):
-    """Edit the lifecycle email templates."""
+    """Edit the lifecycle email templates and organizer-defined custom templates."""
 
     permission = "can_change_event_settings"
     template_name = "exhibitors/email_templates.html"
@@ -2310,9 +2310,30 @@ class EmailTemplatesView(EventPermissionRequiredMixin, TemplateView):
     def get_form(self, data=None):
         return ExhibitionMailTemplatesForm(data=data, obj=self.request.event)
 
+    def get_custom_panels(self, data=None):
+        templates = ExhibitionCustomEmailTemplate.objects.filter(event=self.request.event)
+        panels = []
+        for template in templates:
+            form = ExhibitionCustomEmailTemplateForm(
+                data,
+                instance=template,
+                prefix=f"custom_{template.pk}",
+                event=self.request.event,
+            )
+            panels.append(
+                {
+                    "pk": template.pk,
+                    "label": template.name,
+                    "role_slug": f"custom_{template.pk}",
+                    "form": form,
+                }
+            )
+        return panels
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         form = kwargs.get("form") or self.get_form()
+        custom_panels = kwargs.get("custom_panels") if kwargs.get("custom_panels") is not None else self.get_custom_panels()
         context["form"] = form
         context["template_panels"] = [
             {
@@ -2327,18 +2348,22 @@ class EmailTemplatesView(EventPermissionRequiredMixin, TemplateView):
                 (mail_helpers.PROPOSAL_REJECTED, _("Request rejected")),
             )
         ]
+        context["custom_panels"] = custom_panels
         context["email_placeholders"] = mail_helpers.PLACEHOLDER_DOCS
         context["locales"] = self.request.event.settings.locales
-        context["custom_templates"] = ExhibitionCustomEmailTemplate.objects.filter(event=self.request.event)
         return context
 
     def post(self, request, *args, **kwargs):
         form = self.get_form(data=request.POST)
-        if form.is_valid():
+        custom_panels = self.get_custom_panels(data=request.POST)
+        custom_valid = all(panel["form"].is_valid() for panel in custom_panels)
+        if form.is_valid() and custom_valid:
             form.save()
+            for panel in custom_panels:
+                panel["form"].save()
             messages.success(request, _("Email templates have been saved."))
             return redirect("plugins:exhibition:email.templates", **event_kwargs(request.event))
-        return self.render_to_response(self.get_context_data(form=form))
+        return self.render_to_response(self.get_context_data(form=form, custom_panels=custom_panels))
 
 
 class EmailTemplatePreviewView(EventPermissionRequiredMixin, View):
@@ -2347,20 +2372,28 @@ class EmailTemplatePreviewView(EventPermissionRequiredMixin, View):
     permission = "can_change_event_settings"
 
     def post(self, request, *args, **kwargs):
-        role = request.POST.get("role")
-        if role not in mail_helpers.LIFECYCLE_ROLES:
+        role = request.POST.get("role", "")
+        custom_pk = role[len("custom_") :] if role.startswith("custom_") else None
+        if custom_pk is not None:
+            if not ExhibitionCustomEmailTemplate.objects.filter(event=request.event, pk=custom_pk).exists():
+                return JsonResponse({"detail": _("Unknown template.")}, status=400)
+            widget = ExhibitionCustomEmailTemplateForm(event=request.event).fields["body"].widget
+            field_name = f"{role}-body"
+        elif role in mail_helpers.LIFECYCLE_ROLES:
+            form = ExhibitionMailTemplatesForm(obj=request.event)
+            field_name = mail_helpers.body_settings_key(role)
+            widget = form.fields[field_name].widget
+        else:
             return JsonResponse({"detail": _("Unknown template.")}, status=400)
 
         from eventyay.base.i18n import language
         from eventyay.base.templatetags.rich_text import markdown_compile_email
 
-        form = ExhibitionMailTemplatesForm(obj=request.event)
         placeholders = mail_helpers.build_preview_placeholders(request.event)
         event_locales = set(request.event.settings.locales)
         region = request.event.settings.region
 
         def values_by_locale(field_name):
-            widget = form.fields[field_name].widget
             raw = widget.value_from_datadict(request.POST, request.FILES, field_name)
             if not isinstance(raw, (list, tuple)):
                 raw = [raw]
@@ -2371,7 +2404,7 @@ class EmailTemplatePreviewView(EventPermissionRequiredMixin, View):
                     by_locale[code] = raw[index] or ""
             return by_locale
 
-        bodies = values_by_locale(mail_helpers.body_settings_key(role))
+        bodies = values_by_locale(field_name)
 
         def render(text):
             try:
@@ -2400,28 +2433,6 @@ class CustomEmailTemplateCreateView(EventPermissionRequiredMixin, CreateView):
     def form_valid(self, form):
         form.instance.event = self.request.event
         messages.success(self.request, _("Custom template has been created."))
-        return super().form_valid(form)
-
-    def get_success_url(self):
-        return reverse("plugins:exhibition:email.templates", kwargs=event_kwargs(self.request.event))
-
-
-class CustomEmailTemplateEditView(EventPermissionRequiredMixin, UpdateView):
-    model = ExhibitionCustomEmailTemplate
-    form_class = ExhibitionCustomEmailTemplateForm
-    permission = "can_change_event_settings"
-    template_name = "exhibitors/email_custom_template_form.html"
-
-    def get_queryset(self):
-        return ExhibitionCustomEmailTemplate.objects.filter(event=self.request.event)
-
-    def get_form_kwargs(self):
-        kwargs = super().get_form_kwargs()
-        kwargs["event"] = self.request.event
-        return kwargs
-
-    def form_valid(self, form):
-        messages.success(self.request, _("Custom template has been saved."))
         return super().form_valid(form)
 
     def get_success_url(self):
