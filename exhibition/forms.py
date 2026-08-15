@@ -574,10 +574,11 @@ class CallSettingsForm(I18nModelForm):
         self.fields["call_text"] = I18nFormField(
             label=self.fields["call_text"].label,
             required=False,
-            locales=self.event.settings.get("locales") if self.event else None,
             widget=I18nEmailEditorWidget,
             widget_kwargs={"attrs": {"rows": 8, "data-tiptap-profile": "richtext"}},
         )
+        if self.event:
+            self.fields["call_text"].widget.enabled_locales = self.event.settings.get("locales")
 
 
 class ExhibitionQuestionFieldsMixin:
@@ -1552,8 +1553,8 @@ class ExhibitionMailTemplatesForm(SettingsForm):
                 required=False,
                 placeholders=placeholder_names,
                 initial=default_body,
-                locales=self.locales,
             )
+            self.fields[mail_helpers.body_settings_key(role)].widget.enabled_locales = self.locales
 
 
 class ExhibitionCustomEmailTemplateForm(I18nModelForm):
@@ -1576,5 +1577,6 @@ class ExhibitionCustomEmailTemplateForm(I18nModelForm):
             label=self.fields["body"].label,
             required=False,
             placeholders=placeholder_names,
-            locales=self.event.settings.get("locales") if self.event else None,
         )
+        if self.event:
+            self.fields["body"].widget.enabled_locales = self.event.settings.get("locales")
