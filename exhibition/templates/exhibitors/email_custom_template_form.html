@@ -1,20 +1,49 @@
 {% extends "exhibitors/base.html" %}
 {% load i18n %}
+{% load static %}
 {% load bootstrap3 %}
 
 {% block title %}{{ request.event.name }} - {% trans "Custom template" %}{% endblock %}
+
+{% block custom_header %}
+    {{ block.super }}
+    <link rel="stylesheet" href="{% static 'exhibition/css/exhibitors-settings.css' %}">
+{% endblock %}
 
 {% block exhibitors_header %}
     <h1>{% trans "Custom template" %}</h1>
 {% endblock %}
 
 {% block exhibitors_content %}
-    <form action="" method="post" class="form-horizontal">
+    <form action="" method="post" class="form-horizontal"
+          data-preview-url="{% url 'plugins:exhibition:email.templates.preview' organizer=request.event.organizer.slug event=request.event.slug %}">
         {% csrf_token %}
         {% bootstrap_form_errors form %}
         {% bootstrap_field form.name layout="control" %}
         {% bootstrap_field form.subject layout="control" %}
-        {% bootstrap_field form.body layout="control" %}
+        <div class="form-group preview-panel" data-role="custom">
+            <label class="col-md-3 control-label">{{ form.body.label }}</label>
+            <div class="col-md-9">
+                <ul class="nav nav-tabs" role="tablist">
+                    <li role="presentation" class="active">
+                        <a data-toggle="tab" href="#custom_edit"><i class="fa fa-pencil-square-o fa-fw"></i> {% trans "Edit" %}</a>
+                    </li>
+                    <li role="presentation">
+                        <a data-toggle="tab" href="#custom_preview" data-template-preview-tab><i class="fa fa-tv fa-fw"></i> {% trans "Preview" %}</a>
+                    </li>
+                </ul>
+                <div class="tab-content">
+                    <div id="custom_edit" class="tab-pane fade in active">
+                        {% bootstrap_field form.body show_label=False form_group_class="" %}
+                    </div>
+                    <div id="custom_preview" class="tab-pane mail-preview-group">
+                        {% for locale in locales %}
+                            <div lang="{{ locale }}" class="mail-preview"></div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
         <div class="form-group submit-group">
             <button type="submit" class="btn btn-primary btn-save">{% trans "Save" %}</button>
             <a class="btn btn-default btn-lg" href="{% url 'plugins:exhibition:email.templates' organizer=request.event.organizer.slug event=request.event.slug %}">
@@ -22,4 +51,6 @@
             </a>
         </div>
     </form>
+
+    <script type="text/javascript" src="{% static 'exhibition/js/email-templates.js' %}"></script>
 {% endblock %}

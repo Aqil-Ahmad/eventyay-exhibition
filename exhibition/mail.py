@@ -1,5 +1,6 @@
 """Email helpers for the exhibition plugin."""
 
+import html
 import logging
 import re
 import uuid
@@ -102,19 +103,21 @@ def build_preview_placeholders(event):
     """Sample placeholder values for previews, wrapped like the tickets preview."""
     from django.utils.translation import gettext
     from eventyay.base.email import get_available_placeholders
+    from eventyay.base.templatetags.rich_text import is_placeholder_html_sample
 
     context = {}
+    title = html.escape(str(gettext("This value will be replaced based on dynamic parameters.")))
     for placeholder in get_available_placeholders(event, ["event", "proposal", "exhibitor"]).values():
         sample = str(placeholder.render_sample(event)).strip()
-        if _PREVIEW_URL_RE.match(sample):
+        if sample.startswith("*") or is_placeholder_html_sample(sample):
+            context[placeholder.identifier] = sample
+        elif _PREVIEW_URL_RE.match(sample):
+            escaped = html.escape(sample)
             context[placeholder.identifier] = (
-                f'<a href="{sample}" target="_blank" rel="noopener noreferrer">{sample}</a>'
+                f'<a href="{escaped}" target="_blank" rel="noopener noreferrer">{escaped}</a>'
             )
         else:
-            context[placeholder.identifier] = '<span class="placeholder" title="{}">{}</span>'.format(
-                gettext("This value will be replaced based on dynamic parameters."),
-                sample,
-            )
+            context[placeholder.identifier] = f'<span class="placeholder" title="{title}">{html.escape(sample)}</span>'
     return _SafeDict(context)
 
 

@@ -2372,7 +2372,10 @@ class EmailTemplatePreviewView(EventPermissionRequiredMixin, View):
     def post(self, request, *args, **kwargs):
         role = request.POST.get("role", "")
         custom_pk = role[len("custom_") :] if role.startswith("custom_") else None
-        if custom_pk is not None:
+        if role == "custom":
+            widget = ExhibitionCustomEmailTemplateForm(event=request.event).fields["body"].widget
+            field_name = "body"
+        elif custom_pk is not None:
             if not ExhibitionCustomEmailTemplate.objects.filter(event=request.event, pk=custom_pk).exists():
                 return JsonResponse({"detail": _("Unknown template.")}, status=400)
             widget = ExhibitionCustomEmailTemplateForm(event=request.event).fields["body"].widget
@@ -2385,7 +2388,8 @@ class EmailTemplatePreviewView(EventPermissionRequiredMixin, View):
             return JsonResponse({"detail": _("Unknown template.")}, status=400)
 
         from eventyay.base.i18n import language
-        from eventyay.base.templatetags.rich_text import markdown_compile_email
+        from eventyay.base.services.mail import expand_email_variable_chips
+        from eventyay.base.templatetags.rich_text import compile_email_body
 
         placeholders = mail_helpers.build_preview_placeholders(request.event)
         event_locales = set(request.event.settings.locales)
@@ -2406,9 +2410,11 @@ class EmailTemplatePreviewView(EventPermissionRequiredMixin, View):
 
         def render(text):
             try:
-                return markdown_compile_email(text.format_map(placeholders))
+                expanded = text.format_map(placeholders)
             except (KeyError, IndexError, ValueError):
-                return markdown_compile_email(text)
+                expanded = text
+            expanded = expand_email_variable_chips(expanded, dict(placeholders))
+            return compile_email_body(expanded)
 
         previews = {}
         for locale in event_locales:
@@ -2427,6 +2433,11 @@ class CustomEmailTemplateCreateView(EventPermissionRequiredMixin, CreateView):
         kwargs = super().get_form_kwargs()
         kwargs["event"] = self.request.event
         return kwargs
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["locales"] = self.request.event.settings.locales
+        return context
 
     def form_valid(self, form):
         form.instance.event = self.request.event
