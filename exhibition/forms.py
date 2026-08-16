@@ -1,4 +1,5 @@
 from django import forms
+from django.conf import settings as django_settings
 from django.core.files.storage import default_storage
 from django.core.files.uploadedfile import UploadedFile
 from django.db import transaction
@@ -43,6 +44,7 @@ from .social_links import (
     build_social_link_url,
     get_social_link_value,
 )
+from .utils import localized_value_for, merge_localized_value
 
 
 class ExhibitorInfoForm(I18nModelForm):
@@ -711,6 +713,21 @@ class ExhibitionQuestionFieldsMixin:
 
 
 class ExhibitionProposalForm(ExhibitionQuestionFieldsMixin, I18nModelForm):
+    content_locale = forms.ChoiceField(
+        label=_("Language"),
+        help_text=_("The language you are filling in this form with."),
+    )
+    name = forms.CharField(max_length=190, label=_("Organization name"))
+    description = forms.CharField(
+        required=False,
+        label=_("Organization description"),
+        widget=forms.Textarea(attrs={"rows": 4}),
+    )
+    booth_name = forms.CharField(
+        max_length=100,
+        required=False,
+        label=_("Preferred booth name"),
+    )
     slides_url = forms.URLField(
         required=False,
         label=_("Slides URL"),
@@ -783,13 +800,22 @@ class ExhibitionProposalForm(ExhibitionQuestionFieldsMixin, I18nModelForm):
             "notes": forms.Textarea(attrs={"rows": 4}),
         }
 
+    SINGLE_LOCALE_FIELDS = ("name", "description", "booth_name")
+
     def __init__(self, *args, **kwargs):
         event = kwargs.get("event")
         self.read_only = kwargs.pop("read_only", False)
         self.draft_save = kwargs.pop("draft_save", False)
         instance = kwargs.get("instance")
+        resolved_event = event or getattr(instance, "event", None)
+        self.selected_content_locale = self._resolve_content_locale(resolved_event, instance)
+        kwargs["initial"] = self._build_localized_initial(kwargs.pop("initial", None), instance)
         super().__init__(*args, **kwargs)
-        self.event = event or getattr(instance, "event", None)
+        self.event = resolved_event
+        self._stored_localized_values = {
+            field_name: getattr(self.instance, field_name, None) for field_name in self.SINGLE_LOCALE_FIELDS
+        }
+        self._set_content_locale_choices()
         self.exhibition_settings = None
         self.proposal_field_settings = {}
         self.active_proposal_fields = {}
@@ -832,6 +858,45 @@ class ExhibitionProposalForm(ExhibitionQuestionFieldsMixin, I18nModelForm):
                 name_field.help_text = _(
                     "The organization name is locked after acceptance. Contact the organizers to change it."
                 )
+
+    @staticmethod
+    def _resolve_content_locale(event, instance):
+        if instance is not None and getattr(instance, "content_locale", None):
+            return instance.content_locale
+        if event is None:
+            return django_settings.LANGUAGE_CODE
+        content_locales = list(getattr(event, "content_locales", None) or [])
+        if content_locales:
+            return content_locales[0] if len(content_locales) == 1 else event.locale
+        return event.locale
+
+    def _build_localized_initial(self, initial, instance):
+        initial = dict(initial or {})
+        initial.setdefault("content_locale", self.selected_content_locale)
+        if instance is None or not instance.pk:
+            return initial
+        for field_name in self.SINGLE_LOCALE_FIELDS:
+            initial.setdefault(
+                field_name,
+                localized_value_for(getattr(instance, field_name, None), self.selected_content_locale),
+            )
+        return initial
+
+    def _set_content_locale_choices(self):
+        if "content_locale" not in self.fields:
+            return
+        content_locales = list(getattr(self.event, "content_locales", None) or []) if self.event else []
+        if len(content_locales) <= 1:
+            self.fields.pop("content_locale")
+            return
+        choices = list(self.event.named_content_locales)
+        if self.selected_content_locale not in {code for code, _label in choices}:
+            if self.instance.pk:
+                choices.append((self.selected_content_locale, self.selected_content_locale))
+            else:
+                self.selected_content_locale = content_locales[0]
+                self.initial["content_locale"] = self.selected_content_locale
+        self.fields["content_locale"].choices = choices
 
     def apply_proposal_field_settings(self):
         file_field_keys = set(self.file_url_fields)
@@ -1041,6 +1106,21 @@ class ExhibitionProposalForm(ExhibitionQuestionFieldsMixin, I18nModelForm):
 
     def save(self, commit=True):
         instance = super().save(commit=False)
+        locale = self.cleaned_data.get("content_locale") or self.selected_content_locale
+        instance.content_locale = locale
+        for field_name in self.SINGLE_LOCALE_FIELDS:
+            if field_name not in self.fields:
+                setattr(instance, field_name, self._stored_localized_values.get(field_name) or "")
+                continue
+            setattr(
+                instance,
+                field_name,
+                merge_localized_value(
+                    self._stored_localized_values.get(field_name),
+                    locale,
+                    self.cleaned_data.get(field_name),
+                ),
+            )
         instance.is_exhibitor = self.cleaned_data.get("is_exhibitor", True)
         instance.is_sponsor = self.cleaned_data.get("is_sponsor", False)
         if not instance.is_exhibitor:

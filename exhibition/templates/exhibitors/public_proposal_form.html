@@ -26,6 +26,10 @@
         {% csrf_token %}
         {% bootstrap_form_errors form %}
 
+        {% if form.content_locale %}
+            {% bootstrap_field form.content_locale layout="control" %}
+        {% endif %}
+
         {% for item in form.proposal_items %}
             {% if item.kind == 'social_links' and can_edit %}
                 <div class="form-group {% if social_media_formset.non_form_errors %}has-error{% endif %}">
