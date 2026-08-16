@@ -16,7 +16,6 @@ from exhibition.models import (
     ExhibitionProposal,
     ExhibitionProposalState,
     ExhibitorInfo,
-    ExhibitorSettings,
     SponsorGroup,
 )
 from exhibition.views import (
@@ -193,12 +192,14 @@ def test_outbox_and_sent_querysets_do_not_overlap(mail_event, proposal):
 
 @pytest.mark.django_db
 def test_access_email_resolves_placeholders_and_keeps_newlines(mail_event, exhibitor):
-    with scopes_disabled():
-        ExhibitorSettings.objects.create(
-            event=mail_event,
-            exhibitors_access_mail_subject="Access for {event_name}",
-            exhibitors_access_mail_body="Hello {exhibitor_name},\n\nBooth: {booth_id}\nCode: {exhibitor_access_code}",
-        )
+    mail_event.settings.set(
+        mail_helpers.subject_settings_key(mail_helpers.EXHIBITOR_ACCESS),
+        "Access for {event_name}",
+    )
+    mail_event.settings.set(
+        mail_helpers.body_settings_key(mail_helpers.EXHIBITOR_ACCESS),
+        "Hello {exhibitor_name},\n\nBooth: {booth_id}\nCode: {exhibitor_access_code}",
+    )
 
     queued = mail_helpers.queue_exhibitor_access_email(mail_event, exhibitor)
 
@@ -212,25 +213,17 @@ def test_access_email_resolves_placeholders_and_keeps_newlines(mail_event, exhib
 
 
 @pytest.mark.django_db
-def test_access_email_returns_none_without_template(mail_event, exhibitor):
-    with scopes_disabled():
-        ExhibitorSettings.objects.create(
-            event=mail_event,
-            exhibitors_access_mail_subject="",
-            exhibitors_access_mail_body="",
-        )
+def test_access_email_falls_back_to_default_template(mail_event, exhibitor):
+    queued = mail_helpers.queue_exhibitor_access_email(mail_event, exhibitor)
 
-    assert mail_helpers.queue_exhibitor_access_email(mail_event, exhibitor) is None
+    assert queued is not None
+    assert "Acme Corp" in queued.body
+    assert exhibitor.key in queued.body
 
 
 @pytest.mark.django_db
 def test_access_email_returns_none_without_exhibitor_email(mail_event):
     with scopes_disabled():
-        ExhibitorSettings.objects.create(
-            event=mail_event,
-            exhibitors_access_mail_subject="Access",
-            exhibitors_access_mail_body="Code: {exhibitor_access_code}",
-        )
         exhibitor = ExhibitorInfo.objects.create(event=mail_event, name="No Email Co", email="")
 
     assert mail_helpers.queue_exhibitor_access_email(mail_event, exhibitor) is None
