@@ -16,6 +16,7 @@ from eventyay.common.forms.mixins import (
 from eventyay.common.forms.widgets import HtmlDateTimeInput
 from eventyay.common.urls import normalize_url_scheme
 from eventyay.common.utils.language import localize_event_text
+from eventyay.helpers.i18n import is_rtl
 from i18nfield.forms import I18nFormField, I18nTextarea, I18nTextInput
 
 from . import mail as mail_helpers
@@ -848,6 +849,7 @@ class ExhibitionProposalForm(ExhibitionQuestionFieldsMixin, I18nModelForm):
                 readonly=self.read_only,
             )
             self.apply_proposal_field_order()
+        self._apply_content_text_direction()
         if self.read_only:
             for field in self.fields.values():
                 field.disabled = True
@@ -897,6 +899,29 @@ class ExhibitionProposalForm(ExhibitionQuestionFieldsMixin, I18nModelForm):
                 self.selected_content_locale = content_locales[0]
                 self.initial["content_locale"] = self.selected_content_locale
         self.fields["content_locale"].choices = choices
+        self.fields["content_locale"].widget.attrs["data-rtl-locales"] = ",".join(
+            code for code, _label in choices if is_rtl(code)
+        )
+
+    def _content_text_field_names(self):
+        names = [name for name in self.SINGLE_LOCALE_FIELDS if name in self.fields]
+        if "notes" in self.fields:
+            names.append("notes")
+        for name, field in self.fields.items():
+            if getattr(field, "question", None) is None:
+                continue
+            if isinstance(field, forms.URLField):
+                continue
+            if isinstance(field.widget, forms.TextInput | forms.Textarea):
+                names.append(name)
+        return names
+
+    def _apply_content_text_direction(self):
+        direction = "rtl" if is_rtl(self.selected_content_locale) else "ltr"
+        for field_name in self._content_text_field_names():
+            widget = self.fields[field_name].widget
+            widget.attrs["dir"] = direction
+            widget.attrs["data-content-text"] = "1"
 
     def apply_proposal_field_settings(self):
         file_field_keys = set(self.file_url_fields)

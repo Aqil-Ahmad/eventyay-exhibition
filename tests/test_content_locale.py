@@ -95,6 +95,41 @@ def test_save_records_the_selected_language(event):
 
 
 @pytest.mark.django_db
+def test_text_fields_are_ltr_for_left_to_right_locale(event):
+    with scopes_disabled():
+        form = ExhibitionProposalForm(event=_multilingual(event))
+        assert form.fields["name"].widget.attrs["dir"] == "ltr"
+
+
+@pytest.mark.django_db
+def test_text_fields_flip_to_rtl_for_right_to_left_locale(event):
+    with scopes_disabled():
+        event.content_locale_array = "en,ur"
+        event.save(update_fields=["content_locale_array"])
+        rtl_event = Event.objects.get(pk=event.pk)
+        proposal = _proposal(rtl_event, name=LazyI18nString({"ur": "ایکمی"}), content_locale="ur")
+
+        form = ExhibitionProposalForm(instance=proposal, event=rtl_event)
+
+        assert form.fields["name"].widget.attrs["dir"] == "rtl"
+        assert form.fields["description"].widget.attrs["dir"] == "rtl"
+        assert "ur" in form.fields["content_locale"].widget.attrs["data-rtl-locales"]
+
+
+@pytest.mark.django_db
+def test_language_selector_itself_keeps_default_direction(event):
+    with scopes_disabled():
+        event.content_locale_array = "en,ur"
+        event.save(update_fields=["content_locale_array"])
+        rtl_event = Event.objects.get(pk=event.pk)
+        proposal = _proposal(rtl_event, name=LazyI18nString({"ur": "ایکمی"}), content_locale="ur")
+
+        form = ExhibitionProposalForm(instance=proposal, event=rtl_event)
+
+        assert "dir" not in form.fields["content_locale"].widget.attrs
+
+
+@pytest.mark.django_db
 def test_sync_keeps_organizer_authored_translations(event):
     with scopes_disabled():
         exhibitor = ExhibitorInfo.objects.create(
