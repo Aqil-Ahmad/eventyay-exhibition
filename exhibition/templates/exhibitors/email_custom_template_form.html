@@ -2,6 +2,7 @@
 {% load i18n %}
 {% load static %}
 {% load bootstrap3 %}
+{% load exhibition_email %}
 
 {% block title %}{{ request.event.name }} - {% trans "Custom template" %}{% endblock %}
 
@@ -38,7 +39,7 @@
                     </div>
                     <div id="custom_preview" class="tab-pane mail-preview-group">
                         {% for locale in locales %}
-                            <div lang="{{ locale }}" class="mail-preview"></div>
+                            <div lang="{{ locale }}" dir="{{ locale|locale_dir }}" class="mail-preview"></div>
                         {% endfor %}
                     </div>
                 </div>

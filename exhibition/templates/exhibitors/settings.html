@@ -2,6 +2,7 @@
 {% load i18n %}
 {% load static %}
 {% load bootstrap3 %}
+{% load exhibition_email %}
 {% block title %}
     {% if active_tab == "call" %}
         {% trans "Call for Exhibitors" %}
@@ -73,7 +74,7 @@ The {event_name} team{% endblocktrans %}
                                 <div id="call_text_preview" class="tab-pane call-text-preview-group"
                                      data-preview-url="{% url 'plugins:exhibition:settings.call.preview' organizer=request.event.organizer.slug event=request.event.slug %}">
                                     {% for locale, html in call_text_previews %}
-                                        <div lang="{{ locale }}" class="call-text-preview">{{ html }}</div>
+                                        <div lang="{{ locale }}" dir="{{ locale|locale_dir }}" class="call-text-preview">{{ html }}</div>
                                     {% endfor %}
                                     <div class="alert alert-info call-text-preview-note">
                                         {% trans "This panel renders unsaved draft text using the same styling as the live public call page." %}
