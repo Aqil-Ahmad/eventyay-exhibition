@@ -1934,7 +1934,6 @@ class EmailComposeView(EventPermissionRequiredMixin, FormView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context["email_placeholders"] = mail_helpers.PLACEHOLDER_DOCS
         context["custom_templates"] = ExhibitionCustomEmailTemplate.objects.filter(event=self.request.event)
         return context
 
@@ -2349,7 +2348,6 @@ class EmailTemplatesView(EventPermissionRequiredMixin, TemplateView):
             )
         ]
         context["custom_panels"] = custom_panels
-        context["email_placeholders"] = mail_helpers.PLACEHOLDER_DOCS
         context["locales"] = self.request.event.settings.locales
         return context
 
