@@ -8,7 +8,7 @@ from django.db.models import Max, Q
 from django.utils import timezone
 from django.utils.crypto import get_random_string
 from django.utils.translation import gettext_lazy as _
-from eventyay.base.models import Event, Voucher
+from eventyay.base.models import Device, Event, Voucher
 from eventyay.common.utils.language import localize_event_text
 from i18nfield.fields import I18nCharField, I18nTextField
 from i18nfield.strings import LazyI18nString
@@ -906,6 +906,18 @@ class ExhibitorVoucher(models.Model):
 
     def __str__(self):
         return f"{self.voucher.code} ({self.exhibitor.name})"
+
+
+class ExhibitorDevice(models.Model):
+    exhibitor = models.ForeignKey(ExhibitorInfo, on_delete=models.CASCADE, related_name="devices")
+    device = models.OneToOneField(Device, on_delete=models.CASCADE, related_name="exhibitor_link")
+    created = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ("created", "pk")
+
+    def __str__(self):
+        return f"{self.device.name} ({self.exhibitor.name})"
 
 
 class ExhibitionEmailQueue(models.Model):
