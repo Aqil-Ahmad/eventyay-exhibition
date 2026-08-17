@@ -305,8 +305,6 @@ class SettingsView(EventPermissionRequiredMixin, ListView):
 
         if action == "save_exhibitor_settings":
             settings.allowed_fields = request.POST.getlist("exhibitors_access_voucher")
-            settings.exhibitors_access_mail_subject = request.POST.get("exhibitors_access_mail_subject", "")
-            settings.exhibitors_access_mail_body = request.POST.get("exhibitors_access_mail_body", "")
             settings.save()
             messages.success(self.request, _("Settings have been saved."))
             return redirect(self.get_settings_url("exhibitors"))
@@ -2346,6 +2344,7 @@ class EmailTemplatesView(EventPermissionRequiredMixin, TemplateView):
                 (mail_helpers.PROPOSAL_NEW, _("Request received (confirmation)")),
                 (mail_helpers.PROPOSAL_ACCEPTED, _("Request accepted")),
                 (mail_helpers.PROPOSAL_REJECTED, _("Request rejected")),
+                (mail_helpers.EXHIBITOR_ACCESS, _("Exhibitor lead scanning key")),
             )
         ]
         context["custom_panels"] = custom_panels
