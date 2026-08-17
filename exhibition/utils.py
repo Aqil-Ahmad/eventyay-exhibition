@@ -4,6 +4,7 @@ from urllib.parse import parse_qs, urlparse
 from django.db.models import Q, QuerySet
 from django.utils import timezone
 from eventyay.common.urls import get_url_origin, normalize_url_scheme
+from eventyay.common.utils.language import localize_event_text
 
 if TYPE_CHECKING:
     from .models import ExhibitorInfo
@@ -223,6 +224,53 @@ def generate_exhibitor_vouchers(exhibitor, *, product, count, max_usages, price_
         )
         links.append(ExhibitorVoucher(exhibitor=exhibitor, voucher=voucher))
     return ExhibitorVoucher.objects.bulk_create(links)
+
+
+def provision_exhibitor_devices(exhibitor, count, *, user=None):
+    """Create ``count`` lead-scanning devices for an exhibitor and link them."""
+    from eventyay.base.models import Device
+
+    from .models import ExhibitorDevice
+
+    partner_name = localize_event_text(exhibitor.name) or str(exhibitor.name)
+    existing = ExhibitorDevice.objects.filter(exhibitor=exhibitor).count()
+    links = []
+    for index in range(count):
+        device = Device(
+            organizer=exhibitor.event.organizer,
+            name=f"{partner_name} #{existing + index + 1}",
+            all_events=False,
+            security_profile="eventyay_checkin",
+        )
+        device.save()
+        device.limit_events.add(exhibitor.event)
+        device.log_action("eventyay.device.created", user=user, data={"exhibitor": exhibitor.pk})
+        links.append(ExhibitorDevice(exhibitor=exhibitor, device=device))
+    return ExhibitorDevice.objects.bulk_create(links)
+
+
+def reset_exhibitor_device_setup(exhibitor, *, user=None):
+    """Regenerate setup tokens for an exhibitor's devices; returns those that were live."""
+    from eventyay.base.models.devices import generate_initialization_token
+
+    from .models import ExhibitorDevice
+
+    disconnected = []
+    for link in ExhibitorDevice.objects.filter(exhibitor=exhibitor).select_related("device"):
+        device = link.device
+        if device.api_token and device.initialized:
+            disconnected.append(device)
+        device.initialization_token = generate_initialization_token()
+        device.api_token = None
+        device.initialized = None
+        device.revoked = False
+        device.save(update_fields=["initialization_token", "api_token", "initialized", "revoked"])
+        device.log_action(
+            "eventyay.device.setup_token_reset",
+            user=user,
+            data={"had_active_session": device in disconnected, "exhibitor": exhibitor.pk},
+        )
+    return disconnected
 
 
 PROPOSAL_SYNCED_PROFILE_FIELDS = (

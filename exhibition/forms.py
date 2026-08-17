@@ -456,6 +456,16 @@ class ExhibitorInfoForm(I18nModelForm):
         return instance
 
 
+class ExhibitorDeviceProvisionForm(forms.Form):
+    count = forms.IntegerField(
+        min_value=1,
+        max_value=50,
+        initial=1,
+        label=_("Number of devices"),
+        help_text=_("Each device gets its own single-use setup token and QR code."),
+    )
+
+
 class ExhibitorVoucherBatchForm(forms.Form):
     product = forms.ModelChoiceField(
         queryset=Product.objects.none(),
