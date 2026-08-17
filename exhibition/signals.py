@@ -17,8 +17,15 @@ from eventyay.presale.signals import (
     html_head,
 )
 
-from .mail import proposal_public_url
-from .models import ExhibitionProposal, ExhibitorInfo, ExhibitorSettings, ExhibitorVoucher, SponsorGroup
+from .mail import proposal_public_url, render_device_tokens, sample_device_tokens
+from .models import (
+    ExhibitionProposal,
+    ExhibitorDevice,
+    ExhibitorInfo,
+    ExhibitorSettings,
+    ExhibitorVoucher,
+    SponsorGroup,
+)
 from .utils import add_external_image_csp_sources, public_exhibitors_queryset
 
 
@@ -215,6 +222,12 @@ def exhibition_mail_placeholders(sender, **kwargs):
             lambda exhibitor: exhibitor.key or "",
             "a1b2c3d4",
         ),
+        SimpleFunctionalMailTextPlaceholder(
+            "device_tokens",
+            ["exhibitor"],
+            render_device_tokens,
+            sample_device_tokens,
+        ),
     ]
 
 
@@ -222,6 +235,14 @@ def exhibition_mail_placeholders(sender, **kwargs):
 def delete_exhibitor_vouchers(sender, instance, **kwargs):
     for link in ExhibitorVoucher.objects.filter(exhibitor=instance, voucher__redeemed=0).select_related("voucher"):
         link.voucher.delete()
+
+
+@receiver(pre_delete, sender=ExhibitorInfo, dispatch_uid="exhibition_exhibitor_device_cleanup")
+def revoke_exhibitor_devices(sender, instance, **kwargs):
+    for link in ExhibitorDevice.objects.filter(exhibitor=instance).select_related("device"):
+        device = link.device
+        device.revoked = True
+        device.save(update_fields=["revoked"])
 
 
 @receiver(user_menu_items, dispatch_uid="exhibition_user_menu_item")
