@@ -121,36 +121,51 @@ class _SafeDict(dict):
 
 _PREVIEW_URL_RE = re.compile(r"^(https?://|www\.)[^\s]+$")
 
-MESSAGE_CENTER_PLACEHOLDER_CONTEXT = ["event", "proposal"]
+PROPOSAL_PLACEHOLDER_CONTEXT = ["event", "proposal"]
+EXHIBITOR_PLACEHOLDER_CONTEXT = ["event", "exhibitor"]
+
+ROLE_PLACEHOLDER_CONTEXT = {
+    PROPOSAL_NEW: PROPOSAL_PLACEHOLDER_CONTEXT,
+    PROPOSAL_ACCEPTED: PROPOSAL_PLACEHOLDER_CONTEXT,
+    PROPOSAL_REJECTED: PROPOSAL_PLACEHOLDER_CONTEXT,
+    EXHIBITOR_ACCESS: EXHIBITOR_PLACEHOLDER_CONTEXT,
+}
 
 
-def message_center_placeholder_names(event):
-    """Placeholder names that actually resolve for Message center templates and compose."""
+def placeholder_names(event, context):
+    """Placeholder names that actually resolve for the given email context."""
     from eventyay.base.email import get_available_placeholders
 
-    return sorted(get_available_placeholders(event, MESSAGE_CENTER_PLACEHOLDER_CONTEXT).keys())
+    return sorted(get_available_placeholders(event, list(context)).keys())
 
 
-def build_preview_placeholders(event):
+def role_placeholder_names(event, role):
+    """Placeholder names resolvable for a lifecycle role's own render context."""
+    return placeholder_names(event, ROLE_PLACEHOLDER_CONTEXT[role])
+
+
+def build_preview_placeholders(event, context=PROPOSAL_PLACEHOLDER_CONTEXT):
     """Sample placeholder values for previews, wrapped like the tickets preview."""
     from django.utils.translation import gettext
     from eventyay.base.email import get_available_placeholders
     from eventyay.base.templatetags.rich_text import is_placeholder_html_sample
 
-    context = {}
+    preview_context = {}
     title = html.escape(str(gettext("This value will be replaced based on dynamic parameters.")))
-    for placeholder in get_available_placeholders(event, MESSAGE_CENTER_PLACEHOLDER_CONTEXT).values():
+    for placeholder in get_available_placeholders(event, list(context)).values():
         sample = str(placeholder.render_sample(event)).strip()
         if sample.startswith("*") or is_placeholder_html_sample(sample):
-            context[placeholder.identifier] = sample
+            preview_context[placeholder.identifier] = sample
         elif _PREVIEW_URL_RE.match(sample):
             escaped = html.escape(sample)
-            context[placeholder.identifier] = (
+            preview_context[placeholder.identifier] = (
                 f'<a href="{escaped}" target="_blank" rel="noopener noreferrer">{escaped}</a>'
             )
         else:
-            context[placeholder.identifier] = f'<span class="placeholder" title="{title}">{html.escape(sample)}</span>'
-    return _SafeDict(context)
+            preview_context[placeholder.identifier] = (
+                f'<span class="placeholder" title="{title}">{html.escape(sample)}</span>'
+            )
+    return _SafeDict(preview_context)
 
 
 def recipient_locale(event, user=None):

@@ -2372,6 +2372,7 @@ class EmailTemplatePreviewView(EventPermissionRequiredMixin, View):
     def post(self, request, *args, **kwargs):
         role = request.POST.get("role", "")
         custom_pk = role[len("custom_") :] if role.startswith("custom_") else None
+        placeholder_context = mail_helpers.PROPOSAL_PLACEHOLDER_CONTEXT
         if role == "compose":
             widget = ExhibitionComposeForm(event=request.event).fields["body"].widget
             field_name = "body"
@@ -2387,6 +2388,7 @@ class EmailTemplatePreviewView(EventPermissionRequiredMixin, View):
             form = ExhibitionMailTemplatesForm(obj=request.event)
             field_name = mail_helpers.body_settings_key(role)
             widget = form.fields[field_name].widget
+            placeholder_context = mail_helpers.ROLE_PLACEHOLDER_CONTEXT[role]
         else:
             return JsonResponse({"detail": _("Unknown template.")}, status=400)
 
@@ -2394,7 +2396,7 @@ class EmailTemplatePreviewView(EventPermissionRequiredMixin, View):
         from eventyay.base.services.mail import expand_email_variable_chips
         from eventyay.base.templatetags.rich_text import compile_email_body
 
-        placeholders = mail_helpers.build_preview_placeholders(request.event)
+        placeholders = mail_helpers.build_preview_placeholders(request.event, placeholder_context)
         event_locales = set(request.event.settings.locales)
         region = request.event.settings.region
 

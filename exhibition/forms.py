@@ -1510,7 +1510,7 @@ class ExhibitionComposeForm(forms.Form):
         self.fields["sponsor_group"].queryset = SponsorGroup.objects.filter(event=self.event).order_by("level", "pk")
         self.fields["body"] = I18nEmailBodyFormField(
             label=_("Body"),
-            placeholders=mail_helpers.message_center_placeholder_names(self.event),
+            placeholders=mail_helpers.placeholder_names(self.event, mail_helpers.PROPOSAL_PLACEHOLDER_CONTEXT),
         )
         self.order_fields(["states", "partner_type", "sponsor_group", "subject", "body", "scheduled_at"])
         locales = self.event.settings.get("locales")
@@ -1536,7 +1536,6 @@ class ExhibitionMailTemplatesForm(SettingsForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        placeholder_names = mail_helpers.message_center_placeholder_names(self.obj)
         for role in mail_helpers.LIFECYCLE_ROLES:
             default_subject, default_body = mail_helpers.DEFAULT_TEMPLATES[role]
             label = self._ROLE_LABELS[role]
@@ -1550,7 +1549,7 @@ class ExhibitionMailTemplatesForm(SettingsForm):
             self.fields[mail_helpers.body_settings_key(role)] = I18nEmailBodyFormField(
                 label=_("%(role)s — body") % {"role": label},
                 required=False,
-                placeholders=placeholder_names,
+                placeholders=mail_helpers.role_placeholder_names(self.obj, role),
                 initial=default_body,
             )
             self.fields[mail_helpers.body_settings_key(role)].widget.enabled_locales = self.locales
@@ -1569,7 +1568,7 @@ class ExhibitionCustomEmailTemplateForm(I18nModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        placeholder_names = mail_helpers.message_center_placeholder_names(self.event)
+        placeholder_names = mail_helpers.placeholder_names(self.event, mail_helpers.PROPOSAL_PLACEHOLDER_CONTEXT)
         self.fields["body"] = I18nEmailBodyFormField(
             label=self.fields["body"].label,
             required=False,
