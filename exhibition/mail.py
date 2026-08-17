@@ -98,6 +98,15 @@ class _SafeDict(dict):
 
 _PREVIEW_URL_RE = re.compile(r"^(https?://|www\.)[^\s]+$")
 
+MESSAGE_CENTER_PLACEHOLDER_CONTEXT = ["event", "proposal"]
+
+
+def message_center_placeholder_names(event):
+    """Placeholder names that actually resolve for Message center templates and compose."""
+    from eventyay.base.email import get_available_placeholders
+
+    return sorted(get_available_placeholders(event, MESSAGE_CENTER_PLACEHOLDER_CONTEXT).keys())
+
 
 def build_preview_placeholders(event):
     """Sample placeholder values for previews, wrapped like the tickets preview."""
@@ -107,7 +116,7 @@ def build_preview_placeholders(event):
 
     context = {}
     title = html.escape(str(gettext("This value will be replaced based on dynamic parameters.")))
-    for placeholder in get_available_placeholders(event, ["event", "proposal", "exhibitor"]).values():
+    for placeholder in get_available_placeholders(event, MESSAGE_CENTER_PLACEHOLDER_CONTEXT).values():
         sample = str(placeholder.render_sample(event)).strip()
         if sample.startswith("*") or is_placeholder_html_sample(sample):
             context[placeholder.identifier] = sample

@@ -2,6 +2,7 @@
 {% load i18n %}
 {% load static %}
 {% load bootstrap3 %}
+{% load exhibition_email %}
 
 {% block custom_header %}
     {{ block.super }}
@@ -32,7 +33,8 @@
         </form>
     {% endif %}
 
-    <form action="" method="post" class="form-horizontal">
+    <form action="" method="post" class="form-horizontal"
+          data-preview-url="{% url 'plugins:exhibition:email.templates.preview' organizer=request.event.organizer.slug event=request.event.slug %}">
         {% csrf_token %}
         {% bootstrap_form_errors form %}
         <fieldset>
@@ -44,7 +46,29 @@
         <fieldset>
             <legend>{% trans "Message" %}</legend>
             {% bootstrap_field form.subject layout="control" %}
-            {% bootstrap_field form.body layout="control" %}
+            <div class="form-group preview-panel" data-role="compose">
+                <label class="col-md-3 control-label">{{ form.body.label }}</label>
+                <div class="col-md-9">
+                    <ul class="nav nav-tabs" role="tablist">
+                        <li role="presentation" class="active">
+                            <a data-toggle="tab" href="#compose_edit"><i class="fa fa-pencil-square-o fa-fw"></i> {% trans "Edit" %}</a>
+                        </li>
+                        <li role="presentation">
+                            <a data-toggle="tab" href="#compose_preview" data-template-preview-tab><i class="fa fa-tv fa-fw"></i> {% trans "Preview" %}</a>
+                        </li>
+                    </ul>
+                    <div class="tab-content">
+                        <div id="compose_edit" class="tab-pane fade in active">
+                            {% bootstrap_field form.body show_label=False form_group_class="" %}
+                        </div>
+                        <div id="compose_preview" class="tab-pane mail-preview-group">
+                            {% for locale in locales %}
+                                <div lang="{{ locale }}" dir="{{ locale|locale_dir }}" class="mail-preview"></div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+            </div>
             {% bootstrap_field form.scheduled_at layout="control" %}
         </fieldset>
         <div class="form-group submit-group">
@@ -58,4 +82,6 @@
             </div>
         </div>
     </form>
+
+    <script type="text/javascript" src="{% static 'exhibition/js/email-templates.js' %}"></script>
 {% endblock %}

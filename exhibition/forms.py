@@ -8,7 +8,7 @@ from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 from eventyay.base.forms import I18nModelForm, SettingsForm
 from eventyay.base.models import PriceModeChoices, Product
-from eventyay.common.forms.fields import EmailBodyField, I18nEmailBodyFormField
+from eventyay.common.forms.fields import I18nEmailBodyFormField
 from eventyay.common.forms.mixins import (
     EventLocalizedModelChoiceField,
     EventLocalizedModelMultipleChoiceField,
@@ -1496,14 +1496,7 @@ class ExhibitionComposeForm(forms.Form):
         required=False,
         empty_label=_("Any sponsor group"),
     )
-    subject = forms.CharField(label=_("Subject"), max_length=255)
-    body = EmailBodyField(
-        label=_("Body"),
-        widget=EmailEditorWidget(
-            attrs={"rows": 12},
-            placeholders=[token.strip("{}") for token, _doc in mail_helpers.PLACEHOLDER_DOCS],
-        ),
-    )
+    subject = I18nFormField(label=_("Subject"), widget=I18nTextInput, max_length=255)
     scheduled_at = forms.DateTimeField(
         label=_("Send at"),
         required=False,
@@ -1515,6 +1508,14 @@ class ExhibitionComposeForm(forms.Form):
         self.event = kwargs.pop("event")
         super().__init__(*args, **kwargs)
         self.fields["sponsor_group"].queryset = SponsorGroup.objects.filter(event=self.event).order_by("level", "pk")
+        self.fields["body"] = I18nEmailBodyFormField(
+            label=_("Body"),
+            placeholders=mail_helpers.message_center_placeholder_names(self.event),
+        )
+        self.order_fields(["states", "partner_type", "sponsor_group", "subject", "body", "scheduled_at"])
+        locales = self.event.settings.get("locales")
+        self.fields["subject"].widget.enabled_locales = locales
+        self.fields["body"].widget.enabled_locales = locales
 
     def clean_scheduled_at(self):
         scheduled_at = self.cleaned_data.get("scheduled_at")
@@ -1534,9 +1535,7 @@ class ExhibitionMailTemplatesForm(SettingsForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        from eventyay.base.email import get_available_placeholders
-
-        placeholder_names = sorted(get_available_placeholders(self.obj, ["event", "proposal", "exhibitor"]).keys())
+        placeholder_names = mail_helpers.message_center_placeholder_names(self.obj)
         for role in mail_helpers.LIFECYCLE_ROLES:
             default_subject, default_body = mail_helpers.DEFAULT_TEMPLATES[role]
             label = self._ROLE_LABELS[role]
@@ -1569,9 +1568,7 @@ class ExhibitionCustomEmailTemplateForm(I18nModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        from eventyay.base.email import get_available_placeholders
-
-        placeholder_names = sorted(get_available_placeholders(self.event, ["event", "proposal", "exhibitor"]).keys())
+        placeholder_names = mail_helpers.message_center_placeholder_names(self.event)
         self.fields["body"] = I18nEmailBodyFormField(
             label=self.fields["body"].label,
             required=False,

@@ -1928,13 +1928,14 @@ class EmailComposeView(EventPermissionRequiredMixin, FormView):
         if template_pk:
             template = ExhibitionCustomEmailTemplate.objects.filter(event=self.request.event, pk=template_pk).first()
             if template:
-                initial["subject"] = str(template.subject)
-                initial["body"] = str(template.body)
+                initial["subject"] = template.subject
+                initial["body"] = template.body
         return initial
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context["custom_templates"] = ExhibitionCustomEmailTemplate.objects.filter(event=self.request.event)
+        context["locales"] = self.request.event.settings.locales
         return context
 
     def form_valid(self, form):
@@ -2372,7 +2373,10 @@ class EmailTemplatePreviewView(EventPermissionRequiredMixin, View):
     def post(self, request, *args, **kwargs):
         role = request.POST.get("role", "")
         custom_pk = role[len("custom_") :] if role.startswith("custom_") else None
-        if role == "custom":
+        if role == "compose":
+            widget = ExhibitionComposeForm(event=request.event).fields["body"].widget
+            field_name = "body"
+        elif role == "custom":
             widget = ExhibitionCustomEmailTemplateForm(event=request.event).fields["body"].widget
             field_name = "body"
         elif custom_pk is not None:
