@@ -1950,7 +1950,7 @@ class ExhibitorDeviceManageView(EventPermissionRequiredMixin, DetailView):
         provision_exhibitor_devices(self.object, count, user=request.user)
         messages.success(
             request,
-            ngettext("%(count)d device provisioned.", "%(count)d devices provisioned.", count) % {"count": count},
+            ngettext("%(count)d device added.", "%(count)d devices added.", count) % {"count": count},
         )
         return redirect(self.get_success_url())
 

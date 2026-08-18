@@ -461,8 +461,11 @@ class ExhibitorDeviceProvisionForm(forms.Form):
         min_value=1,
         max_value=50,
         initial=1,
-        label=_("Number of devices"),
-        help_text=_("Each device gets its own single-use setup token and QR code."),
+        label=_("Devices to add"),
+        help_text=_(
+            "How many new devices to provision now, in addition to any already listed above. "
+            "Each device gets its own single-use setup token and QR code."
+        ),
     )
 
 
