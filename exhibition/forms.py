@@ -44,6 +44,10 @@ from .social_links import (
 )
 
 
+def get_tz_help(event):
+    return _("Times are in the event timezone: %(tz)s.") % {"tz": event.timezone}
+
+
 class ExhibitorInfoForm(I18nModelForm):
     slides_url = forms.URLField(
         required=False,
@@ -491,7 +495,6 @@ class CallSettingsForm(I18nModelForm):
             "call_private": _(
                 "The call page is not linked anywhere public and can only be opened with the secret link shown below."
             ),
-            "call_deadline": _("Time is interpreted in the event timezone."),
         }
         widgets = {
             "call_deadline": HtmlDateTimeInput,
@@ -506,6 +509,7 @@ class CallSettingsForm(I18nModelForm):
         else:
             widget.attrs.setdefault("rows", 8)
         if self.event:
+            self.fields["call_deadline"].help_text = get_tz_help(self.event)
             self.fields["call_deadline"].widget.attrs.update(
                 {
                     "data-schedule-datetime": "1",
@@ -1366,15 +1370,16 @@ class ExhibitionComposeForm(forms.Form):
         label=_("Send at"),
         required=False,
         widget=HtmlDateTimeInput,
-        help_text=_(
-            "Leave empty to send immediately or save to the outbox. Time is interpreted in the event timezone."
-        ),
+        help_text=_("Leave empty to send immediately or save to the outbox."),
     )
 
     def __init__(self, *args, **kwargs):
         self.event = kwargs.pop("event")
         super().__init__(*args, **kwargs)
         self.fields["sponsor_group"].queryset = SponsorGroup.objects.filter(event=self.event).order_by("level", "pk")
+        self.fields["scheduled_at"].help_text = (
+            f"{self.fields['scheduled_at'].help_text} {get_tz_help(self.event)}"
+        )
         self.fields["scheduled_at"].widget.attrs.update(
             {
                 "data-schedule-datetime": "1",
