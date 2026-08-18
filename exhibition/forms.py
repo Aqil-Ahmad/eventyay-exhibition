@@ -1377,9 +1377,7 @@ class ExhibitionComposeForm(forms.Form):
         self.event = kwargs.pop("event")
         super().__init__(*args, **kwargs)
         self.fields["sponsor_group"].queryset = SponsorGroup.objects.filter(event=self.event).order_by("level", "pk")
-        self.fields["scheduled_at"].help_text = (
-            f"{self.fields['scheduled_at'].help_text} {get_tz_help(self.event)}"
-        )
+        self.fields["scheduled_at"].help_text = f"{self.fields['scheduled_at'].help_text} {get_tz_help(self.event)}"
         self.fields["scheduled_at"].widget.attrs.update(
             {
                 "data-schedule-datetime": "1",
