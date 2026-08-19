@@ -779,20 +779,20 @@ class ExhibitionProposalExtraLink(models.Model):
 
 class ExhibitionQuestionVariant(models.TextChoices):
     NUMBER = "number", _("Number")
-    STRING = "string", _("Text (one-line)")
-    TEXT = "text", _("Multi-line text")
+    STRING = "string", _("Text (one line)")
+    TEXT = "text", _("Multiline text")
     URL = "url", _("URL")
     EMAIL = "email", _("Email address")
-    PHONE = "phone", _("Phone number")
-    COUNTRY = "country", _("Country code (ISO 3166-1 alpha-2)")
+    BOOLEAN = "boolean", _("Confirm Checkbox")
+    CHOICES = "choices", _("Radio button (Choose one option)")
+    SELECT = "select", _("Dropdown (Choose one option)")
+    MULTIPLE = "multiple_choice", _("Checkbox (Choose one or several options)")
+    FILE = "file", _("File upload")
     DATE = "date", _("Date")
     TIME = "time", _("Time")
     DATETIME = "datetime", _("Date and time")
-    FILE = "file", _("File upload")
-    BOOLEAN = "boolean", _("Confirmation")
-    CHOICES = "choices", _("Radio button (Choose one option)")
-    MULTIPLE = "multiple_choice", _("Checkbox (Choose one or several options)")
-    SELECT = "select", _("Select (one option)")
+    COUNTRY = "country", _("Country code (ISO 3166-1 alpha-2)")
+    PHONE = "phone", _("Phone number")
 
 
 QUESTION_OPTION_VARIANTS = frozenset(
