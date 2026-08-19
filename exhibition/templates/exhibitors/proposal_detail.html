@@ -139,13 +139,20 @@
     {% endif %}
 
     {% if answers %}
+        {% trans "Download" as download_label %}
         <div class="panel panel-default">
             <div class="panel-heading"><h3 class="panel-title">{% trans "Custom answers" %}</h3></div>
             <div class="panel-body">
                 <dl class="dl-horizontal">
                     {% for answer in answers %}
                         <dt>{{ answer.question.localized_question }}</dt>
-                        <dd>{{ answer.answer_string|linebreaksbr|default:"-" }}</dd>
+                        <dd>
+                            {% if answer.file_url %}
+                                <a href="{{ answer.file_url }}">{{ answer.answer_string|default:download_label }}</a>
+                            {% else %}
+                                {{ answer.answer_string|linebreaksbr|default:"-" }}
+                            {% endif %}
+                        </dd>
                     {% endfor %}
                 </dl>
             </div>
