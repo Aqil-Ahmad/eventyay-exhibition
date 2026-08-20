@@ -3,7 +3,6 @@ import re
 from types import SimpleNamespace
 
 import pytest
-from django.conf import settings as django_settings
 from django.contrib.messages.storage.fallback import FallbackStorage
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import RequestFactory
@@ -37,14 +36,6 @@ def make_exhibitor_settings(event):
         exhibitors_access_mail_subject="",
         exhibitors_access_mail_body="",
     )
-
-
-def _language_index(code):
-    """Global LANGUAGES index used to name the i18n input (e.g. ``call_text_0``)."""
-    for index, (candidate, _name) in enumerate(django_settings.LANGUAGES):
-        if candidate == code:
-            return index
-    raise AssertionError(f"language {code!r} not configured")
 
 
 @pytest.mark.django_db
@@ -244,18 +235,18 @@ def test_call_text_preview_renders_markdown_per_active_locale(event):
     request = factory.post(
         "/preview",
         data={
-            f"call_text_{_language_index('en')}": "# Hello",
-            f"call_text_{_language_index('de')}": "## Hallo",
+            "body_en": "# Hello",
+            "body_de": "## Hallo",
         },
     )
     request.event = event
     response = view.post(request)
 
     assert response.status_code == 200
-    msgs = json.loads(response.content)["msgs"]
-    assert set(msgs.keys()) == {"en", "de"}
-    assert "<h1>Hello</h1>" in msgs["en"]
-    assert "<h2>Hallo</h2>" in msgs["de"]
+    previews = json.loads(response.content)["previews"]
+    assert set(previews.keys()) == {"en", "de"}
+    assert "<h1>Hello</h1>" in previews["en"]
+    assert "<h2>Hallo</h2>" in previews["de"]
 
 
 @pytest.mark.django_db
@@ -267,17 +258,17 @@ def test_call_text_preview_ignores_inactive_locales_and_blank_text(event):
     request = factory.post(
         "/preview",
         data={
-            f"call_text_{_language_index('en')}": "",
-            f"call_text_{_language_index('de')}": "# Nope",
+            "body_en": "",
+            "body_de": "# Nope",
         },
     )
     request.event = event
     response = view.post(request)
 
     assert response.status_code == 200
-    msgs = json.loads(response.content)["msgs"]
-    assert set(msgs.keys()) == {"en"}
-    assert msgs["en"] == ""
+    previews = json.loads(response.content)["previews"]
+    assert set(previews.keys()) == {"en"}
+    assert previews["en"] == ""
 
 
 @pytest.mark.django_db

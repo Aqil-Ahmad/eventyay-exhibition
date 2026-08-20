@@ -2,7 +2,6 @@ import io
 import json
 
 from defusedcsv import csv
-from django.conf import settings as django_settings
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.exceptions import PermissionDenied
@@ -244,15 +243,6 @@ class SettingsView(EventPermissionRequiredMixin, ListView):
             instance=settings,
             event=self.request.event,
         )
-        if ctx["active_tab"] == "call":
-            # Server-render the saved Call text (per language, matching the
-            # preview endpoint) so the preview tab is not blank on load.
-            call_text = settings.call_text.data
-            if not isinstance(call_text, dict):
-                call_text = dict.fromkeys(self.request.event.settings.locales, call_text or "")
-            ctx["call_text_previews"] = [
-                (locale, rich_text(call_text.get(locale, ""))) for locale in self.request.event.settings.locales
-            ]
         ctx["show_add_group_form"] = kwargs.get("show_add_group_form", False)
         ctx["expanded_group_pk"] = kwargs.get("expanded_group_pk")
         return ctx
@@ -1099,23 +1089,22 @@ class SponsorReorderView(PartnerReorderMixin):
 
 
 class CallTextPreviewView(EventPermissionRequiredMixin, View):
-    """Render draft Call text with the same Markdown conversion as the public call page."""
+    """Render draft Call text with the same styling as the public call page.
+
+    Consumed by core's shared ``richtextPreview.js`` (``data-email-preview-*``
+    attributes): the body text is posted as one ``body_<locale>`` field per
+    rendered locale.
+    """
 
     permission = "can_change_settings"
 
     def post(self, request, *args, **kwargs):
-        widget = CallSettingsForm(event=request.event).fields["call_text"].widget
-        # The i18n widget returns values as a list indexed by global LANGUAGES order.
-        values = widget.value_from_datadict(request.POST, request.FILES, "call_text")
-        if not isinstance(values, (list, tuple)):
-            values = [values]
-        event_locales = set(request.event.settings.locales)
-        msgs = {}
-        for index, (code, _name) in enumerate(django_settings.LANGUAGES):
-            if code in event_locales and index < len(values):
-                text = values[index]
-                msgs[code] = str(rich_text(text)) if text else ""
-        return JsonResponse({"msgs": msgs})
+        event_locales = request.event.settings.locales
+        previews = {}
+        for locale in event_locales:
+            text = request.POST.get(f"body_{locale}", "")
+            previews[locale] = str(rich_text(text)) if text else ""
+        return JsonResponse({"previews": previews})
 
 
 class ProposalListView(EventPermissionRequiredMixin, FilteredListMixin, ListView):
@@ -2365,53 +2354,38 @@ class EmailTemplatesView(EventPermissionRequiredMixin, TemplateView):
 
 
 class EmailTemplatePreviewView(EventPermissionRequiredMixin, View):
-    """Render draft template text with sample placeholder values, per locale."""
+    """Render draft template text with sample placeholder values, per locale.
+
+    Consumed by core's shared ``richtextPreview.js`` (``data-email-preview-*``
+    attributes): the role is passed as a query parameter on each panel's own
+    preview URL, and the body text is posted as one ``body_<locale>`` field
+    per rendered locale.
+    """
 
     permission = "can_change_event_settings"
 
     def post(self, request, *args, **kwargs):
-        role = request.POST.get("role", "")
+        role = request.GET.get("role", "")
         custom_pk = role[len("custom_") :] if role.startswith("custom_") else None
-        placeholder_context = mail_helpers.PROPOSAL_PLACEHOLDER_CONTEXT
-        if role == "compose":
-            widget = ExhibitionComposeForm(event=request.event).fields["body"].widget
-            field_name = "body"
-        elif role == "custom":
-            widget = ExhibitionCustomEmailTemplateForm(event=request.event).fields["body"].widget
-            field_name = "body"
+        if role in ("compose", "custom"):
+            pass
         elif custom_pk is not None:
             if not ExhibitionCustomEmailTemplate.objects.filter(event=request.event, pk=custom_pk).exists():
                 return JsonResponse({"detail": _("Unknown template.")}, status=400)
-            widget = ExhibitionCustomEmailTemplateForm(event=request.event).fields["body"].widget
-            field_name = f"{role}-body"
         elif role in mail_helpers.LIFECYCLE_ROLES:
-            form = ExhibitionMailTemplatesForm(obj=request.event)
-            field_name = mail_helpers.body_settings_key(role)
-            widget = form.fields[field_name].widget
-            placeholder_context = mail_helpers.ROLE_PLACEHOLDER_CONTEXT[role]
+            pass
         else:
             return JsonResponse({"detail": _("Unknown template.")}, status=400)
+
+        placeholder_context = mail_helpers.ROLE_PLACEHOLDER_CONTEXT.get(role, mail_helpers.PROPOSAL_PLACEHOLDER_CONTEXT)
 
         from eventyay.base.i18n import language
         from eventyay.base.services.mail import expand_email_variable_chips
         from eventyay.base.templatetags.rich_text import compile_email_body
 
         placeholders = mail_helpers.build_preview_placeholders(request.event, placeholder_context)
-        event_locales = set(request.event.settings.locales)
+        event_locales = request.event.settings.locales
         region = request.event.settings.region
-
-        def values_by_locale(field_name):
-            raw = widget.value_from_datadict(request.POST, request.FILES, field_name)
-            if not isinstance(raw, (list, tuple)):
-                raw = [raw]
-            locales = getattr(widget, "locales", None) or [code for code, _name in django_settings.LANGUAGES]
-            by_locale = {}
-            for index, code in enumerate(locales):
-                if code in event_locales and index < len(raw):
-                    by_locale[code] = raw[index] or ""
-            return by_locale
-
-        bodies = values_by_locale(field_name)
 
         def render(text):
             try:
@@ -2423,8 +2397,9 @@ class EmailTemplatePreviewView(EventPermissionRequiredMixin, View):
 
         previews = {}
         for locale in event_locales:
+            body = request.POST.get(f"body_{locale}", "")
             with language(locale, region):
-                previews[locale] = render(bodies.get(locale, ""))
+                previews[locale] = render(body) if body else ""
         return JsonResponse({"previews": previews})
 
 
