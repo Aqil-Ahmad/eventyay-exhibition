@@ -45,6 +45,7 @@ from .forms import (
     ExhibitionProposalReviewNotesForm,
     ExhibitionProposalSocialLinkFormSet,
     ExhibitionQuestionForm,
+    ExhibitorDeviceProvisionForm,
     ExhibitorExtraLinkFormSet,
     ExhibitorInfoForm,
     ExhibitorSocialLinkFormSet,
@@ -72,6 +73,7 @@ from .models import (
     ExhibitionProposal,
     ExhibitionProposalState,
     ExhibitionQuestion,
+    ExhibitorDevice,
     ExhibitorInfo,
     ExhibitorSettings,
     ExhibitorVoucher,
@@ -85,7 +87,9 @@ from .utils import (
     add_external_image_csp_sources,
     build_exhibitor_video_embed,
     generate_exhibitor_vouchers,
+    provision_exhibitor_devices,
     public_exhibitors_queryset,
+    reset_exhibitor_device_setup,
     should_hide_applicant_emails,
     sync_exhibitor_from_proposal,
 )
@@ -1977,6 +1981,77 @@ class ExhibitorVoucherManageView(EventPermissionRequiredMixin, DetailView):
             request,
             ngettext("%(count)d voucher created.", "%(count)d vouchers created.", count) % {"count": count},
         )
+        return redirect(self.get_success_url())
+
+
+class ExhibitorDeviceManageView(EventPermissionRequiredMixin, DetailView):
+    model = ExhibitorInfo
+    template_name = "exhibitors/devices.html"
+    permission = ("can_change_event_settings",)
+    context_object_name = "exhibitor"
+
+    def get_queryset(self):
+        return ExhibitorInfo.objects.filter(event=self.request.event)
+
+    def can_provision(self):
+        return self.request.user.has_organizer_permission(
+            self.request.event.organizer, "can_change_organizer_settings", request=self.request
+        )
+
+    def device_links(self):
+        return ExhibitorDevice.objects.filter(exhibitor=self.object).select_related("device")
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context.setdefault("form", ExhibitorDeviceProvisionForm())
+        context["device_links"] = self.device_links()
+        context["can_provision"] = self.can_provision()
+        return context
+
+    def get_success_url(self):
+        return reverse(
+            "plugins:exhibition:devices",
+            kwargs={**event_kwargs(self.request.event), "pk": self.object.pk},
+        )
+
+    def post(self, request, *args, **kwargs):
+        self.object = self.get_object()
+        if not self.can_provision():
+            raise PermissionDenied()
+        if request.POST.get("action") == "reset":
+            return self.reset_tokens(request)
+        return self.provision_devices(request)
+
+    @transaction.atomic
+    def provision_devices(self, request):
+        form = ExhibitorDeviceProvisionForm(request.POST)
+        if not form.is_valid():
+            return self.render_to_response(self.get_context_data(form=form))
+        count = form.cleaned_data["count"]
+        provision_exhibitor_devices(self.object, count, user=request.user)
+        messages.success(
+            request,
+            ngettext("%(count)d device added.", "%(count)d devices added.", count) % {"count": count},
+        )
+        return redirect(self.get_success_url())
+
+    @transaction.atomic
+    def reset_tokens(self, request):
+        disconnected = reset_exhibitor_device_setup(self.object, user=request.user)
+        if disconnected:
+            messages.warning(
+                request,
+                ngettext(
+                    "New setup tokens generated. %(count)d device that was already scanning is now disconnected "
+                    "and must be set up again.",
+                    "New setup tokens generated. %(count)d devices that were already scanning are now disconnected "
+                    "and must be set up again.",
+                    len(disconnected),
+                )
+                % {"count": len(disconnected)},
+            )
+        else:
+            messages.success(request, _("New setup tokens generated."))
         return redirect(self.get_success_url())
 
 
