@@ -1,13 +1,18 @@
+from django.core.exceptions import FieldDoesNotExist
 from django.db.models import Prefetch
 from django.db.models.signals import pre_delete
 from django.dispatch import receiver
 from django.template.loader import get_template
 from django.templatetags.static import static
 from django.urls import reverse
-from django.utils.html import format_html, format_html_join
+from django.utils.html import escape, format_html, format_html_join
 from django.utils.translation import gettext_lazy as _
 from eventyay.base.email import SimpleFunctionalMailTextPlaceholder
-from eventyay.base.signals import register_mail_placeholders
+from eventyay.base.signals import (
+    logentry_display,
+    logentry_object_link,
+    register_mail_placeholders,
+)
 from eventyay.common.signals import user_menu_items
 from eventyay.common.utils.language import localize_event_text
 from eventyay.control.signals import event_dashboard_components
@@ -19,7 +24,28 @@ from eventyay.presale.signals import (
 
 from .mail import proposal_public_url, render_device_tokens, sample_device_tokens
 from .models import (
+    LOG_CALL_SECRET_REGENERATED,
+    LOG_CALL_SETTINGS_CHANGED,
+    LOG_EMAIL_SENT,
+    LOG_GROUP_ADDED,
+    LOG_GROUP_CHANGED,
+    LOG_GROUP_DELETED,
+    LOG_PARTNER_ADDED,
+    LOG_PARTNER_CHANGED,
+    LOG_PARTNER_CREATED,
+    LOG_PARTNER_DELETED,
+    LOG_PARTNER_REACTIVATED,
+    LOG_PARTNER_SYNCED,
+    LOG_PREFIX,
+    LOG_PROPOSAL_CHANGED,
+    LOG_QUESTION_ADDED,
+    LOG_QUESTION_CHANGED,
+    LOG_QUESTION_DELETED,
+    LOG_SETTINGS_CHANGED,
+    PROPOSAL_LOG_ACTIONS,
     ExhibitionProposal,
+    ExhibitionProposalState,
+    ExhibitionQuestion,
     ExhibitorDevice,
     ExhibitorInfo,
     ExhibitorSettings,
@@ -266,3 +292,122 @@ def exhibition_user_menu_item(sender, request=None, icon_class="", **kwargs):
         icon_class,
         _("Exhibition requests"),
     )
+
+
+LOG_ENTRY_LABELS = {
+    PROPOSAL_LOG_ACTIONS["approve"]: _("Exhibition request approved."),
+    PROPOSAL_LOG_ACTIONS["reject"]: _("Exhibition request rejected."),
+    PROPOSAL_LOG_ACTIONS["withdraw"]: _("Exhibition request withdrawn."),
+    PROPOSAL_LOG_ACTIONS["reopen"]: _("Exhibition request reopened for review."),
+    LOG_PROPOSAL_CHANGED: _("Exhibition request changed."),
+    LOG_PARTNER_CREATED: _("Organization profile created from an approved request."),
+    LOG_PARTNER_REACTIVATED: _("Organization profile reactivated after re-approval."),
+    LOG_PARTNER_SYNCED: _("Organization profile updated from the submitter's changes."),
+    LOG_PARTNER_ADDED: _("Organization profile created."),
+    LOG_PARTNER_CHANGED: _("Organization profile changed."),
+    LOG_PARTNER_DELETED: _("Organization profile deleted."),
+    LOG_SETTINGS_CHANGED: _("Exhibition settings changed."),
+    LOG_CALL_SETTINGS_CHANGED: _("Call for exhibitors settings changed."),
+    LOG_CALL_SECRET_REGENERATED: _("Private call link regenerated."),
+    LOG_GROUP_ADDED: _("Sponsor group created."),
+    LOG_GROUP_CHANGED: _("Sponsor group changed."),
+    LOG_GROUP_DELETED: _("Sponsor group deleted."),
+    LOG_QUESTION_ADDED: _("Exhibitor form question created."),
+    LOG_QUESTION_CHANGED: _("Exhibitor form question changed."),
+    LOG_QUESTION_DELETED: _("Exhibitor form question deleted."),
+    LOG_EMAIL_SENT: _("Email sent."),
+}
+
+
+def changed_field_labels(logentry):
+    """Render the stored field names of a change entry using their model labels."""
+    names = logentry.parsed_data.get("changed") or []
+    if not names:
+        return ""
+    model = type(logentry.content_object) if logentry.content_object else None
+    labels = []
+    for name in names:
+        label = name.replace("_", " ")
+        if model is not None:
+            try:
+                label = str(model._meta.get_field(name).verbose_name)
+            except (FieldDoesNotExist, AttributeError):
+                pass
+        labels.append(label)
+    return _("Updated: {fields}.").format(fields=", ".join(labels))
+
+
+def proposal_state_label(value):
+    """Render a stored state slug with its translated label."""
+    try:
+        return ExhibitionProposalState(value).label
+    except ValueError:
+        return value
+
+
+@receiver(signal=logentry_display, dispatch_uid="exhibition_logentry_display")
+def exhibition_logentry_display(sender, logentry, **kwargs):
+    if not logentry.action_type.startswith(LOG_PREFIX):
+        return
+
+    label = LOG_ENTRY_LABELS.get(logentry.action_type)
+    if not label:
+        return
+
+    if logentry.action_type in PROPOSAL_LOG_ACTIONS.values():
+        data = logentry.parsed_data
+        if data.get("from") and data.get("to"):
+            transition = _("State changed from {old} to {new}.").format(
+                old=proposal_state_label(data["from"]),
+                new=proposal_state_label(data["to"]),
+            )
+            return f"{label} {transition}"
+
+    changed = changed_field_labels(logentry)
+    if changed:
+        return f"{label} {changed}"
+    return label
+
+
+@receiver(signal=logentry_object_link, dispatch_uid="exhibition_logentry_object_link")
+def exhibition_logentry_object_link(sender, logentry, **kwargs):
+    if not logentry.action_type.startswith(LOG_PREFIX):
+        return
+
+    target = logentry.content_object
+    a_text = None
+    a_map = None
+
+    if isinstance(target, ExhibitionProposal):
+        a_text = _("Exhibition request {val}")
+        a_map = {
+            "href": reverse(
+                "plugins:exhibition:proposal.detail",
+                kwargs={"organizer": sender.organizer.slug, "event": sender.slug, "code": target.code},
+            ),
+            "val": escape(localize_event_text(target.name) or str(target.name)),
+        }
+    elif isinstance(target, ExhibitorInfo):
+        a_text = _("Organization profile {val}")
+        a_map = {
+            "href": reverse(
+                "plugins:exhibition:edit",
+                kwargs={"organizer": sender.organizer.slug, "event": sender.slug, "pk": target.pk},
+            ),
+            "val": escape(localize_event_text(target.name) or str(target.name)),
+        }
+    elif isinstance(target, ExhibitionQuestion):
+        a_text = _("Exhibitor form question {val}")
+        a_map = {
+            "href": reverse(
+                "plugins:exhibition:call.questions.edit",
+                kwargs={"organizer": sender.organizer.slug, "event": sender.slug, "pk": target.pk},
+            ),
+            "val": escape(target.localized_question),
+        }
+    elif isinstance(target, SponsorGroup):
+        return _("Sponsor group {val}").format(val=escape(target.localized_name))
+
+    if a_text and a_map:
+        a_map["val"] = '<a href="{href}">{val}</a>'.format_map(a_map)
+        return a_text.format_map(a_map)

@@ -2,6 +2,12 @@
 {% load i18n %}
 {% load bootstrap3 %}
 {% load event_tags %}
+{% load static %}
+
+{% block custom_header %}
+    {{ block.super }}
+    <link rel="stylesheet" href="{% static 'exhibition/css/history-panel.css' %}">
+{% endblock %}
 
 {% block title %}{{ request.event.name }} - {% trans "Review exhibition request" %}{% endblock %}
 
@@ -185,4 +191,12 @@
             {% endif %}
         </div>
     </form>
+    {% if can_manage %}
+        <div class="panel panel-default exhibition-history">
+            <div class="panel-heading">
+                <h3 class="panel-title">{% trans "History" %}</h3>
+            </div>
+            {% include "pretixcontrol/includes/logs.html" with obj=proposal %}
+        </div>
+    {% endif %}
 {% endblock %}

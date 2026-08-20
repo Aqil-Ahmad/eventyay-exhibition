@@ -116,8 +116,10 @@ def build_exhibitor_video_embed(url: str) -> dict | None:
     return None
 
 
-def create_exhibitor_from_proposal(proposal):
+def create_exhibitor_from_proposal(proposal, requestor=None):
     from .models import (
+        LOG_PARTNER_CREATED,
+        LOG_PARTNER_REACTIVATED,
         ExhibitionProposalState,
         ExhibitorExtraLink,
         ExhibitorInfo,
@@ -145,6 +147,11 @@ def create_exhibitor_from_proposal(proposal):
         proposal.profile_edited_at = None
         proposal.capture_profile_snapshot()
         proposal.save(update_fields=["state", "submitted", "profile_edited_at", "accepted_profile_snapshot", "updated"])
+        exhibitor.log_action(
+            LOG_PARTNER_REACTIVATED,
+            data={"proposal": proposal.code},
+            user=requestor,
+        )
         return exhibitor
 
     exhibitor = ExhibitorInfo.objects.create(
@@ -201,6 +208,11 @@ def create_exhibitor_from_proposal(proposal):
             "accepted_profile_snapshot",
             "updated",
         ]
+    )
+    exhibitor.log_action(
+        LOG_PARTNER_CREATED,
+        data={"proposal": proposal.code, "booth_id": exhibitor.booth_id},
+        user=requestor,
     )
     return exhibitor
 
@@ -289,9 +301,9 @@ PROPOSAL_SYNCED_PROFILE_FIELDS = (
 )
 
 
-def sync_exhibitor_from_proposal(proposal):
+def sync_exhibitor_from_proposal(proposal, requestor=None):
     """Push submitter-owned profile fields of an accepted proposal onto its partner profile."""
-    from .models import ExhibitorExtraLink, ExhibitorSocialLink
+    from .models import LOG_PARTNER_SYNCED, ExhibitorExtraLink, ExhibitorSocialLink
 
     exhibitor = proposal.approved_exhibitor
     if not exhibitor:
@@ -324,5 +336,10 @@ def sync_exhibitor_from_proposal(proposal):
             )
             for link in proposal.extra_links.all()
         ]
+    )
+    exhibitor.log_action(
+        LOG_PARTNER_SYNCED,
+        data={"proposal": proposal.code},
+        user=requestor,
     )
     return exhibitor
