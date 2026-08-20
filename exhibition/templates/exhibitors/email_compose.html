@@ -4,12 +4,13 @@
 {% load bootstrap3 %}
 {% load exhibition_email %}
 
+{% block title %}{{ request.event.name }} - {% trans "Compose email" %}{% endblock %}
+
 {% block custom_header %}
     {{ block.super }}
     <link rel="stylesheet" href="{% static 'exhibition/css/exhibitors-settings.css' %}">
+    <script defer src="{% static 'exhibition/js/schedule-datetime.js' %}"></script>
 {% endblock %}
-
-{% block title %}{{ request.event.name }} - {% trans "Compose email" %}{% endblock %}
 
 {% block exhibitors_header %}
     <h1>{% trans "Compose email" %}</h1>
