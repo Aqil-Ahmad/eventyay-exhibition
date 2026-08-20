@@ -8,9 +8,9 @@ from django.db.models import Max, Q
 from django.utils import timezone
 from django.utils.crypto import get_random_string
 from django.utils.translation import gettext_lazy as _
+from django_countries import Countries
 from eventyay.base.models import Event, Voucher
 from eventyay.common.utils.language import localize_event_text
-from django_countries import Countries
 from i18nfield.fields import I18nCharField, I18nTextField
 from i18nfield.strings import LazyI18nString
 
