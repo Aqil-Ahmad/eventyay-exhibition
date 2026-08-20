@@ -45,6 +45,10 @@ from .social_links import (
 )
 
 
+def get_tz_help(event):
+    return _("Times are in the event timezone: %(tz)s.") % {"tz": event.timezone}
+
+
 class ExhibitorInfoForm(I18nModelForm):
     slides_url = forms.URLField(
         required=False,
@@ -612,6 +616,14 @@ class CallSettingsForm(I18nModelForm):
                 sub_widget.attrs.setdefault("rows", 8)
         else:
             widget.attrs.setdefault("rows", 8)
+        if self.event:
+            self.fields["call_deadline"].help_text = get_tz_help(self.event)
+            self.fields["call_deadline"].widget.attrs.update(
+                {
+                    "data-schedule-datetime": "1",
+                    "data-event-timezone": self.event.timezone,
+                }
+            )
 
 
 class ExhibitionQuestionFieldsMixin:
@@ -1528,6 +1540,13 @@ class ExhibitionComposeForm(forms.Form):
         self.event = kwargs.pop("event")
         super().__init__(*args, **kwargs)
         self.fields["sponsor_group"].queryset = SponsorGroup.objects.filter(event=self.event).order_by("level", "pk")
+        self.fields["scheduled_at"].help_text = f"{self.fields['scheduled_at'].help_text} {get_tz_help(self.event)}"
+        self.fields["scheduled_at"].widget.attrs.update(
+            {
+                "data-schedule-datetime": "1",
+                "data-event-timezone": self.event.timezone,
+            }
+        )
 
     def clean_scheduled_at(self):
         scheduled_at = self.cleaned_data.get("scheduled_at")
