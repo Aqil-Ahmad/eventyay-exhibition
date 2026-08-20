@@ -49,7 +49,140 @@ def get_tz_help(event):
     return _("Times are in the event timezone: %(tz)s.") % {"tz": event.timezone}
 
 
-class ExhibitorInfoForm(I18nModelForm):
+class ExhibitionQuestionFieldsMixin:
+    def inject_exhibition_questions(self, *, event, proposal=None, readonly=False):
+        answers_by_question = {}
+        if proposal and proposal.pk:
+            for answer in proposal.answers.prefetch_related("options"):
+                answers_by_question[answer.question_id] = answer
+
+        questions = (
+            ExhibitionQuestion.objects.filter(event=event, active=True)
+            .prefetch_related("options")
+            .order_by("position", "pk")
+        )
+        for question in questions:
+            answer = answers_by_question.get(question.pk)
+            field = self.get_exhibition_question_field(
+                question=question,
+                answer=answer,
+                readonly=readonly,
+            )
+            field.question = question
+            field.answer = answer
+            self.fields[f"question_{question.pk}"] = field
+
+    def get_exhibition_question_field(self, *, question, answer, readonly):
+        label = localize_event_text(question.question)
+        help_text = localize_event_text(question.help_text) or ""
+        initial = answer.answer if answer else ""
+
+        if question.variant == ExhibitionQuestionVariant.BOOLEAN:
+            return forms.BooleanField(
+                disabled=readonly,
+                help_text=help_text,
+                initial=initial == "True",
+                label=label,
+                required=question.required,
+            )
+        if question.variant == ExhibitionQuestionVariant.TEXT:
+            return forms.CharField(
+                disabled=readonly,
+                help_text=help_text,
+                initial=initial,
+                label=label,
+                required=question.required,
+                widget=forms.Textarea(attrs={"rows": 4}),
+            )
+        if question.variant == ExhibitionQuestionVariant.URL:
+            return forms.URLField(
+                disabled=readonly,
+                help_text=help_text,
+                initial=initial,
+                label=label,
+                required=question.required,
+            )
+
+        choices = question.options.all()
+        if question.variant == ExhibitionQuestionVariant.CHOICES:
+            return EventLocalizedModelChoiceField(
+                disabled=readonly,
+                empty_label=None if question.required else _("— No selection —"),
+                help_text=help_text,
+                initial=answer.options.first() if answer else None,
+                label=label,
+                queryset=choices,
+                required=question.required,
+                widget=forms.RadioSelect,
+            )
+        if question.variant == ExhibitionQuestionVariant.SELECT:
+            return EventLocalizedModelChoiceField(
+                disabled=readonly,
+                empty_label=None if question.required else _("— No selection —"),
+                help_text=help_text,
+                initial=answer.options.first() if answer else None,
+                label=label,
+                queryset=choices,
+                required=question.required,
+            )
+        if question.variant == ExhibitionQuestionVariant.MULTIPLE:
+            return EventLocalizedModelMultipleChoiceField(
+                disabled=readonly,
+                help_text=help_text,
+                initial=list(answer.options.all()) if answer else [],
+                label=label,
+                queryset=choices,
+                required=question.required,
+                widget=forms.CheckboxSelectMultiple,
+            )
+
+        return forms.CharField(
+            disabled=readonly,
+            help_text=help_text,
+            initial=initial,
+            label=label,
+            required=question.required,
+        )
+
+    def save_exhibition_questions(self, proposal):
+        for key, value in self.cleaned_data.items():
+            if not key.startswith("question_"):
+                continue
+            field = self.fields[key]
+            question = field.question
+            answer = field.answer
+            empty = value in ("", None, False) or (
+                hasattr(value, "__len__") and not isinstance(value, str) and len(value) == 0
+            )
+
+            if empty:
+                if answer:
+                    answer.delete()
+                continue
+
+            if not answer:
+                answer = ExhibitionAnswer(proposal=proposal, question=question)
+
+            if isinstance(field, forms.ModelMultipleChoiceField):
+                selected_options = list(value)
+                answer.answer = ", ".join(str(option) for option in selected_options)
+                answer.save()
+                answer.options.set(selected_options)
+            elif isinstance(field, forms.ModelChoiceField):
+                answer.answer = str(value.answer) if value else ""
+                answer.save()
+                answer.options.set([value] if value else [])
+            elif isinstance(field, forms.BooleanField):
+                answer.answer = "True" if value else "False"
+                answer.save()
+                answer.options.clear()
+            else:
+                answer.answer = value
+                answer.save()
+                answer.options.clear()
+
+
+class ExhibitorInfoForm(ExhibitionQuestionFieldsMixin, I18nModelForm):
     slides_url = forms.URLField(
         required=False,
         label=_("Slides URL"),
@@ -237,6 +370,15 @@ class ExhibitorInfoForm(I18nModelForm):
             ]
             self._apply_profile_field_order()
         self._set_voucher_access_help_text()
+        self.linked_proposal = self._resolve_linked_proposal()
+        if self.event and self.linked_proposal:
+            self.inject_exhibition_questions(event=self.event, proposal=self.linked_proposal)
+
+    def _resolve_linked_proposal(self):
+        """The approved request this profile was created from, if any."""
+        if not (self.instance and self.instance.pk):
+            return None
+        return self.instance.source_proposals.order_by("pk").first()
 
     VOUCHER_ACCESS_HELP_TEXTS = {
         "exhibitor": _(
@@ -319,6 +461,9 @@ class ExhibitorInfoForm(I18nModelForm):
                 items.append({"kind": key, "key": key})
             else:
                 items.append({"kind": "field", "key": key, "field": self[field_names[0]]})
+        for name in self.fields:
+            if name.startswith("question_"):
+                items.append({"kind": "field", "key": name, "field": self[name]})
         return items
 
     def _drop_fields(self, names):
@@ -486,6 +631,8 @@ class ExhibitorInfoForm(I18nModelForm):
         if commit:
             instance.save()
             self.save_m2m()
+            if self.linked_proposal:
+                self.save_exhibition_questions(self.linked_proposal)
             if files_to_delete:
 
                 def delete_replaced_files():
@@ -624,139 +771,6 @@ class CallSettingsForm(I18nModelForm):
                     "data-event-timezone": self.event.timezone,
                 }
             )
-
-
-class ExhibitionQuestionFieldsMixin:
-    def inject_exhibition_questions(self, *, event, proposal=None, readonly=False):
-        answers_by_question = {}
-        if proposal and proposal.pk:
-            for answer in proposal.answers.prefetch_related("options"):
-                answers_by_question[answer.question_id] = answer
-
-        questions = (
-            ExhibitionQuestion.objects.filter(event=event, active=True)
-            .prefetch_related("options")
-            .order_by("position", "pk")
-        )
-        for question in questions:
-            answer = answers_by_question.get(question.pk)
-            field = self.get_exhibition_question_field(
-                question=question,
-                answer=answer,
-                readonly=readonly,
-            )
-            field.question = question
-            field.answer = answer
-            self.fields[f"question_{question.pk}"] = field
-
-    def get_exhibition_question_field(self, *, question, answer, readonly):
-        label = localize_event_text(question.question)
-        help_text = localize_event_text(question.help_text) or ""
-        initial = answer.answer if answer else ""
-
-        if question.variant == ExhibitionQuestionVariant.BOOLEAN:
-            return forms.BooleanField(
-                disabled=readonly,
-                help_text=help_text,
-                initial=initial == "True",
-                label=label,
-                required=question.required,
-            )
-        if question.variant == ExhibitionQuestionVariant.TEXT:
-            return forms.CharField(
-                disabled=readonly,
-                help_text=help_text,
-                initial=initial,
-                label=label,
-                required=question.required,
-                widget=forms.Textarea(attrs={"rows": 4}),
-            )
-        if question.variant == ExhibitionQuestionVariant.URL:
-            return forms.URLField(
-                disabled=readonly,
-                help_text=help_text,
-                initial=initial,
-                label=label,
-                required=question.required,
-            )
-
-        choices = question.options.all()
-        if question.variant == ExhibitionQuestionVariant.CHOICES:
-            return EventLocalizedModelChoiceField(
-                disabled=readonly,
-                empty_label=None if question.required else _("— No selection —"),
-                help_text=help_text,
-                initial=answer.options.first() if answer else None,
-                label=label,
-                queryset=choices,
-                required=question.required,
-                widget=forms.RadioSelect,
-            )
-        if question.variant == ExhibitionQuestionVariant.SELECT:
-            return EventLocalizedModelChoiceField(
-                disabled=readonly,
-                empty_label=None if question.required else _("— No selection —"),
-                help_text=help_text,
-                initial=answer.options.first() if answer else None,
-                label=label,
-                queryset=choices,
-                required=question.required,
-            )
-        if question.variant == ExhibitionQuestionVariant.MULTIPLE:
-            return EventLocalizedModelMultipleChoiceField(
-                disabled=readonly,
-                help_text=help_text,
-                initial=list(answer.options.all()) if answer else [],
-                label=label,
-                queryset=choices,
-                required=question.required,
-                widget=forms.CheckboxSelectMultiple,
-            )
-
-        return forms.CharField(
-            disabled=readonly,
-            help_text=help_text,
-            initial=initial,
-            label=label,
-            required=question.required,
-        )
-
-    def save_exhibition_questions(self, proposal):
-        for key, value in self.cleaned_data.items():
-            if not key.startswith("question_"):
-                continue
-            field = self.fields[key]
-            question = field.question
-            answer = field.answer
-            empty = value in ("", None, False) or (
-                hasattr(value, "__len__") and not isinstance(value, str) and len(value) == 0
-            )
-
-            if empty:
-                if answer:
-                    answer.delete()
-                continue
-
-            if not answer:
-                answer = ExhibitionAnswer(proposal=proposal, question=question)
-
-            if isinstance(field, forms.ModelMultipleChoiceField):
-                selected_options = list(value)
-                answer.answer = ", ".join(str(option) for option in selected_options)
-                answer.save()
-                answer.options.set(selected_options)
-            elif isinstance(field, forms.ModelChoiceField):
-                answer.answer = str(value.answer) if value else ""
-                answer.save()
-                answer.options.set([value] if value else [])
-            elif isinstance(field, forms.BooleanField):
-                answer.answer = "True" if value else "False"
-                answer.save()
-                answer.options.clear()
-            else:
-                answer.answer = value
-                answer.save()
-                answer.options.clear()
 
 
 class ExhibitionProposalForm(ExhibitionQuestionFieldsMixin, I18nModelForm):
