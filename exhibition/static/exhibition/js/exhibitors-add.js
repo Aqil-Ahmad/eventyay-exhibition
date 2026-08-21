@@ -6,7 +6,6 @@
     }
 
     document.addEventListener('DOMContentLoaded', function () {
-        var previewObjectUrls = new WeakMap()
         var sponsorCheckbox = document.getElementById('id_is_sponsor')
         var sponsorGroupWrapper = document.getElementById('sponsor-group-wrapper')
         var exhibitorCheckbox = document.getElementById('id_is_exhibitor')
@@ -25,29 +24,21 @@
             }
         }
 
-        function revokePreviewObjectUrl(pair) {
-            var url = previewObjectUrls.get(pair)
-            if (url) {
-                URL.revokeObjectURL(url)
-                previewObjectUrls.delete(pair)
+        function readFileAsDataUrl(file, onDone, onError) {
+            var reader = new FileReader()
+            reader.onload = function () {
+                onDone(String(reader.result || ''))
             }
+            reader.onerror = onError
+            reader.readAsDataURL(file)
         }
 
-        function getImagePreviewSource(pair, fileInput, urlInput, clearCheckbox) {
+        function getStoredPreviewSource(pair, urlInput, clearCheckbox) {
             var urlValue = urlInput.value.trim()
             if (urlValue) {
-                revokePreviewObjectUrl(pair)
                 return urlValue
             }
 
-            if (fileInput.files && fileInput.files.length > 0) {
-                revokePreviewObjectUrl(pair)
-                var objectUrl = URL.createObjectURL(fileInput.files[0])
-                previewObjectUrls.set(pair, objectUrl)
-                return objectUrl
-            }
-
-            revokePreviewObjectUrl(pair)
             if (clearCheckbox && clearCheckbox.checked) {
                 return ''
             }
@@ -71,23 +62,9 @@
                 ? fileInput.form.elements[fileInput.name + '-clear']
                 : null
 
-            function syncImageState() {
-                var urlValue = urlInput.value.trim()
-                var hasUrl = urlValue.length > 0
-                var hasSelectedFile = Boolean(fileInput.files && fileInput.files.length > 0)
-                var hasCurrentFile = pair.dataset.hasCurrentFile === 'true' && !(clearCheckbox && clearCheckbox.checked)
+            var previewToken = 0
 
-                if (hasUrl && hasSelectedFile) {
-                    fileInput.value = ''
-                }
-
-                fileInput.disabled = hasUrl
-                if (clearCheckbox) {
-                    clearCheckbox.disabled = hasUrl
-                }
-                urlInput.disabled = !hasUrl && (hasSelectedFile || hasCurrentFile)
-
-                var previewSource = getImagePreviewSource(pair, fileInput, urlInput, clearCheckbox)
+            function applyPreviewSource(previewSource) {
                 if (!previewSource) {
                     setVisibleState(preview, false)
                     setVisibleState(previewLink, false)
@@ -104,6 +81,53 @@
                 previewImage.src = previewSource
                 setVisibleState(previewImage, true)
                 setVisibleState(previewError, false)
+            }
+
+            function showPreviewError() {
+                setVisibleState(preview, true)
+                setVisibleState(previewLink, false)
+                setVisibleState(previewImage, false)
+                setVisibleState(previewError, true)
+            }
+
+            function syncImageState() {
+                var urlValue = urlInput.value.trim()
+                var hasUrl = urlValue.length > 0
+                var hasSelectedFile = Boolean(fileInput.files && fileInput.files.length > 0)
+                var hasCurrentFile = pair.dataset.hasCurrentFile === 'true' && !(clearCheckbox && clearCheckbox.checked)
+
+                if (hasUrl && hasSelectedFile) {
+                    fileInput.value = ''
+                    hasSelectedFile = false
+                }
+
+                fileInput.disabled = hasUrl
+                if (clearCheckbox) {
+                    clearCheckbox.disabled = hasUrl
+                }
+                urlInput.disabled = !hasUrl && (hasSelectedFile || hasCurrentFile)
+
+                previewToken += 1
+                var token = previewToken
+
+                if (hasSelectedFile) {
+                    readFileAsDataUrl(
+                        fileInput.files[0],
+                        function (dataUrl) {
+                            if (token === previewToken) {
+                                applyPreviewSource(dataUrl)
+                            }
+                        },
+                        function () {
+                            if (token === previewToken) {
+                                showPreviewError()
+                            }
+                        }
+                    )
+                    return
+                }
+
+                applyPreviewSource(getStoredPreviewSource(pair, urlInput, clearCheckbox))
             }
 
             previewImage.addEventListener('load', function () {
