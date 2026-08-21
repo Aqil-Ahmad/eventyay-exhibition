@@ -276,18 +276,28 @@ class ExhibitorInfoForm(I18nModelForm):
 
     def _apply_profile_field_settings(self):
         for key, field_names in self.PROFILE_SETTING_FIELD_MAP.items():
-            if self.profile_key_is_active(key):
-                setting = self.profile_field_settings[key]
-                first_field = self.fields.get(field_names[0]) if field_names else None
-                if first_field is not None and setting.get("custom_label"):
-                    first_field.label = setting["custom_label"]
+            if not self.profile_key_is_active(key):
+                self._drop_fields(field_names)
+                continue
+
+            setting = self.profile_field_settings[key]
+            is_required = bool(setting["required"])
+            for index, field_name in enumerate(field_names):
+                field = self.fields.get(field_name)
+                if field is None:
+                    continue
+                if index == 0:
+                    if setting.get("custom_label"):
+                        field.label = setting["custom_label"]
+                    if setting.get("custom_help_text"):
+                        field.help_text = setting["custom_help_text"]
+                field._required = is_required
                 if key in self.PROFILE_COMPOSITE_KEYS or key == "booth_name":
                     continue
-                for field_name in field_names:
-                    if field_name in self.fields:
-                        self.fields[field_name].required = setting["required"]
-            else:
-                self._drop_fields(field_names)
+                if isinstance(field, I18nFormField):
+                    field.one_required = is_required
+                else:
+                    field.required = is_required
 
     def _apply_profile_field_order(self):
         ordered_field_names = []
@@ -304,6 +314,22 @@ class ExhibitorInfoForm(I18nModelForm):
     def profile_key_is_required(self, key):
         setting = self.profile_field_settings.get(key)
         return bool(setting["active"] and setting["required"]) if setting else False
+
+    def _validate_required_file_or_url(self, field_name, has_new_upload):
+        """Flag a required file field when no upload, URL, or existing file is present."""
+        if not self.profile_key_is_required(field_name):
+            return
+        file_field = self.fields.get(field_name)
+        url_field_name = self.file_url_fields[field_name]
+        if file_field is None and url_field_name not in self.fields:
+            return
+        has_url = bool(self.cleaned_data.get(url_field_name))
+        has_existing = bool(getattr(self.instance, f"visible_{field_name}_url", ""))
+        if not has_new_upload and not has_url and not has_existing:
+            self.add_error(
+                field_name if file_field else url_field_name,
+                _("This field is required."),
+            )
 
     @property
     def profile_items(self):
@@ -365,6 +391,8 @@ class ExhibitorInfoForm(I18nModelForm):
                 }:
                     self.add_error("slides", _("Slides upload must be a PDF file."))
 
+        self._validate_required_file_or_url("slides", has_new_slides_upload)
+
         for image_field, url_field in self.file_url_fields.items():
             if image_field == "slides":
                 continue
@@ -388,6 +416,8 @@ class ExhibitorInfoForm(I18nModelForm):
 
             if image_url:
                 cleaned_data[url_field] = normalize_url_scheme(image_url)
+
+            self._validate_required_file_or_url(image_field, has_new_upload)
 
         if self.partner_type == "sponsor":
             is_sponsor = True
