@@ -6,7 +6,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
     dependencies = [
         ("base", "0043_remove_sendmail_from_plugins"),
-        ("exhibition", "0017_exhibitorvoucher"),
+        ("exhibition", "0018_exhibitordevice"),
     ]
 
     operations = [
