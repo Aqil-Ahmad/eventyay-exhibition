@@ -45,6 +45,7 @@ from .forms import (
     ExhibitionProposalReviewNotesForm,
     ExhibitionProposalSocialLinkFormSet,
     ExhibitionQuestionForm,
+    ExhibitorDeviceProvisionForm,
     ExhibitorExtraLinkFormSet,
     ExhibitorInfoForm,
     ExhibitorSocialLinkFormSet,
@@ -53,6 +54,18 @@ from .forms import (
     social_link_prefixes,
 )
 from .models import (
+    LOG_CALL_SETTINGS_CHANGED,
+    LOG_GROUP_ADDED,
+    LOG_GROUP_CHANGED,
+    LOG_GROUP_DELETED,
+    LOG_PARTNER_ADDED,
+    LOG_PARTNER_CHANGED,
+    LOG_PARTNER_DELETED,
+    LOG_PROPOSAL_CHANGED,
+    LOG_QUESTION_ADDED,
+    LOG_QUESTION_CHANGED,
+    LOG_QUESTION_DELETED,
+    LOG_SETTINGS_CHANGED,
     PROPOSAL_DEFAULT_FIELD_KEYS,
     PROPOSAL_DEFAULT_FIELDS,
     PROPOSAL_REVIEW_ACTIONS,
@@ -60,6 +73,7 @@ from .models import (
     ExhibitionProposal,
     ExhibitionProposalState,
     ExhibitionQuestion,
+    ExhibitorDevice,
     ExhibitorInfo,
     ExhibitorSettings,
     ExhibitorVoucher,
@@ -73,7 +87,9 @@ from .utils import (
     add_external_image_csp_sources,
     build_exhibitor_video_embed,
     generate_exhibitor_vouchers,
+    provision_exhibitor_devices,
     public_exhibitors_queryset,
+    reset_exhibitor_device_setup,
     should_hide_applicant_emails,
     sync_exhibitor_from_proposal,
 )
@@ -303,9 +319,12 @@ class SettingsView(EventPermissionRequiredMixin, ListView):
 
         if action == "save_exhibitor_settings":
             settings.allowed_fields = request.POST.getlist("exhibitors_access_voucher")
-            settings.exhibitors_access_mail_subject = request.POST.get("exhibitors_access_mail_subject", "")
-            settings.exhibitors_access_mail_body = request.POST.get("exhibitors_access_mail_body", "")
             settings.save()
+            settings.log_action(
+                LOG_SETTINGS_CHANGED,
+                data={"allowed_fields": settings.allowed_fields},
+                user=request.user,
+            )
             messages.success(self.request, _("Settings have been saved."))
             return redirect(self.get_settings_url("exhibitors"))
 
@@ -317,12 +336,17 @@ class SettingsView(EventPermissionRequiredMixin, ListView):
             )
             if form.is_valid():
                 form.save()
+                settings.log_action(
+                    LOG_CALL_SETTINGS_CHANGED,
+                    data={"changed": form.changed_data},
+                    user=request.user,
+                )
                 messages.success(self.request, _("Call settings have been saved."))
                 return redirect(self.get_settings_url("call"))
             return self.render_to_response(self.get_context_data(call_settings_form=form))
 
         if action == "regenerate_call_secret":
-            settings.regenerate_call_secret()
+            settings.regenerate_call_secret(requestor=request.user)
             messages.success(
                 self.request,
                 _("A new secret call link has been generated. The old link no longer works."),
@@ -339,6 +363,7 @@ class SettingsView(EventPermissionRequiredMixin, ListView):
                 group = form.save(commit=False)
                 group.event = request.event
                 group.save()
+                group.log_action(LOG_GROUP_ADDED, data={"name": group.localized_name}, user=request.user)
                 messages.success(self.request, _("Sponsor group added."))
                 return redirect(self.get_settings_url("sponsors"))
 
@@ -359,6 +384,7 @@ class SettingsView(EventPermissionRequiredMixin, ListView):
             )
             if form.is_valid():
                 form.save()
+                group.log_action(LOG_GROUP_CHANGED, data={"changed": form.changed_data}, user=request.user)
                 messages.success(self.request, _("Sponsor group updated."))
                 return redirect(self.get_settings_url("sponsors"))
 
@@ -377,6 +403,7 @@ class SettingsView(EventPermissionRequiredMixin, ListView):
                     _("This sponsor group cannot be deleted while it is assigned to partners."),
                 )
             else:
+                group.log_action(LOG_GROUP_DELETED, data={"name": group.localized_name}, user=request.user)
                 group.delete()
                 messages.success(self.request, _("Sponsor group deleted."))
             return redirect(self.get_settings_url("sponsors"))
@@ -831,8 +858,14 @@ class UserProposalEditView(
             and previous_state != ExhibitionProposalState.SUBMITTED
         ):
             send_proposal_confirmation(self.request.event, self.object, self.request.user)
+        if form.changed_data:
+            self.object.log_action(
+                LOG_PROPOSAL_CHANGED,
+                data={"changed": form.changed_data, "by": "submitter"},
+                user=self.request.user,
+            )
         if self.object.approved_exhibitor_id:
-            sync_exhibitor_from_proposal(self.object)
+            sync_exhibitor_from_proposal(self.object, requestor=self.request.user)
         messages.success(self.request, _("Your changes have been saved."))
         return response
 
@@ -873,7 +906,7 @@ class UserProposalWithdrawView(PublicCallEnabledMixin, PublicEventLoginRequiredM
     def post(self, request, *args, **kwargs):
         self.object = self.get_object()
         if self.object.can_be_withdrawn:
-            self.object.withdraw()
+            self.object.withdraw(requestor=request.user)
             messages.success(request, _("Your request has been withdrawn."))
         else:
             messages.error(request, _("This request can no longer be withdrawn."))
@@ -909,7 +942,7 @@ class UserProposalReinstateView(PublicCallEnabledMixin, PublicEventLoginRequired
     def post(self, request, *args, **kwargs):
         self.object = self.get_object()
         if self.object.can_be_reinstated:
-            self.object.reopen()
+            self.object.reopen(requestor=request.user)
             messages.success(request, _("Your request has been reinstated and is pending review again."))
         else:
             messages.error(request, _("This request can no longer be reinstated."))
@@ -1224,6 +1257,12 @@ class ProposalDetailView(EventPermissionRequiredMixin, UpdateView):
     @transaction.atomic
     def form_valid(self, form):
         self.object = form.save()
+        if form.changed_data:
+            self.object.log_action(
+                LOG_PROPOSAL_CHANGED,
+                data={"changed": form.changed_data},
+                user=self.request.user,
+            )
         action = self.request.POST.get("action", "save")
         if action in PROPOSAL_REVIEW_ACTIONS:
             if not self.can_manage():
@@ -1254,10 +1293,10 @@ class ProposalDetailView(EventPermissionRequiredMixin, UpdateView):
             self.object.reject(requestor=requestor)
             messages.success(self.request, _("Request rejected. A rejection email was placed in the outbox."))
         elif action == "withdraw":
-            self.object.withdraw()
+            self.object.withdraw(requestor=requestor)
             messages.success(self.request, _("Request withdrawn."))
         elif action == "reopen":
-            self.object.reopen()
+            self.object.reopen(requestor=requestor)
             messages.success(self.request, _("Request reopened for review."))
         return redirect(self.get_success_url())
 
@@ -1330,9 +1369,9 @@ class ProposalActionView(EventPermissionRequiredMixin, View):
         elif action == "reject":
             proposal.reject(requestor=self.request.user)
         elif action == "withdraw":
-            proposal.withdraw()
+            proposal.withdraw(requestor=self.request.user)
         elif action == "reopen":
-            proposal.reopen()
+            proposal.reopen(requestor=self.request.user)
 
     def build_message(self, action, count, skipped):
         if count:
@@ -1539,6 +1578,15 @@ class ExhibitionQuestionCreateView(EventPermissionRequiredMixin, CreateView):
         kwargs["event"] = self.request.event
         return kwargs
 
+    def form_valid(self, form):
+        response = super().form_valid(form)
+        self.object.log_action(
+            LOG_QUESTION_ADDED,
+            data={"question": self.object.localized_question},
+            user=self.request.user,
+        )
+        return response
+
     def get_success_url(self):
         return reverse(
             "plugins:exhibition:call.questions",
@@ -1560,6 +1608,15 @@ class ExhibitionQuestionEditView(EventPermissionRequiredMixin, UpdateView):
         kwargs["event"] = self.request.event
         return kwargs
 
+    def form_valid(self, form):
+        response = super().form_valid(form)
+        self.object.log_action(
+            LOG_QUESTION_CHANGED,
+            data={"changed": form.changed_data},
+            user=self.request.user,
+        )
+        return response
+
     def get_success_url(self):
         return reverse(
             "plugins:exhibition:call.questions",
@@ -1574,6 +1631,14 @@ class ExhibitionQuestionDeleteView(EventPermissionRequiredMixin, DeleteView):
 
     def get_queryset(self):
         return ExhibitionQuestion.objects.filter(event=self.request.event)
+
+    def form_valid(self, form):
+        self.object.log_action(
+            LOG_QUESTION_DELETED,
+            data={"question": self.object.localized_question},
+            user=self.request.user,
+        )
+        return super().form_valid(form)
 
     def get_success_url(self):
         return reverse(
@@ -1678,6 +1743,11 @@ class ExhibitorCreateView(ExhibitorLinkFormsetMixin, EventPermissionRequiredMixi
 
         response = super().form_valid(form)
         self.save_link_formsets()
+        self.object.log_action(
+            LOG_PARTNER_ADDED,
+            data={"name": localize_event_text(self.object.name), "booth_id": self.object.booth_id},
+            user=self.request.user,
+        )
         if access_newly_granted(form.instance) and queue_exhibitor_access_mail(
             self.request.event, self.object, self.request.user
         ):
@@ -1735,6 +1805,11 @@ class ExhibitorEditView(ExhibitorLinkFormsetMixin, EventPermissionRequiredMixin,
 
         response = super().form_valid(form)
         self.save_link_formsets()
+        self.object.log_action(
+            LOG_PARTNER_CHANGED,
+            data={"changed": form.changed_data},
+            user=self.request.user,
+        )
         if access_newly_granted(form.instance, previous) and queue_exhibitor_access_mail(
             self.request.event, self.object, self.request.user
         ):
@@ -1766,6 +1841,14 @@ class ExhibitorDeleteView(EventPermissionRequiredMixin, DeleteView):
 
     def get_queryset(self):
         return ExhibitorInfo.objects.filter(event=self.request.event)
+
+    def form_valid(self, form):
+        self.object.log_action(
+            LOG_PARTNER_DELETED,
+            data={"name": localize_event_text(self.object.name), "booth_id": self.object.booth_id},
+            user=self.request.user,
+        )
+        return super().form_valid(form)
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -1898,6 +1981,77 @@ class ExhibitorVoucherManageView(EventPermissionRequiredMixin, DetailView):
             request,
             ngettext("%(count)d voucher created.", "%(count)d vouchers created.", count) % {"count": count},
         )
+        return redirect(self.get_success_url())
+
+
+class ExhibitorDeviceManageView(EventPermissionRequiredMixin, DetailView):
+    model = ExhibitorInfo
+    template_name = "exhibitors/devices.html"
+    permission = ("can_change_event_settings",)
+    context_object_name = "exhibitor"
+
+    def get_queryset(self):
+        return ExhibitorInfo.objects.filter(event=self.request.event)
+
+    def can_provision(self):
+        return self.request.user.has_organizer_permission(
+            self.request.event.organizer, "can_change_organizer_settings", request=self.request
+        )
+
+    def device_links(self):
+        return ExhibitorDevice.objects.filter(exhibitor=self.object).select_related("device")
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context.setdefault("form", ExhibitorDeviceProvisionForm())
+        context["device_links"] = self.device_links()
+        context["can_provision"] = self.can_provision()
+        return context
+
+    def get_success_url(self):
+        return reverse(
+            "plugins:exhibition:devices",
+            kwargs={**event_kwargs(self.request.event), "pk": self.object.pk},
+        )
+
+    def post(self, request, *args, **kwargs):
+        self.object = self.get_object()
+        if not self.can_provision():
+            raise PermissionDenied()
+        if request.POST.get("action") == "reset":
+            return self.reset_tokens(request)
+        return self.provision_devices(request)
+
+    @transaction.atomic
+    def provision_devices(self, request):
+        form = ExhibitorDeviceProvisionForm(request.POST)
+        if not form.is_valid():
+            return self.render_to_response(self.get_context_data(form=form))
+        count = form.cleaned_data["count"]
+        provision_exhibitor_devices(self.object, count, user=request.user)
+        messages.success(
+            request,
+            ngettext("%(count)d device added.", "%(count)d devices added.", count) % {"count": count},
+        )
+        return redirect(self.get_success_url())
+
+    @transaction.atomic
+    def reset_tokens(self, request):
+        disconnected = reset_exhibitor_device_setup(self.object, user=request.user)
+        if disconnected:
+            messages.warning(
+                request,
+                ngettext(
+                    "New setup tokens generated. %(count)d device that was already scanning is now disconnected "
+                    "and must be set up again.",
+                    "New setup tokens generated. %(count)d devices that were already scanning are now disconnected "
+                    "and must be set up again.",
+                    len(disconnected),
+                )
+                % {"count": len(disconnected)},
+            )
+        else:
+            messages.success(request, _("New setup tokens generated."))
         return redirect(self.get_success_url())
 
 
@@ -2291,6 +2445,7 @@ class EmailTemplatesView(EventPermissionRequiredMixin, TemplateView):
                 (mail_helpers.PROPOSAL_NEW, _("Request received (confirmation)")),
                 (mail_helpers.PROPOSAL_ACCEPTED, _("Request accepted")),
                 (mail_helpers.PROPOSAL_REJECTED, _("Request rejected")),
+                (mail_helpers.EXHIBITOR_ACCESS, _("Exhibitor lead scanning key")),
             )
         ]
         context["email_placeholders"] = mail_helpers.PLACEHOLDER_DOCS

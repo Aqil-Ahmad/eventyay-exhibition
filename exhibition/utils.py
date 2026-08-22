@@ -4,6 +4,7 @@ from urllib.parse import parse_qs, urlparse
 from django.db.models import Q, QuerySet
 from django.utils import timezone
 from eventyay.common.urls import get_url_origin, normalize_url_scheme
+from eventyay.common.utils.language import localize_event_text
 from i18nfield.strings import LazyI18nString
 
 if TYPE_CHECKING:
@@ -147,8 +148,10 @@ def build_exhibitor_video_embed(url: str) -> dict | None:
     return None
 
 
-def create_exhibitor_from_proposal(proposal):
+def create_exhibitor_from_proposal(proposal, requestor=None):
     from .models import (
+        LOG_PARTNER_CREATED,
+        LOG_PARTNER_REACTIVATED,
         ExhibitionProposalState,
         ExhibitorExtraLink,
         ExhibitorInfo,
@@ -176,6 +179,11 @@ def create_exhibitor_from_proposal(proposal):
         proposal.profile_edited_at = None
         proposal.capture_profile_snapshot()
         proposal.save(update_fields=["state", "submitted", "profile_edited_at", "accepted_profile_snapshot", "updated"])
+        exhibitor.log_action(
+            LOG_PARTNER_REACTIVATED,
+            data={"proposal": proposal.code},
+            user=requestor,
+        )
         return exhibitor
 
     exhibitor = ExhibitorInfo.objects.create(
@@ -233,6 +241,11 @@ def create_exhibitor_from_proposal(proposal):
             "updated",
         ]
     )
+    exhibitor.log_action(
+        LOG_PARTNER_CREATED,
+        data={"proposal": proposal.code, "booth_id": exhibitor.booth_id},
+        user=requestor,
+    )
     return exhibitor
 
 
@@ -259,6 +272,54 @@ def generate_exhibitor_vouchers(exhibitor, *, product, count, max_usages, price_
 
 PROPOSAL_LOCALIZED_PROFILE_FIELDS = ("name", "description")
 
+
+def provision_exhibitor_devices(exhibitor, count, *, user=None):
+    """Create ``count`` lead-scanning devices for an exhibitor and link them."""
+    from eventyay.base.models import Device
+
+    from .models import ExhibitorDevice
+
+    partner_name = localize_event_text(exhibitor.name) or str(exhibitor.name)
+    existing = ExhibitorDevice.objects.filter(exhibitor=exhibitor).count()
+    links = []
+    for index in range(count):
+        device = Device(
+            organizer=exhibitor.event.organizer,
+            name=f"{partner_name} #{existing + index + 1}",
+            all_events=False,
+            security_profile="eventyay_checkin",
+        )
+        device.save()
+        device.limit_events.add(exhibitor.event)
+        device.log_action("eventyay.device.created", user=user, data={"exhibitor": exhibitor.pk})
+        links.append(ExhibitorDevice(exhibitor=exhibitor, device=device))
+    return ExhibitorDevice.objects.bulk_create(links)
+
+
+def reset_exhibitor_device_setup(exhibitor, *, user=None):
+    """Regenerate setup tokens for an exhibitor's devices; returns those that were live."""
+    from eventyay.base.models.devices import generate_initialization_token
+
+    from .models import ExhibitorDevice
+
+    disconnected = []
+    for link in ExhibitorDevice.objects.filter(exhibitor=exhibitor).select_related("device"):
+        device = link.device
+        if device.api_token and device.initialized:
+            disconnected.append(device)
+        device.initialization_token = generate_initialization_token()
+        device.api_token = None
+        device.initialized = None
+        device.revoked = False
+        device.save(update_fields=["initialization_token", "api_token", "initialized", "revoked"])
+        device.log_action(
+            "eventyay.device.setup_token_reset",
+            user=user,
+            data={"had_active_session": device in disconnected, "exhibitor": exhibitor.pk},
+        )
+    return disconnected
+
+
 PROPOSAL_SYNCED_PROFILE_FIELDS = (
     "name",
     "description",
@@ -275,9 +336,9 @@ PROPOSAL_SYNCED_PROFILE_FIELDS = (
 )
 
 
-def sync_exhibitor_from_proposal(proposal):
+def sync_exhibitor_from_proposal(proposal, requestor=None):
     """Push submitter-owned profile fields of an accepted proposal onto its partner profile."""
-    from .models import ExhibitorExtraLink, ExhibitorSocialLink
+    from .models import LOG_PARTNER_SYNCED, ExhibitorExtraLink, ExhibitorSocialLink
 
     exhibitor = proposal.approved_exhibitor
     if not exhibitor:
@@ -326,5 +387,10 @@ def sync_exhibitor_from_proposal(proposal):
             )
             for link in proposal.extra_links.all()
         ]
+    )
+    exhibitor.log_action(
+        LOG_PARTNER_SYNCED,
+        data={"proposal": proposal.code},
+        user=requestor,
     )
     return exhibitor

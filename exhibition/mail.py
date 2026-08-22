@@ -1,5 +1,6 @@
 """Email helpers for the exhibition plugin."""
 
+import json
 import logging
 import re
 import uuid
@@ -8,6 +9,7 @@ from urllib.parse import urljoin
 
 from django.conf import settings as django_settings
 from django.urls import reverse
+from django.utils.html import escape
 from django.utils.translation import gettext_lazy as _lazy, gettext_noop
 from i18nfield.strings import LazyI18nString
 
@@ -16,8 +18,9 @@ logger = logging.getLogger(__name__)
 PROPOSAL_NEW = "proposal_new"
 PROPOSAL_ACCEPTED = "proposal_accepted"
 PROPOSAL_REJECTED = "proposal_rejected"
+EXHIBITOR_ACCESS = "exhibitor_access"
 
-LIFECYCLE_ROLES = (PROPOSAL_NEW, PROPOSAL_ACCEPTED, PROPOSAL_REJECTED)
+LIFECYCLE_ROLES = (PROPOSAL_NEW, PROPOSAL_ACCEPTED, PROPOSAL_REJECTED, EXHIBITOR_ACCESS)
 
 PLACEHOLDER_DOCS = (
     ("{event_name}", _lazy("The event's name")),
@@ -25,6 +28,16 @@ PLACEHOLDER_DOCS = (
     ("{request_code}", _lazy("The request's unique code")),
     ("{request_url}", _lazy("Link for the applicant to view or edit the request")),
     ("{name}", _lazy("The applicant's name")),
+    ("{exhibitor_name}", _lazy("The exhibitor / sponsor name (access email only)")),
+    ("{booth_id}", _lazy("The exhibitor's booth ID (access email only)")),
+    ("{exhibitor_access_code}", _lazy("The exhibitor's secret access code (access email only)")),
+    (
+        "{device_tokens}",
+        _lazy(
+            "Setup URL, token and QR code for each lead-scanning device provisioned "
+            "for this exhibitor (access email only)"
+        ),
+    ),
 )
 
 _SETTINGS_PREFIX = "exhibition_mail_"
@@ -76,6 +89,25 @@ DEFAULT_TEMPLATES = {
                 "We hope to see you at a future event.\n\n"
                 "Best regards,\n"
                 "The {event_name} team"
+            )
+        ),
+    ),
+    EXHIBITOR_ACCESS: (
+        LazyI18nString.from_gettext(gettext_noop("Lead Scanning Access for {event_name}")),
+        LazyI18nString.from_gettext(
+            gettext_noop(
+                "Hello {exhibitor_name},\n\n"
+                "Please use the information below to activate the **Lead Scanning app**:\n\n"
+                "**Step 1 — Open the Web App:** access.eventyay.com\n\n"
+                "**Step 2 — Enter the Exhibitor Key:** {exhibitor_access_code}\n\n"
+                "**Step 3 — Set up each device** by scanning its QR code, or by entering its "
+                "setup URL and token manually:\n\n"
+                "{device_tokens}\n\n"
+                "*Each token is unique to one device and can only be used once. "
+                "If you set up additional devices, each device will require its own token.*\n\n"
+                "Please share these details with the team members who will be scanning leads at the event.\n\n"
+                "Best regards,\n"
+                "The {event_name} Team"
             )
         ),
     ),
@@ -161,6 +193,38 @@ def proposal_public_url(proposal):
     return urljoin(django_settings.SITE_URL, path)
 
 
+def device_setup_url():
+    return django_settings.SITE_URL.rstrip("/")
+
+
+def _render_device_block(name, setup_url, token):
+    from eventyay.base.email import render_qr_code_img
+
+    payload = json.dumps({"handshake_version": 1, "url": setup_url, "token": token})
+    return (
+        f"<p><strong>{escape(name)}</strong><br>"
+        f"{escape(_lazy('Setup URL'))}: {escape(setup_url)}<br>"
+        f"{escape(_lazy('Setup token'))}: <code>{escape(token)}</code><br>"
+        f"{render_qr_code_img(payload, alt=str(_lazy('Device setup QR code')))}</p>"
+    )
+
+
+def render_device_tokens(exhibitor):
+    """One setup URL, token and QR code per lead-scanning device linked to the exhibitor."""
+    from .models import ExhibitorDevice
+
+    setup_url = device_setup_url()
+    blocks = [
+        _render_device_block(link.device.name, setup_url, link.device.initialization_token)
+        for link in ExhibitorDevice.objects.filter(exhibitor=exhibitor).select_related("device")
+    ]
+    return "".join(blocks)
+
+
+def sample_device_tokens(event=None):
+    return _render_device_block(str(_lazy("Acme Corp #1")), device_setup_url(), "SAMPLETOKEN123456")
+
+
 def queue_proposal_email(event, proposal, role, *, send_now=False, requestor=None):
     """Queue a lifecycle email; ``send_now`` sends it instead of leaving it in the outbox."""
     from .models import ExhibitionEmailQueue
@@ -237,19 +301,14 @@ def queue_compose_emails(event, proposals, subject, body, *, scheduled_at=None, 
 
 
 def queue_exhibitor_access_email(event, exhibitor, *, requestor=None):
-    """Queue the access-credentials email; ``None`` if no recipient or template."""
-    from .models import ExhibitionEmailQueue, ExhibitorSettings
+    """Queue the access-credentials email; ``None`` if the exhibitor has no email address."""
+    from .models import ExhibitionEmailQueue
 
     to_email = (exhibitor.email or "").strip()
     if not to_email:
         return None
 
-    exhibitor_settings = ExhibitorSettings.objects.filter(event=event).first()
-    subject_tpl = (exhibitor_settings.exhibitors_access_mail_subject if exhibitor_settings else "") or ""
-    body_tpl = (exhibitor_settings.exhibitors_access_mail_body if exhibitor_settings else "") or ""
-    if not subject_tpl and not body_tpl:
-        return None
-
+    subject_tpl, body_tpl = get_email_template(event, EXHIBITOR_ACCESS)
     locale = recipient_locale(event)
     context = build_exhibitor_context(event, exhibitor)
 
