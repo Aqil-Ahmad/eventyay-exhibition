@@ -1,8 +1,14 @@
 {% extends "exhibitors/base.html" %}
 {% load i18n %}
 {% load bootstrap3 %}
+{% load static %}
 
 {% block title %}{{ request.event.name }} - {% trans "Compose email" %}{% endblock %}
+
+{% block custom_header %}
+    {{ block.super }}
+    <script defer src="{% static 'exhibition/js/schedule-datetime.js' %}"></script>
+{% endblock %}
 
 {% block exhibitors_header %}
     <h1>{% trans "Compose email" %}</h1>

@@ -9,7 +9,8 @@ from django.utils import timezone
 from django.utils.crypto import get_random_string
 from django.utils.translation import gettext_lazy as _
 from django_countries import Countries
-from eventyay.base.models import Event, Voucher
+from eventyay.base.models import Device, Event, Voucher
+from eventyay.base.models.base import LoggedModel
 from eventyay.common.utils.language import localize_event_text
 from i18nfield.fields import I18nCharField, I18nTextField
 from i18nfield.strings import LazyI18nString
@@ -203,7 +204,7 @@ def default_allowed_fields():
     return ["attendee_name", "attendee_email"]
 
 
-class ExhibitorSettings(models.Model):
+class ExhibitorSettings(LoggedModel):
     event = models.ForeignKey("base.Event", on_delete=models.CASCADE)
     exhibitors_access_mail_subject = models.CharField(max_length=255)
     exhibitors_access_mail_body = models.TextField()
@@ -237,9 +238,10 @@ class ExhibitorSettings(models.Model):
             return False
         return not self.call_deadline or self.call_deadline >= timezone.now()
 
-    def regenerate_call_secret(self):
+    def regenerate_call_secret(self, requestor=None):
         self.call_secret = generate_call_secret()
         self.save(update_fields=["call_secret"])
+        self.log_action(LOG_CALL_SECRET_REGENERATED, user=requestor)
 
     @property
     def normalized_proposal_field_settings(self):
@@ -287,7 +289,7 @@ class ExhibitorSettings(models.Model):
         unique_together = ("event",)
 
 
-class SponsorGroup(models.Model):
+class SponsorGroup(LoggedModel):
     event = models.ForeignKey(Event, on_delete=models.CASCADE, related_name="sponsor_groups")
     name = I18nCharField(max_length=120, verbose_name=_("Group name"))
     level = models.PositiveIntegerField(default=1, db_index=True, verbose_name=_("Level"))
@@ -307,7 +309,7 @@ class SponsorGroup(models.Model):
         return self.localized_name or str(self.name)
 
 
-class ExhibitorInfo(models.Model):
+class ExhibitorInfo(LoggedModel):
     event = models.ForeignKey(Event, on_delete=models.CASCADE)
     name = I18nCharField(max_length=190, verbose_name=_("Name"))
     description = I18nTextField(verbose_name=_("Description"), null=True, blank=True)
@@ -481,6 +483,33 @@ PROPOSAL_REVIEW_ACTIONS = {
 
 PROPOSAL_BULK_ACTIONS = ("approve", "reject")
 
+LOG_PREFIX = "eventyay.plugins.exhibition"
+
+PROPOSAL_LOG_ACTIONS = {
+    "approve": f"{LOG_PREFIX}.proposal.approved",
+    "reject": f"{LOG_PREFIX}.proposal.rejected",
+    "withdraw": f"{LOG_PREFIX}.proposal.withdrawn",
+    "reopen": f"{LOG_PREFIX}.proposal.reopened",
+}
+
+LOG_PROPOSAL_CHANGED = f"{LOG_PREFIX}.proposal.changed"
+LOG_PARTNER_CREATED = f"{LOG_PREFIX}.partner.created"
+LOG_PARTNER_REACTIVATED = f"{LOG_PREFIX}.partner.reactivated"
+LOG_PARTNER_ADDED = f"{LOG_PREFIX}.partner.added"
+LOG_PARTNER_CHANGED = f"{LOG_PREFIX}.partner.changed"
+LOG_PARTNER_DELETED = f"{LOG_PREFIX}.partner.deleted"
+LOG_PARTNER_SYNCED = f"{LOG_PREFIX}.partner.synced"
+LOG_SETTINGS_CHANGED = f"{LOG_PREFIX}.settings.changed"
+LOG_CALL_SETTINGS_CHANGED = f"{LOG_PREFIX}.call.settings.changed"
+LOG_CALL_SECRET_REGENERATED = f"{LOG_PREFIX}.call.secret.regenerated"
+LOG_GROUP_ADDED = f"{LOG_PREFIX}.sponsorgroup.added"
+LOG_GROUP_CHANGED = f"{LOG_PREFIX}.sponsorgroup.changed"
+LOG_GROUP_DELETED = f"{LOG_PREFIX}.sponsorgroup.deleted"
+LOG_QUESTION_ADDED = f"{LOG_PREFIX}.question.added"
+LOG_QUESTION_CHANGED = f"{LOG_PREFIX}.question.changed"
+LOG_QUESTION_DELETED = f"{LOG_PREFIX}.question.deleted"
+LOG_EMAIL_SENT = f"{LOG_PREFIX}.email.sent"
+
 SUBMITTER_PROFILE_FIELD_LABELS = {
     "description": _("Organization Description"),
     "email": _("Contact email"),
@@ -497,7 +526,7 @@ SUBMITTER_PROFILE_FIELD_LABELS = {
 }
 
 
-class ExhibitionProposal(models.Model):
+class ExhibitionProposal(LoggedModel):
     code = models.CharField(
         max_length=12,
         unique=True,
@@ -601,17 +630,32 @@ class ExhibitionProposal(models.Model):
     def available_bulk_actions(self):
         return [action for action in PROPOSAL_BULK_ACTIONS if self.can_transition_to(PROPOSAL_REVIEW_ACTIONS[action])]
 
-    def set_partner_active(self, active):
+    def set_partner_active(self, active, requestor=None):
         if self.approved_exhibitor_id and self.approved_exhibitor.active != active:
             self.approved_exhibitor.active = active
             self.approved_exhibitor.save(update_fields=["active"])
+            self.approved_exhibitor.log_action(
+                LOG_PARTNER_CHANGED,
+                data={"active": active, "reason": "proposal_state_change", "proposal": self.code},
+                user=requestor,
+            )
+
+    def log_transition(self, action, previous, requestor=None):
+        """Record who moved the request between states, and in which direction."""
+        self.log_action(
+            PROPOSAL_LOG_ACTIONS[action],
+            data={"from": previous, "to": self.state, "code": self.code},
+            user=requestor,
+        )
 
     def approve(self, requestor=None):
         """Accept the request, create or reactivate its partner profile and queue the acceptance email."""
         from .mail import PROPOSAL_ACCEPTED, queue_proposal_email
         from .utils import create_exhibitor_from_proposal
 
-        exhibitor = create_exhibitor_from_proposal(self)
+        previous = self.state
+        exhibitor = create_exhibitor_from_proposal(self, requestor=requestor)
+        self.log_transition("approve", previous, requestor=requestor)
         queue_proposal_email(self.event, self, PROPOSAL_ACCEPTED, requestor=requestor)
         return exhibitor
 
@@ -619,9 +663,11 @@ class ExhibitionProposal(models.Model):
         """Reject the request, hide any partner profile and queue the rejection email."""
         from .mail import PROPOSAL_REJECTED, queue_proposal_email
 
+        previous = self.state
         self.state = ExhibitionProposalState.REJECTED
         self.save(update_fields=["state", "updated"])
-        self.set_partner_active(False)
+        self.set_partner_active(False, requestor=requestor)
+        self.log_transition("reject", previous, requestor=requestor)
         queue_proposal_email(self.event, self, PROPOSAL_REJECTED, requestor=requestor)
 
     @property
@@ -632,17 +678,21 @@ class ExhibitionProposal(models.Model):
     def can_be_reinstated(self):
         return self.state == ExhibitionProposalState.WITHDRAWN
 
-    def withdraw(self):
+    def withdraw(self, requestor=None):
+        previous = self.state
         self.state = ExhibitionProposalState.WITHDRAWN
         self.save(update_fields=["state", "updated"])
-        self.set_partner_active(False)
+        self.set_partner_active(False, requestor=requestor)
+        self.log_transition("withdraw", previous, requestor=requestor)
 
-    def reopen(self):
+    def reopen(self, requestor=None):
         """Move the request back to submitted for a fresh decision; sends no decision email."""
+        previous = self.state
         self.state = ExhibitionProposalState.SUBMITTED
         self.submitted = self.submitted or timezone.now()
         self.save(update_fields=["state", "submitted", "updated"])
-        self.set_partner_active(False)
+        self.set_partner_active(False, requestor=requestor)
+        self.log_transition("reopen", previous, requestor=requestor)
 
     @property
     def requires_open_call_to_edit(self):
@@ -804,7 +854,7 @@ QUESTION_OPTION_VARIANTS = frozenset(
 )
 
 
-class ExhibitionQuestion(models.Model):
+class ExhibitionQuestion(LoggedModel):
     event = models.ForeignKey(
         Event,
         on_delete=models.CASCADE,
@@ -936,7 +986,19 @@ class ExhibitorVoucher(models.Model):
         return f"{self.voucher.code} ({self.exhibitor.name})"
 
 
-class ExhibitionEmailQueue(models.Model):
+class ExhibitorDevice(models.Model):
+    exhibitor = models.ForeignKey(ExhibitorInfo, on_delete=models.CASCADE, related_name="devices")
+    device = models.OneToOneField(Device, on_delete=models.CASCADE, related_name="exhibitor_link")
+    created = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ("created", "pk")
+
+    def __str__(self):
+        return f"{self.device.name} ({self.exhibitor.name})"
+
+
+class ExhibitionEmailQueue(LoggedModel):
     """A single email queued for one recipient, with placeholders already rendered."""
 
     event = models.ForeignKey(
@@ -998,10 +1060,10 @@ class ExhibitionEmailQueue(models.Model):
         self.sent_at = timezone.now()
         self.scheduled_at = None
         self.save(update_fields=["sent_at", "scheduled_at", "updated"])
-        self.event.log_action(
-            "eventyay.plugins.exhibition.email.sent",
+        self.log_action(
+            LOG_EMAIL_SENT,
             user=requestor,
-            data={"queue_id": self.pk, "to": self.to_email, "subject": self.subject},
+            data={"to": self.to_email, "subject": self.subject},
         )
 
     send.alters_data = True

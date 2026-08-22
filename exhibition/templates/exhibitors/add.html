@@ -8,6 +8,7 @@
 {% block custom_header %}
     {{ block.super }}
     <link rel="stylesheet" href="{% static 'exhibition/css/exhibitors-add.css' %}">
+    <link rel="stylesheet" href="{% static 'exhibition/css/history-panel.css' %}">
 {% endblock %}
 
 {% block exhibitors_header %}
@@ -219,7 +220,6 @@
         {% bootstrap_field form.lead_scanning_enabled layout="control" %}
         {% bootstrap_field form.allow_lead_access layout="control" %}
         {% bootstrap_field form.lead_scanning_scope_by_device layout="control" %}
-        {% bootstrap_field form.allow_voucher_access layout="control" %}
     </fieldset>
     {% endif %}
 
@@ -253,5 +253,13 @@
         </a>
     </div>
 </form>
+{% if action == 'edit' %}
+    <div class="panel panel-default exhibition-history">
+        <div class="panel-heading">
+            <h3 class="panel-title">{% trans "History" %}</h3>
+        </div>
+        {% include "pretixcontrol/includes/logs.html" with obj=object %}
+    </div>
+{% endif %}
 <script type="text/javascript" src="{% static 'exhibition/js/exhibitors-add.js' %}"></script>
 {% endblock %}
