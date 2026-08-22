@@ -25,7 +25,9 @@
         {% for item in form.profile_items %}
             {% if item.kind == 'social_links' %}
                 <div class="form-group">
-                    <label class="col-md-3 control-label partner-link-group-label">{% trans "Social Media" %}</label>
+                    <label class="col-md-3 control-label partner-link-group-label">
+                        <span class="label-text">{% trans "Social Media" %}{% if form.profile_field_settings.social_links.required %}<span aria-hidden="true" class="required-indicator text-danger"> *</span><span class="sr-only">, {% trans "required" %}</span>{% endif %}</span>{% if not form.profile_field_settings.social_links.required %}<br><span class="optional">{% trans "Optional" %}</span>{% endif %}
+                    </label>
                     <div class="col-md-9">
                         <div id="social-links-formset" class="partner-link-formset formset" data-formset-prefix="{{ social_media_formset.prefix }}" data-social-link-prefixes='{{ social_link_prefixes|escapejson_dumps }}'>
                             {{ social_media_formset.management_form }}
@@ -84,7 +86,9 @@
                 </div>
             {% elif item.kind == 'extra_links' %}
                 <div class="form-group">
-                    <label class="col-md-3 control-label partner-link-group-label">{% trans "Extra Links" %}</label>
+                    <label class="col-md-3 control-label partner-link-group-label">
+                        <span class="label-text">{% trans "Extra Links" %}{% if form.profile_field_settings.extra_links.required %}<span aria-hidden="true" class="required-indicator text-danger"> *</span><span class="sr-only">, {% trans "required" %}</span>{% endif %}</span>{% if not form.profile_field_settings.extra_links.required %}<br><span class="optional">{% trans "Optional" %}</span>{% endif %}
+                    </label>
                     <div class="col-md-9">
                         <div id="extra-links-formset" class="partner-link-formset formset" data-formset-prefix="{{ extra_links_formset.prefix }}">
                             {{ extra_links_formset.management_form }}
