@@ -33,6 +33,7 @@ from .views import (
     ExhibitorCopyKeyView,
     ExhibitorCreateView,
     ExhibitorDeleteView,
+    ExhibitorDeviceManageView,
     ExhibitorEditView,
     ExhibitorListView,
     ExhibitorReorderView,
@@ -240,6 +241,11 @@ urlpatterns = [
         "exhibitors/event/<orgslug:organizer>/<slug:event>/vouchers/<int:pk>",
         ExhibitorVoucherManageView.as_view(),
         name="vouchers",
+    ),
+    path(
+        "exhibitors/event/<orgslug:organizer>/<slug:event>/devices/<int:pk>",
+        ExhibitorDeviceManageView.as_view(),
+        name="devices",
     ),
     path(
         "exhibitors/event/<orgslug:organizer>/<slug:event>/emails/compose",

@@ -1,6 +1,7 @@
 """Email helpers for the exhibition plugin."""
 
 import html
+import json
 import logging
 import re
 import uuid
@@ -9,6 +10,7 @@ from urllib.parse import urljoin
 
 from django.conf import settings as django_settings
 from django.urls import reverse
+from django.utils.html import escape
 from django.utils.translation import gettext_lazy as _lazy, gettext_noop
 from i18nfield.strings import LazyI18nString
 
@@ -30,6 +32,13 @@ PLACEHOLDER_DOCS = (
     ("{exhibitor_name}", _lazy("The exhibitor / sponsor name (access email only)")),
     ("{booth_id}", _lazy("The exhibitor's booth ID (access email only)")),
     ("{exhibitor_access_code}", _lazy("The exhibitor's secret access code (access email only)")),
+    (
+        "{device_tokens}",
+        _lazy(
+            "Setup URL, token and QR code for each lead-scanning device provisioned "
+            "for this exhibitor (access email only)"
+        ),
+    ),
 )
 
 _SETTINGS_PREFIX = "exhibition_mail_"
@@ -90,13 +99,13 @@ DEFAULT_TEMPLATES = {
             gettext_noop(
                 "Hello {exhibitor_name},\n\n"
                 "Please use the information below to activate the **Lead Scanning app**:\n\n"
-                "1. Open the **Web App**: access.eventyay.com\n"
-                "2. Enter the **Device Token(s)**:\n"
-                "    - Device 1: {device_1_token}\n"
-                "    - Device 2: {device_2_token}\n\n"
-                "    *Please enter each Device Token manually. Each token is unique to one device. "
-                "If you set up additional devices, each device will require its own Device Token.*\n\n"
-                "3. Enter the **Exhibitor Key**: {exhibitor_access_code}\n\n"
+                "**Step 1 — Open the Web App:** access.eventyay.com\n\n"
+                "**Step 2 — Enter the Exhibitor Key:** {exhibitor_access_code}\n\n"
+                "**Step 3 — Set up each device** by scanning its QR code, or by entering its "
+                "setup URL and token manually:\n\n"
+                "{device_tokens}\n\n"
+                "*Each token is unique to one device and can only be used once. "
+                "If you set up additional devices, each device will require its own token.*\n\n"
                 "Please share these details with the team members who will be scanning leads at the event.\n\n"
                 "Best regards,\n"
                 "The {event_name} Team"
@@ -209,6 +218,38 @@ def proposal_public_url(proposal):
         },
     )
     return urljoin(django_settings.SITE_URL, path)
+
+
+def device_setup_url():
+    return django_settings.SITE_URL.rstrip("/")
+
+
+def _render_device_block(name, setup_url, token):
+    from eventyay.base.email import render_qr_code_img
+
+    payload = json.dumps({"handshake_version": 1, "url": setup_url, "token": token})
+    return (
+        f"<p><strong>{escape(name)}</strong><br>"
+        f"{escape(_lazy('Setup URL'))}: {escape(setup_url)}<br>"
+        f"{escape(_lazy('Setup token'))}: <code>{escape(token)}</code><br>"
+        f"{render_qr_code_img(payload, alt=str(_lazy('Device setup QR code')))}</p>"
+    )
+
+
+def render_device_tokens(exhibitor):
+    """One setup URL, token and QR code per lead-scanning device linked to the exhibitor."""
+    from .models import ExhibitorDevice
+
+    setup_url = device_setup_url()
+    blocks = [
+        _render_device_block(link.device.name, setup_url, link.device.initialization_token)
+        for link in ExhibitorDevice.objects.filter(exhibitor=exhibitor).select_related("device")
+    ]
+    return "".join(blocks)
+
+
+def sample_device_tokens(event=None):
+    return _render_device_block(str(_lazy("Acme Corp #1")), device_setup_url(), "SAMPLETOKEN123456")
 
 
 def queue_proposal_email(event, proposal, role, *, send_now=False, requestor=None):
