@@ -5,7 +5,7 @@ import exhibition.models
 
 class Migration(migrations.Migration):
     dependencies = [
-        ("exhibition", "0017_exhibitorvoucher"),
+        ("exhibition", "0018_exhibitordevice"),
     ]
 
     operations = [
