@@ -71,6 +71,16 @@ def public_exhibitors_queryset(event) -> QuerySet["ExhibitorInfo"]:
     )
 
 
+def allow_blob_image_previews(request):
+    """Permit blob: images in img-src so local file previews render on this page."""
+    if not request:
+        return
+    sources = list(getattr(request, "_external_image_csp_sources", []))
+    if "blob:" not in sources:
+        sources.append("blob:")
+    request._external_image_csp_sources = sources
+
+
 def add_external_image_csp_sources(request, image_urls):
     if not request:
         return

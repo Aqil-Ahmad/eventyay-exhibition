@@ -128,17 +128,14 @@
                 </div>
             {% elif item.kind == 'slides' %}
                 {% bootstrap_field form.slides layout="control" %}
-                {% bootstrap_field form.slides_url layout="control" %}
             {% elif item.kind == 'logo' %}
                 <div
                     data-partner-image-source-pair
                     data-file-input-id="{{ form.logo.id_for_label }}"
-                    data-url-input-id="{{ form.logo_url.id_for_label }}"
                     data-current-preview-url="{{ form.instance.visible_logo_url }}"
                     data-has-current-file="{{ form.instance.logo|yesno:'true,false' }}"
                 >
                     {% bootstrap_field form.logo layout="control" %}
-                    {% bootstrap_field form.logo_url layout="control" %}
                     <div class="form-group" data-image-preview hidden>
                         <label class="col-md-3 control-label">{% trans "Logo preview" %}</label>
                         <div class="col-md-9">
@@ -153,12 +150,10 @@
                 <div
                     data-partner-image-source-pair
                     data-file-input-id="{{ form.header_image.id_for_label }}"
-                    data-url-input-id="{{ form.header_image_url.id_for_label }}"
                     data-current-preview-url="{{ form.instance.visible_header_image_url }}"
                     data-has-current-file="{{ form.instance.header_image|yesno:'true,false' }}"
                 >
                     {% bootstrap_field form.header_image layout="control" %}
-                    {% bootstrap_field form.header_image_url layout="control" %}
                     <div class="form-group" data-image-preview hidden>
                         <label class="col-md-3 control-label">{% trans "Header image preview" %}</label>
                         <div class="col-md-9">
