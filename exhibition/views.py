@@ -85,6 +85,7 @@ from .models import (
 from .social_links import serialize_social_link
 from .utils import (
     add_external_image_csp_sources,
+    allow_blob_image_previews,
     build_exhibitor_video_embed,
     generate_exhibitor_vouchers,
     provision_exhibitor_devices,
@@ -712,6 +713,7 @@ class ProposalLinkFormsetMixin:
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
+        allow_blob_image_previews(self.request)
         context["social_media_formset"] = kwargs.get(
             "social_media_formset",
             getattr(self, "social_media_formset", None) or self.get_social_formset(),
@@ -1026,6 +1028,7 @@ class ExhibitorLinkFormsetMixin:
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
+        allow_blob_image_previews(self.request)
         show_social_links = self.proposal_field_is_active("social_links")
         show_extra_links = self.proposal_field_is_active("extra_links")
         context["social_media_formset"] = kwargs.get(
