@@ -183,21 +183,6 @@ class ExhibitionQuestionFieldsMixin:
 
 
 class ExhibitorInfoForm(ExhibitionQuestionFieldsMixin, I18nModelForm):
-    slides_url = forms.URLField(
-        required=False,
-        label=_("Slides URL"),
-        help_text=_("Use an external PDF URL instead of uploading a slides file."),
-    )
-    logo_url = forms.URLField(
-        required=False,
-        label=_("Logo URL"),
-        help_text=_("Use an external image URL instead of uploading a logo file."),
-    )
-    header_image_url = forms.URLField(
-        required=False,
-        label=_("Header image URL"),
-        help_text=_("Use an external image URL instead of uploading a header image file."),
-    )
     sponsor_group = forms.ModelChoiceField(
         queryset=SponsorGroup.objects.none(),
         required=False,
@@ -272,11 +257,8 @@ class ExhibitorInfoForm(ExhibitionQuestionFieldsMixin, I18nModelForm):
             "contact_url",
             "video_url",
             "slides",
-            "slides_url",
             "logo",
-            "logo_url",
             "header_image",
-            "header_image_url",
             "is_exhibitor",
             "is_sponsor",
             "sponsor_group",
@@ -316,9 +298,9 @@ class ExhibitorInfoForm(ExhibitionQuestionFieldsMixin, I18nModelForm):
         "url": ("url",),
         "contact_url": ("contact_url",),
         "video_url": ("video_url",),
-        "slides": ("slides", "slides_url"),
-        "logo": ("logo", "logo_url"),
-        "header_image": ("header_image", "header_image_url"),
+        "slides": ("slides",),
+        "logo": ("logo",),
+        "header_image": ("header_image",),
         "booth_name": ("booth_name",),
     }
     PROFILE_FORMSET_KEYS = ("social_links", "extra_links")
@@ -477,7 +459,6 @@ class ExhibitorInfoForm(ExhibitionQuestionFieldsMixin, I18nModelForm):
         if video_url:
             cleaned_data["video_url"] = normalize_url_scheme(video_url)
 
-        slides_url = cleaned_data.get("slides_url") or ""
         submitted_slides = None
         if "slides" in self.fields:
             submitted_slides = self.fields["slides"].widget.value_from_datadict(
@@ -485,54 +466,17 @@ class ExhibitorInfoForm(ExhibitionQuestionFieldsMixin, I18nModelForm):
                 self.files,
                 self.add_prefix("slides"),
             )
-        has_new_slides_upload = isinstance(submitted_slides, UploadedFile)
-        if slides_url and has_new_slides_upload:
-            message = _("Either upload a PDF or enter an external PDF URL, not both.")
-            self.add_error("slides", message)
-            self.add_error("slides_url", message)
-        else:
-            if slides_url:
-                normalized_slides_url = normalize_url_scheme(slides_url)
-                if not normalized_slides_url.lower().split("?", 1)[0].endswith(".pdf"):
-                    self.add_error("slides_url", _("Slides URL must point to a PDF file."))
-                else:
-                    cleaned_data["slides_url"] = normalized_slides_url
-
-            if has_new_slides_upload:
-                slides_file = self.files.get(self.add_prefix("slides"))
-                filename = (slides_file.name or "").lower() if slides_file else ""
-                content_type = (slides_file.content_type or "").lower() if slides_file else ""
-                if not filename.endswith(".pdf"):
-                    self.add_error("slides", _("Slides upload must be a PDF file."))
-                elif content_type and content_type not in {
-                    "application/pdf",
-                    "application/x-pdf",
-                }:
-                    self.add_error("slides", _("Slides upload must be a PDF file."))
-
-        for image_field, url_field in self.file_url_fields.items():
-            if image_field == "slides":
-                continue
-            if image_field not in self.fields and url_field not in self.fields:
-                continue
-            image_url = cleaned_data.get(url_field) or ""
-            submitted_image = None
-            if image_field in self.fields:
-                submitted_image = self.fields[image_field].widget.value_from_datadict(
-                    self.data,
-                    self.files,
-                    self.add_prefix(image_field),
-                )
-            has_new_upload = isinstance(submitted_image, UploadedFile)
-
-            if image_url and has_new_upload:
-                message = _("Either upload a file or enter an external URL, not both.")
-                self.add_error(image_field, message)
-                self.add_error(url_field, message)
-                continue
-
-            if image_url:
-                cleaned_data[url_field] = normalize_url_scheme(image_url)
+        if isinstance(submitted_slides, UploadedFile):
+            slides_file = self.files.get(self.add_prefix("slides"))
+            filename = (slides_file.name or "").lower() if slides_file else ""
+            content_type = (slides_file.content_type or "").lower() if slides_file else ""
+            if not filename.endswith(".pdf"):
+                self.add_error("slides", _("Slides upload must be a PDF file."))
+            elif content_type and content_type not in {
+                "application/pdf",
+                "application/x-pdf",
+            }:
+                self.add_error("slides", _("Slides upload must be a PDF file."))
 
         if self.partner_type == "sponsor":
             is_sponsor = True
@@ -582,19 +526,9 @@ class ExhibitorInfoForm(ExhibitionQuestionFieldsMixin, I18nModelForm):
         files_to_delete: set[str] = set()
 
         for image_field, url_field in self.file_url_fields.items():
-            if image_field == "slides":
-                continue
             previous_file = getattr(old_instance, image_field, None) if old_instance else None
             uploaded_file = self.files.get(self.add_prefix(image_field))
             clear_selected = bool(self.data.get(self.add_prefix(f"{image_field}-clear")))
-            image_url = self.cleaned_data.get(url_field) or ""
-
-            if image_url:
-                if previous_file and previous_file.name:
-                    files_to_delete.add(previous_file.name)
-                setattr(instance, image_field, None)
-                setattr(instance, url_field, image_url)
-                continue
 
             if uploaded_file:
                 if previous_file and previous_file.name:
@@ -607,26 +541,6 @@ class ExhibitorInfoForm(ExhibitionQuestionFieldsMixin, I18nModelForm):
                     files_to_delete.add(previous_file.name)
                 setattr(instance, image_field, None)
                 setattr(instance, url_field, "")
-
-        previous_slides = getattr(old_instance, "slides", None) if old_instance else None
-        uploaded_slides = self.files.get(self.add_prefix("slides"))
-        clear_slides = bool(self.data.get(self.add_prefix("slides-clear")))
-        slides_url = self.cleaned_data.get("slides_url") or ""
-
-        if slides_url:
-            if previous_slides and previous_slides.name:
-                files_to_delete.add(previous_slides.name)
-            instance.slides = None
-            instance.slides_url = slides_url
-        elif uploaded_slides:
-            if previous_slides and previous_slides.name:
-                files_to_delete.add(previous_slides.name)
-            instance.slides_url = ""
-        elif clear_slides:
-            if previous_slides and previous_slides.name:
-                files_to_delete.add(previous_slides.name)
-            instance.slides = None
-            instance.slides_url = ""
 
         if commit:
             instance.save()
@@ -642,6 +556,19 @@ class ExhibitorInfoForm(ExhibitionQuestionFieldsMixin, I18nModelForm):
                 transaction.on_commit(delete_replaced_files)
 
         return instance
+
+
+class ExhibitorDeviceProvisionForm(forms.Form):
+    count = forms.IntegerField(
+        min_value=1,
+        max_value=50,
+        initial=1,
+        label=_("Devices to add"),
+        help_text=_(
+            "How many new devices to provision now, in addition to any already listed above. "
+            "Each device gets its own single-use setup token and QR code."
+        ),
+    )
 
 
 class ExhibitorVoucherBatchForm(forms.Form):
@@ -774,22 +701,6 @@ class CallSettingsForm(I18nModelForm):
 
 
 class ExhibitionProposalForm(ExhibitionQuestionFieldsMixin, I18nModelForm):
-    slides_url = forms.URLField(
-        required=False,
-        label=_("Slides URL"),
-        help_text=_("Use an external PDF URL instead of uploading a slides file."),
-    )
-    logo_url = forms.URLField(
-        required=False,
-        label=_("Logo URL"),
-        help_text=_("Use an external image URL instead of uploading a logo file."),
-    )
-    header_image_url = forms.URLField(
-        required=False,
-        label=_("Header image URL"),
-        help_text=_("Use an external image URL instead of uploading a header image file."),
-    )
-
     file_url_fields = {
         "slides": "slides_url",
         "logo": "logo_url",
@@ -802,9 +713,9 @@ class ExhibitionProposalForm(ExhibitionQuestionFieldsMixin, I18nModelForm):
         "url": ("url",),
         "contact_url": ("contact_url",),
         "video_url": ("video_url",),
-        "slides": ("slides", "slides_url"),
-        "logo": ("logo", "logo_url"),
-        "header_image": ("header_image", "header_image_url"),
+        "slides": ("slides",),
+        "logo": ("logo",),
+        "header_image": ("header_image",),
         "booth_name": ("booth_name",),
         "notes": ("notes",),
     }
@@ -820,11 +731,8 @@ class ExhibitionProposalForm(ExhibitionQuestionFieldsMixin, I18nModelForm):
             "contact_url",
             "video_url",
             "slides",
-            "slides_url",
             "logo",
-            "logo_url",
             "header_image",
-            "header_image_url",
             "url",
             "booth_name",
             "notes",
@@ -1016,7 +924,6 @@ class ExhibitionProposalForm(ExhibitionQuestionFieldsMixin, I18nModelForm):
         if "video_url" in self.fields and (video_url := cleaned_data.get("video_url")):
             cleaned_data["video_url"] = normalize_url_scheme(video_url)
 
-        slides_url = cleaned_data.get("slides_url") or ""
         submitted_slides = None
         if "slides" in self.fields:
             submitted_slides = self.fields["slides"].widget.value_from_datadict(
@@ -1025,53 +932,16 @@ class ExhibitionProposalForm(ExhibitionQuestionFieldsMixin, I18nModelForm):
                 self.add_prefix("slides"),
             )
         has_new_slides_upload = isinstance(submitted_slides, UploadedFile)
-        if slides_url and has_new_slides_upload:
-            message = _("Either upload a PDF or enter an external PDF URL, not both.")
-            self.add_error("slides", message)
-            self.add_error("slides_url", message)
-        elif slides_url:
-            normalized_slides_url = normalize_url_scheme(slides_url)
-            if not normalized_slides_url.lower().split("?", 1)[0].endswith(".pdf"):
-                self.add_error("slides_url", _("Slides URL must point to a PDF file."))
-            else:
-                cleaned_data["slides_url"] = normalized_slides_url
-
-        for image_field, url_field in self.file_url_fields.items():
-            if image_field == "slides":
-                continue
-            if image_field not in self.fields and url_field not in self.fields:
-                continue
-            image_url = cleaned_data.get(url_field) or ""
-            submitted_image = None
-            if image_field in self.fields:
-                submitted_image = self.fields[image_field].widget.value_from_datadict(
-                    self.data,
-                    self.files,
-                    self.add_prefix(image_field),
-                )
-            has_new_upload = isinstance(submitted_image, UploadedFile)
-            if image_url and has_new_upload:
-                message = _("Either upload a file or enter an external URL, not both.")
-                self.add_error(image_field, message)
-                self.add_error(url_field, message)
-            elif image_url:
-                cleaned_data[url_field] = normalize_url_scheme(image_url)
-
-        self.validate_required_file_or_url("slides", has_new_slides_upload)
+        self.validate_required_file("slides", has_new_slides_upload)
         for image_field in ("logo", "header_image"):
-            if image_field not in self.fields and self.file_url_fields[image_field] not in self.fields:
+            if image_field not in self.fields:
                 continue
-            submitted_image = None
-            if image_field in self.fields:
-                submitted_image = self.fields[image_field].widget.value_from_datadict(
-                    self.data,
-                    self.files,
-                    self.add_prefix(image_field),
-                )
-            self.validate_required_file_or_url(
-                image_field,
-                isinstance(submitted_image, UploadedFile),
+            submitted_image = self.fields[image_field].widget.value_from_datadict(
+                self.data,
+                self.files,
+                self.add_prefix(image_field),
             )
+            self.validate_required_file(image_field, isinstance(submitted_image, UploadedFile))
 
         if not cleaned_data["is_exhibitor"]:
             cleaned_data["booth_name"] = ""
@@ -1085,22 +955,17 @@ class ExhibitionProposalForm(ExhibitionQuestionFieldsMixin, I18nModelForm):
 
         return cleaned_data
 
-    def validate_required_file_or_url(self, field_name, has_new_upload):
+    def validate_required_file(self, field_name, has_new_upload):
+        """Flag a required file field when nothing is uploaded and nothing is stored."""
         if self.draft_save:
             return
         if not self.field_setting_is_active(field_name) or not self.field_setting_is_required(field_name):
             return
-        file_field = self.fields.get(field_name)
-        url_field_name = self.file_url_fields[field_name]
-        if file_field is None and url_field_name not in self.fields:
+        if field_name not in self.fields:
             return
-        has_url = bool(self.cleaned_data.get(url_field_name))
         has_existing = bool(getattr(self.instance, f"visible_{field_name}_url", ""))
-        if not has_new_upload and not has_url and not has_existing:
-            self.add_error(
-                field_name if file_field else url_field_name,
-                _("This field is required."),
-            )
+        if not has_new_upload and not has_existing:
+            self.add_error(field_name, _("This field is required."))
 
     def save(self, commit=True):
         instance = super().save(commit=False)
