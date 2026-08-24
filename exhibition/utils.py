@@ -227,6 +227,25 @@ def create_exhibitor_from_proposal(proposal, requestor=None):
     return exhibitor
 
 
+def resolve_voucher_defaults(exhibitor):
+    """Voucher settings for this exhibitor: their sponsor group's, or the event-wide default."""
+    from .models import ExhibitorSettings
+
+    source = (
+        exhibitor.sponsor_group
+        if exhibitor.sponsor_group_id
+        else ExhibitorSettings.objects.get_or_create(event=exhibitor.event)[0]
+    )
+    return {
+        "product": source.voucher_default_product,
+        "count": source.voucher_default_count,
+        "max_usages": source.voucher_default_max_usages,
+        "price_mode": source.voucher_default_price_mode,
+        "value": source.voucher_default_value,
+        "valid_until": source.voucher_default_valid_until,
+    }
+
+
 def generate_exhibitor_vouchers(exhibitor, *, product, count, max_usages, price_mode, value, valid_until):
     from eventyay.base.models import Voucher
 
