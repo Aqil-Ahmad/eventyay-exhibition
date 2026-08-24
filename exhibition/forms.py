@@ -18,7 +18,7 @@ from eventyay.common.forms.widgets import EmailEditorWidget, HtmlDateTimeInput, 
 from eventyay.common.urls import normalize_url_scheme
 from eventyay.common.utils.language import localize_event_text
 from eventyay.helpers.i18n import is_rtl
-from i18nfield.forms import I18nFormField, I18nTextarea, I18nTextInput
+from i18nfield.forms import I18nFormField, I18nTextInput
 
 from . import mail as mail_helpers
 from .models import (
