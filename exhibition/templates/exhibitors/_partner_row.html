@@ -34,25 +34,40 @@
             {% endif %}
         </td>
     {% endif %}
+    {% if "can_change_event_settings" in request.eventpermset %}
+        <td class="partner-vouchers-col">
+            {% if e.voucher_sent_at %}
+                <span class="label label-success" title="{% blocktrans trimmed with sent=e.voucher_sent_at|date:"SHORT_DATETIME_FORMAT" %}Last sent {{ sent }}{% endblocktrans %}" data-toggle="tooltip">
+                    {% trans "Sent" %}
+                </span>
+            {% else %}
+                <span class="text-muted">{% trans "Not sent" %}</span>
+            {% endif %}
+        </td>
+    {% endif %}
     <td class="text-right flip">
         {% if "can_change_event_settings" in request.eventpermset %}
             <a href="{% url "plugins:exhibition:edit" organizer=request.event.organizer.slug event=request.event.slug pk=e.id %}?type={{ partner_type }}" class="btn btn-default btn-sm"><i class="fa fa-edit"></i></a>
             <button type="button" class="btn btn-default btn-sm exhibitor-copy-key" data-url="{% url "plugins:exhibition:copy_key" organizer=request.event.organizer.slug event=request.event.slug pk=e.id %}" data-copied-label="{% trans "Copied!" %}" data-failed-label="{% trans "Copy failed" %}" title="{% trans "Key" %}" data-toggle="tooltip"><i class="fa fa-copy"></i></button>
             <a href="{% url "plugins:exhibition:vouchers" organizer=request.event.organizer.slug event=request.event.slug pk=e.id %}" class="btn btn-default btn-sm" title="{% trans "Vouchers" %}" data-toggle="tooltip"><i class="fa fa-ticket"></i></a>
-            <form action="{% url "plugins:exhibition:vouchers" organizer=request.event.organizer.slug event=request.event.slug pk=e.id %}" method="post" class="exhibitor-quick-send-vouchers" style="display:inline;">
-                {% csrf_token %}
-                <input type="hidden" name="action" value="send">
-                <input type="hidden" name="count" value="{{ e.voucher_send_default_count }}">
-                {% if e.email %}
-                    <button type="submit" class="btn btn-default btn-sm" title="{% if e.voucher_already_sent %}{% blocktrans trimmed with count=e.voucher_send_default_count %}Send {{ count }} more vouchers (already sent before){% endblocktrans %}{% else %}{% blocktrans trimmed with count=e.voucher_send_default_count %}Send {{ count }} vouchers{% endblocktrans %}{% endif %}" data-toggle="tooltip" onclick="return confirm('{% trans "Create and send the default number of vouchers to this partner now?" %}');">
-                        <i class="fa fa-paper-plane"></i>{% if e.voucher_already_sent %} <i class="fa fa-check text-success"></i>{% endif %}
-                    </button>
-                {% else %}
-                    <button type="button" class="btn btn-default btn-sm disabled" title="{% trans "No email address on file" %}" data-toggle="tooltip" disabled>
+            {% if e.email %}
+                <form action="{% url "plugins:exhibition:vouchers" organizer=request.event.organizer.slug event=request.event.slug pk=e.id %}" method="post" class="exhibitor-quick-send-vouchers"
+                      data-confirm="{% blocktrans trimmed with count=e.voucher_send_default_count name=e.name %}Create {{ count }} new voucher codes for {{ name }} and email them now?{% endblocktrans %}"
+                      data-confirm-title="{% trans "Send vouchers" %}"
+                      data-confirm-label="{% trans "Create and send" %}">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="send">
+                    <input type="hidden" name="count" value="{{ e.voucher_send_default_count }}">
+                    <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                    <button type="submit" class="btn btn-default btn-sm" title="{% blocktrans trimmed with count=e.voucher_send_default_count %}Create and send {{ count }} vouchers{% endblocktrans %}" data-toggle="tooltip">
                         <i class="fa fa-paper-plane"></i>
                     </button>
-                {% endif %}
-            </form>
+                </form>
+            {% else %}
+                <button type="button" class="btn btn-default btn-sm disabled" title="{% trans "No email address on file" %}" data-toggle="tooltip" disabled>
+                    <i class="fa fa-paper-plane"></i>
+                </button>
+            {% endif %}
             <a href="{% url "plugins:exhibition:devices" organizer=request.event.organizer.slug event=request.event.slug pk=e.id %}" class="btn btn-default btn-sm" title="{% trans "Lead-scanning devices" %}" data-toggle="tooltip"><i class="fa fa-mobile"></i></a>
             <a href="{% url "plugins:exhibition:delete" organizer=request.event.organizer.slug event=request.event.slug pk=e.id %}?type={{ partner_type }}" class="btn btn-delete btn-danger btn-sm"><i class="fa fa-trash"></i></a>
             {% if reorder_enabled %}

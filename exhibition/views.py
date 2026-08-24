@@ -6,12 +6,13 @@ from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.exceptions import PermissionDenied
 from django.db import transaction
-from django.db.models import Count, Min, Q
+from django.db.models import Count, Max, Min, Q
 from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.functional import cached_property
+from django.utils.http import url_has_allowed_host_and_scheme
 from django.utils.translation import gettext_lazy as _, ngettext
 from django.views import View
 from django.views.generic import DeleteView, DetailView, FormView, ListView, TemplateView
@@ -89,6 +90,7 @@ from .utils import (
     add_external_image_csp_sources,
     allow_blob_image_previews,
     build_exhibitor_video_embed,
+    event_voucher_settings,
     generate_exhibitor_vouchers,
     provision_exhibitor_devices,
     public_exhibitors_queryset,
@@ -325,7 +327,7 @@ class SettingsView(EventPermissionRequiredMixin, ListView):
             if not voucher_defaults_form.is_valid():
                 return self.render_to_response(self.get_context_data(voucher_defaults_form=voucher_defaults_form))
             settings.allowed_fields = request.POST.getlist("exhibitors_access_voucher")
-            settings.save()
+            voucher_defaults_form.save()
             settings.log_action(
                 LOG_SETTINGS_CHANGED,
                 data={"allowed_fields": settings.allowed_fields, "changed": voucher_defaults_form.changed_data},
@@ -492,14 +494,18 @@ class ExhibitorListView(EventPermissionRequiredMixin, FilteredListMixin, ListVie
         ids = [exhibitor.pk for exhibitor in exhibitors]
         if not ids:
             return
-        sent_ids = set(
+        last_sent = dict(
             ExhibitionEmailQueue.objects.filter(
                 exhibitor_id__in=ids, role=mail_helpers.VOUCHERS, sent_at__isnull=False
-            ).values_list("exhibitor_id", flat=True)
+            )
+            .values_list("exhibitor_id")
+            .annotate(last_sent=Max("sent_at"))
         )
+        event_settings = event_voucher_settings(self.request.event)
         for exhibitor in exhibitors:
-            exhibitor.voucher_send_default_count = resolve_voucher_defaults(exhibitor)["count"]
-            exhibitor.voucher_already_sent = exhibitor.pk in sent_ids
+            defaults = resolve_voucher_defaults(exhibitor, event_settings=event_settings)
+            exhibitor.voucher_send_default_count = defaults["count"]
+            exhibitor.voucher_sent_at = last_sent.get(exhibitor.pk)
 
     def build_sponsor_group_sections(self, sponsors):
         groups = list(SponsorGroup.objects.filter(event=self.request.event).order_by("level", "pk"))
@@ -1952,18 +1958,11 @@ class ExhibitorVoucherManageView(EventPermissionRequiredMixin, DetailView):
     def voucher_links(self):
         return ExhibitorVoucher.objects.filter(exhibitor=self.object).select_related("voucher", "voucher__product")
 
-    def already_sent(self):
-        return ExhibitionEmailQueue.objects.filter(
-            exhibitor=self.object, role=mail_helpers.VOUCHERS, sent_at__isnull=False
-        ).exists()
-
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         default_count = resolve_voucher_defaults(self.object)["count"]
         context.setdefault("form", ExhibitorVoucherBatchForm(initial={"count": default_count}))
-        context.setdefault("send_form", ExhibitorVoucherBatchForm(initial={"count": default_count}))
         context["vouchers"] = self.voucher_links()
-        context["already_sent"] = self.already_sent()
         return context
 
     def download_csv(self):
@@ -2003,6 +2002,10 @@ class ExhibitorVoucherManageView(EventPermissionRequiredMixin, DetailView):
         return response
 
     def get_success_url(self):
+        """Back where the action was triggered from, so sending from the partner list stays on the list."""
+        next_url = self.request.POST.get("next") or ""
+        if next_url and url_has_allowed_host_and_scheme(next_url, allowed_hosts={self.request.get_host()}):
+            return next_url
         return reverse(
             "plugins:exhibition:vouchers",
             kwargs={**event_kwargs(self.request.event), "pk": self.object.pk},
@@ -2052,7 +2055,7 @@ class ExhibitorVoucherManageView(EventPermissionRequiredMixin, DetailView):
     def send_vouchers(self, request):
         form = ExhibitorVoucherBatchForm(request.POST)
         if not form.is_valid():
-            return self.render_to_response(self.get_context_data(send_form=form))
+            return self.render_to_response(self.get_context_data(form=form))
         if not (self.object.email or "").strip():
             messages.error(request, _("This partner has no email address on file, so vouchers cannot be sent."))
             return redirect(self.get_success_url())

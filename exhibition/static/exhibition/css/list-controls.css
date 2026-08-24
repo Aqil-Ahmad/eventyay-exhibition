@@ -10,3 +10,11 @@
 .reorder-hint {
     margin-bottom: 12px;
 }
+
+.exhibitor-quick-send-vouchers {
+    display: inline-block;
+}
+
+.partner-vouchers-col {
+    white-space: nowrap;
+}

@@ -115,10 +115,10 @@ DEFAULT_TEMPLATES = {
         ),
     ),
     VOUCHERS: (
-        LazyI18nString.from_gettext(gettext_noop("Your vouchers for {event_name} — {exhibitor_name}")),
-        LazyI18nString.from_gettext(
-            gettext_noop(
-                "Dear {exhibitor_name},\n\n"
+        LazyI18nString({"en": "Your vouchers for {event_name} — {exhibitor_name}"}),
+        LazyI18nString(
+            {
+                "en": "Dear {exhibitor_name},\n\n"
                 "Thank you for participating in {event_name}. Please share the voucher codes below with "
                 "your audience — anyone who uses one gets credited to you as a lead.\n\n"
                 "{voucher_list}\n\n"
@@ -126,7 +126,7 @@ DEFAULT_TEMPLATES = {
                 "If you have any questions, please don't hesitate to reach out.\n\n"
                 "Best regards,\n"
                 "The {event_name} Team"
-            )
+            }
         ),
     ),
 }
@@ -280,8 +280,9 @@ def _voucher_applies_to_text(voucher):
             effect = f" — {voucher.value} {_lazy('off')}"
         elif voucher.price_mode == PriceModeChoices.SET:
             effect = f" — {_lazy('price set to')} {voucher.value}"
-    uses = _lazy("use") if voucher.max_usages == 1 else _lazy("uses")
-    return f"{product_name}{effect} ({voucher.max_usages} {uses})"
+    if voucher.max_usages > 1:
+        effect = f"{effect} ({voucher.max_usages} {_lazy('uses')})"
+    return f"{product_name}{effect}"
 
 
 def _voucher_block_html(code, applies_to_text):
@@ -305,8 +306,8 @@ def render_voucher_list(exhibitor):
 
 
 def sample_voucher_list(event=None):
-    return _voucher_block_html("FOSSASIA-GOLD", "Exhibitor Staff Pass (5 uses)") + _voucher_block_html(
-        "FOSSASIA-GOLD-DISC", "Standard Public Ticket — 20% discount (50 uses)"
+    return _voucher_block_html("ACME-3XKQ-7T2P", "Standard Public Ticket") + _voucher_block_html(
+        "ACME-9WFD-4M8N", "Standard Public Ticket — 20% discount"
     )
 
 
