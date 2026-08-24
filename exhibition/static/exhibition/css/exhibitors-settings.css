@@ -59,27 +59,6 @@
     background: #f8fafc;
 }
 
-/* Call text: Edit/Preview tabs */
-.call-text-preview {
-    min-height: 120px;
-    padding: 12px 15px;
-    border: 1px solid #ccc;
-    border-radius: 3px;
-    background: #fff;
-}
-
-.call-text-preview > :first-child {
-    margin-top: 0;
-}
-
-.call-text-preview > :last-child {
-    margin-bottom: 0;
-}
-
-.call-text-preview-group .call-text-preview + .call-text-preview {
-    margin-top: -1px;
-}
-
 .call-text-preview-note {
     margin-top: 12px;
     margin-bottom: 0;
@@ -104,4 +83,20 @@
 
 .call-secret-hint {
     font-size: 12px;
+}
+
+.email-template-panel .panel-title .collapse-indicator {
+    margin-left: 15px;
+}
+
+.custom-template-picker {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-bottom: 15px;
+}
+
+.custom-template-picker .control-label {
+    margin: 0;
 }

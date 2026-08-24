@@ -24,12 +24,13 @@
         <legend>{% trans "Profile" %}</legend>
         {% for item in form.profile_items %}
             {% if item.kind == 'social_links' %}
-                <div class="form-group">
-                    <label class="col-md-3 control-label partner-link-group-label">{% trans "Social Media" %}</label>
+                <div class="form-group {% if social_media_formset.non_form_errors %}has-error{% endif %}">
+                    <label class="col-md-3 control-label partner-link-group-label">
+                        <span class="label-text">{% trans "Social Media" %}{% if form.profile_field_settings.social_links.required %}<span aria-hidden="true" class="required-indicator text-danger"> *</span><span class="sr-only">, {% trans "required" %}</span>{% endif %}</span>{% if not form.profile_field_settings.social_links.required %}<br><span class="optional">{% trans "Optional" %}</span>{% endif %}
+                    </label>
                     <div class="col-md-9">
                         <div id="social-links-formset" class="partner-link-formset formset" data-formset-prefix="{{ social_media_formset.prefix }}" data-social-link-prefixes='{{ social_link_prefixes|escapejson_dumps }}'>
                             {{ social_media_formset.management_form }}
-                            {{ social_media_formset.non_form_errors }}
                             <div data-formset-body>
                                 {% for social_form in social_media_formset %}
                                     <div class="row partner-link-row" data-formset-form data-social-link-row>
@@ -80,15 +81,19 @@
                                 </button>
                             </div>
                         </div>
+                        {% if social_media_formset.non_form_errors %}
+                            <p class="help-block">{{ social_media_formset.non_form_errors.0 }}</p>
+                        {% endif %}
                     </div>
                 </div>
             {% elif item.kind == 'extra_links' %}
-                <div class="form-group">
-                    <label class="col-md-3 control-label partner-link-group-label">{% trans "Extra Links" %}</label>
+                <div class="form-group {% if extra_links_formset.non_form_errors %}has-error{% endif %}">
+                    <label class="col-md-3 control-label partner-link-group-label">
+                        <span class="label-text">{% trans "Extra Links" %}{% if form.profile_field_settings.extra_links.required %}<span aria-hidden="true" class="required-indicator text-danger"> *</span><span class="sr-only">, {% trans "required" %}</span>{% endif %}</span>{% if not form.profile_field_settings.extra_links.required %}<br><span class="optional">{% trans "Optional" %}</span>{% endif %}
+                    </label>
                     <div class="col-md-9">
                         <div id="extra-links-formset" class="partner-link-formset formset" data-formset-prefix="{{ extra_links_formset.prefix }}">
                             {{ extra_links_formset.management_form }}
-                            {{ extra_links_formset.non_form_errors }}
                             <div data-formset-body>
                                 {% for extra_form in extra_links_formset %}
                                     <div class="row partner-link-row" data-formset-form>
@@ -133,21 +138,21 @@
                                 </button>
                             </div>
                         </div>
+                        {% if extra_links_formset.non_form_errors %}
+                            <p class="help-block">{{ extra_links_formset.non_form_errors.0 }}</p>
+                        {% endif %}
                     </div>
                 </div>
             {% elif item.kind == 'slides' %}
                 {% bootstrap_field form.slides layout="control" %}
-                {% bootstrap_field form.slides_url layout="control" %}
             {% elif item.kind == 'logo' %}
                 <div
                     data-partner-image-source-pair
                     data-file-input-id="{{ form.logo.id_for_label }}"
-                    data-url-input-id="{{ form.logo_url.id_for_label }}"
                     data-current-preview-url="{{ form.instance.visible_logo_url }}"
                     data-has-current-file="{{ form.instance.logo|yesno:'true,false' }}"
                 >
                     {% bootstrap_field form.logo layout="control" %}
-                    {% bootstrap_field form.logo_url layout="control" %}
                     <div class="form-group" data-image-preview hidden>
                         <label class="col-md-3 control-label">{% trans "Logo preview" %}</label>
                         <div class="col-md-9">
@@ -162,12 +167,10 @@
                 <div
                     data-partner-image-source-pair
                     data-file-input-id="{{ form.header_image.id_for_label }}"
-                    data-url-input-id="{{ form.header_image_url.id_for_label }}"
                     data-current-preview-url="{{ form.instance.visible_header_image_url }}"
                     data-has-current-file="{{ form.instance.header_image|yesno:'true,false' }}"
                 >
                     {% bootstrap_field form.header_image layout="control" %}
-                    {% bootstrap_field form.header_image_url layout="control" %}
                     <div class="form-group" data-image-preview hidden>
                         <label class="col-md-3 control-label">{% trans "Header image preview" %}</label>
                         <div class="col-md-9">
