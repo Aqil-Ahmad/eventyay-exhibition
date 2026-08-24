@@ -402,18 +402,28 @@ class ExhibitorInfoForm(ExhibitionQuestionFieldsMixin, I18nModelForm):
 
     def _apply_profile_field_settings(self):
         for key, field_names in self.PROFILE_SETTING_FIELD_MAP.items():
-            if self.profile_key_is_active(key):
-                setting = self.profile_field_settings[key]
-                first_field = self.fields.get(field_names[0]) if field_names else None
-                if first_field is not None and setting.get("custom_label"):
-                    first_field.label = setting["custom_label"]
+            if not self.profile_key_is_active(key):
+                self._drop_fields(field_names)
+                continue
+
+            setting = self.profile_field_settings[key]
+            is_required = bool(setting["required"])
+            for index, field_name in enumerate(field_names):
+                field = self.fields.get(field_name)
+                if field is None:
+                    continue
+                if index == 0:
+                    if setting.get("custom_label"):
+                        field.label = setting["custom_label"]
+                    if setting.get("custom_help_text"):
+                        field.help_text = setting["custom_help_text"]
+                field._required = is_required
                 if key in self.PROFILE_COMPOSITE_KEYS or key == "booth_name":
                     continue
-                for field_name in field_names:
-                    if field_name in self.fields:
-                        self.fields[field_name].required = setting["required"]
-            else:
-                self._drop_fields(field_names)
+                if isinstance(field, I18nFormField):
+                    field.one_required = is_required
+                else:
+                    field.required = is_required
 
     def _apply_profile_field_order(self):
         ordered_field_names = []
@@ -430,6 +440,14 @@ class ExhibitorInfoForm(ExhibitionQuestionFieldsMixin, I18nModelForm):
     def profile_key_is_required(self, key):
         setting = self.profile_field_settings.get(key)
         return bool(setting["active"] and setting["required"]) if setting else False
+
+    def _validate_required_file(self, field_name, has_new_upload):
+        """Flag a required file field when no upload or existing file is present."""
+        if not self.profile_key_is_required(field_name) or field_name not in self.fields:
+            return
+        has_existing = bool(getattr(self.instance, f"visible_{field_name}_url", ""))
+        if not has_new_upload and not has_existing:
+            self.add_error(field_name, _("This field is required."))
 
     @property
     def profile_items(self):
@@ -468,7 +486,8 @@ class ExhibitorInfoForm(ExhibitionQuestionFieldsMixin, I18nModelForm):
                 self.files,
                 self.add_prefix("slides"),
             )
-        if isinstance(submitted_slides, UploadedFile):
+        has_new_slides_upload = isinstance(submitted_slides, UploadedFile)
+        if has_new_slides_upload:
             slides_file = self.files.get(self.add_prefix("slides"))
             filename = (slides_file.name or "").lower() if slides_file else ""
             content_type = (slides_file.content_type or "").lower() if slides_file else ""
@@ -479,6 +498,18 @@ class ExhibitorInfoForm(ExhibitionQuestionFieldsMixin, I18nModelForm):
                 "application/x-pdf",
             }:
                 self.add_error("slides", _("Slides upload must be a PDF file."))
+
+        self._validate_required_file("slides", has_new_slides_upload)
+
+        for image_field in self.file_url_fields:
+            if image_field == "slides" or image_field not in self.fields:
+                continue
+            submitted_image = self.fields[image_field].widget.value_from_datadict(
+                self.data,
+                self.files,
+                self.add_prefix(image_field),
+            )
+            self._validate_required_file(image_field, isinstance(submitted_image, UploadedFile))
 
         if self.partner_type == "sponsor":
             is_sponsor = True
