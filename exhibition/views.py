@@ -2033,52 +2033,57 @@ class ExhibitorVoucherManageView(EventPermissionRequiredMixin, DetailView):
         if not form.is_valid():
             return self.render_to_response(self.get_context_data(form=form))
         count = form.cleaned_data["count"]
-        defaults = resolve_voucher_defaults(self.object)
-        generate_exhibitor_vouchers(
-            self.object,
-            product=defaults["product"],
-            count=count,
-            price_mode=defaults["price_mode"],
-            value=defaults["value"],
-        )
+        if not count:
+            form.add_error("count", _("Enter how many vouchers to create."))
+            return self.render_to_response(self.get_context_data(form=form))
+        self.issue_vouchers(count)
         messages.success(
             request,
             ngettext("%(count)d voucher created.", "%(count)d vouchers created.", count) % {"count": count},
         )
         return redirect(self.get_success_url())
 
-    @transaction.atomic
-    def send_vouchers(self, request):
-        form = ExhibitorVoucherBatchForm(request.POST)
-        if not form.is_valid():
-            return self.render_to_response(self.get_context_data(form=form))
-        if not (self.object.email or "").strip():
-            messages.error(request, _("This partner has no email address on file, so vouchers cannot be sent."))
-            return redirect(self.get_success_url())
-        count = form.cleaned_data["count"]
+    def issue_vouchers(self, count):
         defaults = resolve_voucher_defaults(self.object)
-        links = generate_exhibitor_vouchers(
+        return generate_exhibitor_vouchers(
             self.object,
             product=defaults["product"],
             count=count,
             price_mode=defaults["price_mode"],
             value=defaults["value"],
         )
+
+    @transaction.atomic
+    def send_vouchers(self, request):
+        """Create any requested vouchers, then email the partner their complete list of codes."""
+        form = ExhibitorVoucherBatchForm(request.POST)
+        if not form.is_valid():
+            return self.render_to_response(self.get_context_data(form=form))
+        if not (self.object.email or "").strip():
+            messages.error(request, _("This partner has no email address on file, so vouchers cannot be emailed."))
+            return redirect(self.get_success_url())
+        count = form.cleaned_data["count"]
+        if count:
+            self.issue_vouchers(count)
+        vouchers = [link.voucher for link in self.voucher_links()]
+        if not vouchers:
+            form.add_error("count", _("This partner has no vouchers yet, so there is nothing to email."))
+            return self.render_to_response(self.get_context_data(form=form))
         mail_helpers.queue_voucher_email(
             request.event,
             self.object,
-            [link.voucher for link in links],
+            vouchers,
             send_now=True,
             requestor=request.user,
         )
         messages.success(
             request,
             ngettext(
-                "%(count)d voucher created and emailed to the partner.",
-                "%(count)d vouchers created and emailed to the partner.",
-                count,
+                "%(count)d voucher code emailed to the partner.",
+                "%(count)d voucher codes emailed to the partner.",
+                len(vouchers),
             )
-            % {"count": count},
+            % {"count": len(vouchers)},
         )
         return redirect(self.get_success_url())
 

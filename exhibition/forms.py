@@ -620,13 +620,14 @@ class ExhibitorDeviceProvisionForm(forms.Form):
 
 
 class ExhibitorVoucherBatchForm(forms.Form):
-    """Number of vouchers to issue (or send); the rest of the settings come from the resolved defaults."""
+    """How many vouchers to issue; the rest of the settings come from the resolved defaults."""
 
     count = forms.IntegerField(
-        min_value=1,
+        min_value=0,
         max_value=1000,
         initial=1,
-        label=_("Number of vouchers"),
+        label=_("New vouchers to create"),
+        help_text=_("Set to 0 to email the codes this partner already has without creating new ones."),
     )
 
 
