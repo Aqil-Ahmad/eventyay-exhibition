@@ -2,7 +2,6 @@ import io
 import json
 
 from defusedcsv import csv
-from django.conf import settings as django_settings
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.exceptions import PermissionDenied
@@ -36,6 +35,7 @@ from .filters import (
 from .forms import (
     CallSettingsForm,
     ExhibitionComposeForm,
+    ExhibitionCustomEmailTemplateForm,
     ExhibitionDefaultFieldForm,
     ExhibitionEmailQueueForm,
     ExhibitionMailTemplatesForm,
@@ -69,6 +69,7 @@ from .models import (
     PROPOSAL_DEFAULT_FIELD_KEYS,
     PROPOSAL_DEFAULT_FIELDS,
     PROPOSAL_REVIEW_ACTIONS,
+    ExhibitionCustomEmailTemplate,
     ExhibitionEmailQueue,
     ExhibitionProposal,
     ExhibitionProposalState,
@@ -259,15 +260,6 @@ class SettingsView(EventPermissionRequiredMixin, ListView):
             instance=settings,
             event=self.request.event,
         )
-        if ctx["active_tab"] == "call":
-            # Server-render the saved Call text (per language, matching the
-            # preview endpoint) so the preview tab is not blank on load.
-            call_text = settings.call_text.data
-            if not isinstance(call_text, dict):
-                call_text = dict.fromkeys(self.request.event.settings.locales, call_text or "")
-            ctx["call_text_previews"] = [
-                (locale, rich_text(call_text.get(locale, ""))) for locale in self.request.event.settings.locales
-            ]
         ctx["show_add_group_form"] = kwargs.get("show_add_group_form", False)
         ctx["expanded_group_pk"] = kwargs.get("expanded_group_pk")
         return ctx
@@ -629,6 +621,18 @@ class UserProposalListView(PublicCallEnabledMixin, PublicEventLoginRequiredMixin
         return context
 
 
+def formset_has_entries(formset):
+    """True when a link formset holds at least one row that is filled in and not deleted."""
+    if formset is None:
+        return True
+    for form in formset.forms:
+        if not form.cleaned_data or form.cleaned_data.get("DELETE"):
+            continue
+        if any(value for name, value in form.cleaned_data.items() if name != "DELETE"):
+            return True
+    return False
+
+
 class ProposalLinkFormsetMixin:
     social_formset_prefix = "social_links"
     extra_formset_prefix = "extra_links"
@@ -642,17 +646,6 @@ class ProposalLinkFormsetMixin:
 
     def proposal_field_is_required(self, key):
         return self.get_proposal_field_settings()[key]["required"]
-
-    @staticmethod
-    def _formset_has_entries(formset):
-        if formset is None:
-            return True
-        for form in formset.forms:
-            if not form.cleaned_data or form.cleaned_data.get("DELETE"):
-                continue
-            if any(value for name, value in form.cleaned_data.items() if name != "DELETE"):
-                return True
-        return False
 
     def get_formset_instance(self):
         obj = getattr(self, "object", None)
@@ -690,7 +683,7 @@ class ProposalLinkFormsetMixin:
         if (
             valid
             and self.proposal_field_is_required("social_links")
-            and not self._formset_has_entries(self.social_media_formset)
+            and not formset_has_entries(self.social_media_formset)
         ):
             self.social_media_formset._non_form_errors = self.social_media_formset.error_class(
                 [_("Add at least one social media link.")]
@@ -699,7 +692,7 @@ class ProposalLinkFormsetMixin:
         if (
             valid
             and self.proposal_field_is_required("extra_links")
-            and not self._formset_has_entries(self.extra_links_formset)
+            and not formset_has_entries(self.extra_links_formset)
         ):
             self.extra_links_formset._non_form_errors = self.extra_links_formset.error_class(
                 [_("Add at least one extra link.")]
@@ -968,6 +961,9 @@ class ExhibitorLinkFormsetMixin:
     def proposal_field_is_active(self, key):
         return self.get_proposal_field_settings()[key]["active"]
 
+    def proposal_field_is_required(self, key):
+        return self.get_proposal_field_settings()[key]["required"]
+
     def get_formset_instance(self):
         obj = getattr(self, "object", None)
         return obj if obj is not None else ExhibitorInfo(event=self.request.event)
@@ -993,11 +989,32 @@ class ExhibitorLinkFormsetMixin:
             self.get_extra_link_formset() if self.proposal_field_is_active("extra_links") else None
         )
 
-        if (
+        valid = (
             form.is_valid()
             and (self.social_media_formset is None or self.social_media_formset.is_valid())
             and (self.extra_links_formset is None or self.extra_links_formset.is_valid())
+        )
+
+        if (
+            valid
+            and self.proposal_field_is_required("social_links")
+            and not formset_has_entries(self.social_media_formset)
         ):
+            self.social_media_formset._non_form_errors = self.social_media_formset.error_class(
+                [_("Add at least one social media link.")]
+            )
+            valid = False
+        if (
+            valid
+            and self.proposal_field_is_required("extra_links")
+            and not formset_has_entries(self.extra_links_formset)
+        ):
+            self.extra_links_formset._non_form_errors = self.extra_links_formset.error_class(
+                [_("Add at least one extra link.")]
+            )
+            valid = False
+
+        if valid:
             return self.form_valid(form)
         return self.form_invalid(form)
 
@@ -1135,23 +1152,22 @@ class SponsorReorderView(PartnerReorderMixin):
 
 
 class CallTextPreviewView(EventPermissionRequiredMixin, View):
-    """Render draft Call text with the same Markdown conversion as the public call page."""
+    """Render draft Call text with the same styling as the public call page.
+
+    Consumed by core's shared ``richtextPreview.js`` (``data-email-preview-*``
+    attributes): the body text is posted as one ``body_<locale>`` field per
+    rendered locale.
+    """
 
     permission = "can_change_settings"
 
     def post(self, request, *args, **kwargs):
-        widget = CallSettingsForm(event=request.event).fields["call_text"].widget
-        # The i18n widget returns values as a list indexed by global LANGUAGES order.
-        values = widget.value_from_datadict(request.POST, request.FILES, "call_text")
-        if not isinstance(values, (list, tuple)):
-            values = [values]
-        event_locales = set(request.event.settings.locales)
-        msgs = {}
-        for index, (code, _name) in enumerate(django_settings.LANGUAGES):
-            if code in event_locales and index < len(values):
-                text = values[index]
-                msgs[code] = str(rich_text(text)) if text else ""
-        return JsonResponse({"msgs": msgs})
+        event_locales = request.event.settings.locales
+        previews = {}
+        for locale in event_locales:
+            text = request.POST.get(f"body_{locale}", "")
+            previews[locale] = str(rich_text(text)) if text else ""
+        return JsonResponse({"previews": previews})
 
 
 class ProposalListView(EventPermissionRequiredMixin, FilteredListMixin, ListView):
@@ -1808,11 +1824,20 @@ class ExhibitorEditView(ExhibitorLinkFormsetMixin, EventPermissionRequiredMixin,
 
         response = super().form_valid(form)
         self.save_link_formsets()
-        self.object.log_action(
-            LOG_PARTNER_CHANGED,
-            data={"changed": form.changed_data},
-            user=self.request.user,
-        )
+        profile_changes = [key for key in form.changed_data if not key.startswith("question_")]
+        question_changes = [int(key.split("_", 1)[1]) for key in form.changed_data if key.startswith("question_")]
+        if profile_changes:
+            self.object.log_action(
+                LOG_PARTNER_CHANGED,
+                data={"changed": profile_changes},
+                user=self.request.user,
+            )
+        if question_changes and form.linked_proposal:
+            form.linked_proposal.log_action(
+                LOG_PROPOSAL_CHANGED,
+                data={"changed_questions": question_changes},
+                user=self.request.user,
+            )
         if access_newly_granted(form.instance, previous) and queue_exhibitor_access_mail(
             self.request.event, self.object, self.request.user
         ):
@@ -2077,9 +2102,20 @@ class EmailComposeView(EventPermissionRequiredMixin, FormView):
         kwargs["event"] = self.request.event
         return kwargs
 
+    def get_initial(self):
+        initial = super().get_initial()
+        template_pk = self.request.GET.get("template")
+        if template_pk:
+            template = ExhibitionCustomEmailTemplate.objects.filter(event=self.request.event, pk=template_pk).first()
+            if template:
+                initial["subject"] = template.subject
+                initial["body"] = template.body
+        return initial
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context["email_placeholders"] = mail_helpers.PLACEHOLDER_DOCS
+        context["custom_templates"] = ExhibitionCustomEmailTemplate.objects.filter(event=self.request.event)
+        context["locales"] = self.request.event.settings.locales
         return context
 
     def form_valid(self, form):
@@ -2255,6 +2291,11 @@ class EmailEditView(EventPermissionRequiredMixin, UpdateView):
     def get_queryset(self):
         return ExhibitionEmailQueue.objects.filter(event=self.request.event, sent_at__isnull=True)
 
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs["event"] = self.request.event
+        return kwargs
+
     def batch_queryset(self):
         return ExhibitionEmailQueue.objects.filter(
             event=self.request.event, batch=self.object.batch, sent_at__isnull=True
@@ -2268,14 +2309,24 @@ class EmailEditView(EventPermissionRequiredMixin, UpdateView):
             context["recipients"] = [self.object.to_email]
         return context
 
+    def reschedule(self, rows, scheduled_at):
+        from .tasks import send_scheduled_email
+
+        if not scheduled_at:
+            return
+        for row in rows:
+            send_scheduled_email.apply_async(args=[self.request.event.pk, row.pk], eta=scheduled_at)
+
     def form_valid(self, form):
         self.object = form.save(commit=False)
         subject = form.cleaned_data["subject"]
         body = form.cleaned_data["body"]
+        scheduled_at = form.cleaned_data["scheduled_at"]
+        reschedule = "scheduled_at" in form.changed_data
 
         if self.object.batch:
             rows = list(self.batch_queryset())
-            self.batch_queryset().update(subject=subject, body=body)
+            self.batch_queryset().update(subject=subject, body=body, scheduled_at=scheduled_at)
             if "_send" in self.request.POST:
                 for row in rows:
                     row.subject = subject
@@ -2283,6 +2334,8 @@ class EmailEditView(EventPermissionRequiredMixin, UpdateView):
                     row.send(requestor=self.request.user)
                 messages.success(self.request, _("The emails have been saved and sent."))
             else:
+                if reschedule:
+                    self.reschedule(rows, scheduled_at)
                 messages.success(self.request, _("The emails have been saved."))
             return redirect(self.get_success_url())
 
@@ -2291,6 +2344,8 @@ class EmailEditView(EventPermissionRequiredMixin, UpdateView):
             self.object.send(requestor=self.request.user)
             messages.success(self.request, _("The email has been saved and sent."))
         else:
+            if reschedule:
+                self.reschedule([self.object], scheduled_at)
             messages.success(self.request, _("The email has been saved."))
         return redirect(self.get_success_url())
 
@@ -2425,7 +2480,7 @@ class EmailBulkActionView(EventPermissionRequiredMixin, View):
 
 
 class EmailTemplatesView(EventPermissionRequiredMixin, TemplateView):
-    """Edit the lifecycle email templates."""
+    """Edit the lifecycle email templates and organizer-defined custom templates."""
 
     permission = "can_change_event_settings"
     template_name = "exhibitors/email_templates.html"
@@ -2433,9 +2488,32 @@ class EmailTemplatesView(EventPermissionRequiredMixin, TemplateView):
     def get_form(self, data=None):
         return ExhibitionMailTemplatesForm(data=data, obj=self.request.event)
 
+    def get_custom_panels(self, data=None):
+        templates = ExhibitionCustomEmailTemplate.objects.filter(event=self.request.event)
+        panels = []
+        for template in templates:
+            form = ExhibitionCustomEmailTemplateForm(
+                data,
+                instance=template,
+                prefix=f"custom_{template.pk}",
+                event=self.request.event,
+            )
+            panels.append(
+                {
+                    "pk": template.pk,
+                    "label": template.name,
+                    "role_slug": f"custom_{template.pk}",
+                    "form": form,
+                }
+            )
+        return panels
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         form = kwargs.get("form") or self.get_form()
+        custom_panels = kwargs.get("custom_panels")
+        if custom_panels is None:
+            custom_panels = self.get_custom_panels()
         context["form"] = form
         context["template_panels"] = [
             {
@@ -2451,59 +2529,109 @@ class EmailTemplatesView(EventPermissionRequiredMixin, TemplateView):
                 (mail_helpers.EXHIBITOR_ACCESS, _("Exhibitor lead scanning key")),
             )
         ]
-        context["email_placeholders"] = mail_helpers.PLACEHOLDER_DOCS
+        context["custom_panels"] = custom_panels
         context["locales"] = self.request.event.settings.locales
         return context
 
     def post(self, request, *args, **kwargs):
         form = self.get_form(data=request.POST)
-        if form.is_valid():
+        custom_panels = self.get_custom_panels(data=request.POST)
+        custom_valid = all(panel["form"].is_valid() for panel in custom_panels)
+        if form.is_valid() and custom_valid:
             form.save()
+            for panel in custom_panels:
+                panel["form"].save()
             messages.success(request, _("Email templates have been saved."))
             return redirect("plugins:exhibition:email.templates", **event_kwargs(request.event))
-        return self.render_to_response(self.get_context_data(form=form))
+        return self.render_to_response(self.get_context_data(form=form, custom_panels=custom_panels))
 
 
 class EmailTemplatePreviewView(EventPermissionRequiredMixin, View):
-    """Render draft template text with sample placeholder values, per locale."""
+    """Render draft template text with sample placeholder values, per locale.
+
+    Consumed by core's shared ``richtextPreview.js`` (``data-email-preview-*``
+    attributes): the role is passed as a query parameter on each panel's own
+    preview URL, and the body text is posted as one ``body_<locale>`` field
+    per rendered locale.
+    """
 
     permission = "can_change_event_settings"
 
     def post(self, request, *args, **kwargs):
-        role = request.POST.get("role")
-        if role not in mail_helpers.LIFECYCLE_ROLES:
+        role = request.GET.get("role", "")
+        custom_pk = role[len("custom_") :] if role.startswith("custom_") else None
+        if role in ("compose", "custom"):
+            pass
+        elif custom_pk is not None:
+            if not ExhibitionCustomEmailTemplate.objects.filter(event=request.event, pk=custom_pk).exists():
+                return JsonResponse({"detail": _("Unknown template.")}, status=400)
+        elif role in mail_helpers.LIFECYCLE_ROLES:
+            pass
+        else:
             return JsonResponse({"detail": _("Unknown template.")}, status=400)
 
+        placeholder_context = mail_helpers.ROLE_PLACEHOLDER_CONTEXT.get(role, mail_helpers.PROPOSAL_PLACEHOLDER_CONTEXT)
+
         from eventyay.base.i18n import language
-        from eventyay.base.templatetags.rich_text import markdown_compile_email
+        from eventyay.base.services.mail import expand_email_variable_chips
+        from eventyay.base.templatetags.rich_text import compile_email_body
 
-        form = ExhibitionMailTemplatesForm(obj=request.event)
-        placeholders = mail_helpers.build_preview_placeholders(request.event)
-        event_locales = set(request.event.settings.locales)
+        placeholders = mail_helpers.build_preview_placeholders(request.event, placeholder_context)
+        event_locales = request.event.settings.locales
         region = request.event.settings.region
-
-        def values_by_locale(field_name):
-            widget = form.fields[field_name].widget
-            raw = widget.value_from_datadict(request.POST, request.FILES, field_name)
-            if not isinstance(raw, (list, tuple)):
-                raw = [raw]
-            locales = getattr(widget, "locales", None) or [code for code, _name in django_settings.LANGUAGES]
-            by_locale = {}
-            for index, code in enumerate(locales):
-                if code in event_locales and index < len(raw):
-                    by_locale[code] = raw[index] or ""
-            return by_locale
-
-        bodies = values_by_locale(mail_helpers.body_settings_key(role))
 
         def render(text):
             try:
-                return markdown_compile_email(text.format_map(placeholders))
+                expanded = text.format_map(placeholders)
             except (KeyError, IndexError, ValueError):
-                return markdown_compile_email(text)
+                expanded = text
+            expanded = expand_email_variable_chips(expanded, dict(placeholders))
+            return compile_email_body(expanded)
 
         previews = {}
         for locale in event_locales:
+            body = request.POST.get(f"body_{locale}", "")
             with language(locale, region):
-                previews[locale] = render(bodies.get(locale, ""))
+                previews[locale] = render(body) if body else ""
         return JsonResponse({"previews": previews})
+
+
+class CustomEmailTemplateCreateView(EventPermissionRequiredMixin, CreateView):
+    model = ExhibitionCustomEmailTemplate
+    form_class = ExhibitionCustomEmailTemplateForm
+    permission = "can_change_event_settings"
+    template_name = "exhibitors/email_custom_template_form.html"
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs["event"] = self.request.event
+        return kwargs
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["locales"] = self.request.event.settings.locales
+        return context
+
+    def form_valid(self, form):
+        form.instance.event = self.request.event
+        messages.success(self.request, _("Custom template has been created."))
+        return super().form_valid(form)
+
+    def get_success_url(self):
+        return reverse("plugins:exhibition:email.templates", kwargs=event_kwargs(self.request.event))
+
+
+class CustomEmailTemplateDeleteView(EventPermissionRequiredMixin, DeleteView):
+    model = ExhibitionCustomEmailTemplate
+    permission = "can_change_event_settings"
+    template_name = "exhibitors/email_custom_template_delete.html"
+
+    def get_queryset(self):
+        return ExhibitionCustomEmailTemplate.objects.filter(event=self.request.event)
+
+    def form_valid(self, form):
+        messages.success(self.request, _("Custom template has been deleted."))
+        return super().form_valid(form)
+
+    def get_success_url(self):
+        return reverse("plugins:exhibition:email.templates", kwargs=event_kwargs(self.request.event))

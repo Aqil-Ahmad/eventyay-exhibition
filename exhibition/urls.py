@@ -13,6 +13,8 @@ from .api import (
 )
 from .views import (
     CallTextPreviewView,
+    CustomEmailTemplateCreateView,
+    CustomEmailTemplateDeleteView,
     EmailBulkActionView,
     EmailComposeView,
     EmailDeleteView,
@@ -274,6 +276,16 @@ urlpatterns = [
         "exhibitors/event/<orgslug:organizer>/<slug:event>/emails/templates/preview",
         EmailTemplatePreviewView.as_view(),
         name="email.templates.preview",
+    ),
+    path(
+        "exhibitors/event/<orgslug:organizer>/<slug:event>/emails/custom-templates/add",
+        CustomEmailTemplateCreateView.as_view(),
+        name="email.custom_templates.add",
+    ),
+    path(
+        "exhibitors/event/<orgslug:organizer>/<slug:event>/emails/custom-templates/<int:pk>/delete",
+        CustomEmailTemplateDeleteView.as_view(),
+        name="email.custom_templates.delete",
     ),
     path(
         "exhibitors/event/<orgslug:organizer>/<slug:event>/emails/<int:pk>/edit",

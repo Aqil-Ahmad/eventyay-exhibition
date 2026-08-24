@@ -35,7 +35,10 @@ def send_scheduled_email(self, event_id, queue_id):
             if queued is None:
                 return
 
-            if queued.scheduled_at and queued.scheduled_at > now():
+            if queued.scheduled_at is None:
+                return
+
+            if queued.scheduled_at > now():
                 send_scheduled_email.apply_async(args=[original_event_id, queue_id], eta=queued.scheduled_at)
                 return
 
