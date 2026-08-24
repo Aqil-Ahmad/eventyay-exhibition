@@ -1039,3 +1039,24 @@ class ExhibitionEmailQueue(LoggedModel):
         )
 
     send.alters_data = True
+
+
+class ExhibitionCustomEmailTemplate(models.Model):
+    event = models.ForeignKey(
+        Event,
+        on_delete=models.CASCADE,
+        related_name="exhibition_custom_email_templates",
+    )
+    name = models.CharField(max_length=190, verbose_name=_("Template name"))
+    subject = I18nCharField(max_length=255, verbose_name=_("Subject"))
+    body = I18nTextField(verbose_name=_("Body"), blank=True)
+    created = models.DateTimeField(auto_now_add=True)
+    updated = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = _("Custom email template")
+        verbose_name_plural = _("Custom email templates")
+        ordering = ("name",)
+
+    def __str__(self):
+        return self.name

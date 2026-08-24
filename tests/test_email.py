@@ -33,6 +33,16 @@ def _locale_index(event, field_name, locale):
     return widget.locales.index(locale)
 
 
+def _compose_data(event, locale="en", **values):
+    """Compose form POST data with i18n subject/body posted for one locale."""
+    form = ExhibitionComposeForm(event=event)
+    data = {}
+    for field_name, value in values.items():
+        index = form.fields[field_name].widget.locales.index(locale)
+        data[f"{field_name}_{index}"] = value
+    return data
+
+
 @pytest.fixture
 def mail_event(event):
     """Event with the plugin enabled, so the placeholder signal is dispatched."""
@@ -230,12 +240,9 @@ def test_access_email_returns_none_without_exhibitor_email(mail_event):
 
 
 def _preview(event, role, body_by_locale):
-    """POST draft body text to the preview endpoint."""
-    field_name = mail_helpers.body_settings_key(role)
-    data = {"role": role}
-    for locale, text in body_by_locale.items():
-        data[f"{field_name}_{_locale_index(event, field_name, locale)}"] = text
-    request = RequestFactory().post("/preview", data=data)
+    """POST draft body text to the preview endpoint, role passed as a query param."""
+    data = {f"body_{locale}": text for locale, text in body_by_locale.items()}
+    request = RequestFactory().post(f"/preview?role={role}", data=data)
     request.event = event
     return EmailTemplatePreviewView().post(request)
 
@@ -278,7 +285,7 @@ def test_preview_sanitises_html(mail_event):
 
 @pytest.mark.django_db
 def test_preview_rejects_unknown_role(mail_event):
-    request = RequestFactory().post("/preview", data={"role": "not_a_role"})
+    request = RequestFactory().post("/preview?role=not_a_role")
     request.event = mail_event
     response = EmailTemplatePreviewView().post(request)
 
@@ -403,8 +410,7 @@ def test_compose_view_saves_to_outbox(mail_event):
         data={
             "states": [ExhibitionProposalState.ACCEPTED],
             "partner_type": "",
-            "subject": "Hi",
-            "body": "Body",
+            **_compose_data(mail_event, subject="Hi", body="Body"),
         },
         event=mail_event,
     )
@@ -441,14 +447,13 @@ def test_compose_form_rejects_past_scheduled_at(mail_event):
     form = ExhibitionComposeForm(
         data={
             "states": [ExhibitionProposalState.ACCEPTED],
-            "subject": "Hi",
-            "body": "Body",
             "scheduled_at": (timezone.now() - timedelta(hours=1)).strftime("%Y-%m-%dT%H:%M"),
+            **_compose_data(mail_event, subject="Hi", body="Body"),
         },
         event=mail_event,
     )
     assert not form.is_valid()
-    assert "scheduled_at" in form.errors
+    assert list(form.errors) == ["scheduled_at"]
 
 
 @pytest.mark.django_db
@@ -459,9 +464,8 @@ def test_compose_view_schedules_emails(mail_event):
         data={
             "states": [ExhibitionProposalState.ACCEPTED],
             "partner_type": "",
-            "subject": "Hi",
-            "body": "Body",
             "scheduled_at": when.strftime("%Y-%m-%dT%H:%M"),
+            **_compose_data(mail_event, subject="Hi", body="Body"),
         },
         event=mail_event,
     )
