@@ -36,7 +36,11 @@
     {% endif %}
     {% if "can_change_event_settings" in request.eventpermset %}
         <td class="partner-vouchers-col">
-            {% if e.voucher_sent_at %}
+            {% if e.voucher_pending %}
+                <span class="label label-warning" title="{% trans "Waiting in the outbox" %}" data-toggle="tooltip">
+                    {% trans "In outbox" %}
+                </span>
+            {% elif e.voucher_sent_at %}
                 <span class="label label-success" title="{% blocktrans trimmed with sent=e.voucher_sent_at|date:"SHORT_DATETIME_FORMAT" %}Last sent {{ sent }}{% endblocktrans %}" data-toggle="tooltip">
                     {% trans "Sent" %}
                 </span>

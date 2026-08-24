@@ -492,15 +492,14 @@ class ExhibitorListView(EventPermissionRequiredMixin, FilteredListMixin, ListVie
         ids = [exhibitor.pk for exhibitor in exhibitors]
         if not ids:
             return
+        rows = ExhibitionEmailQueue.objects.filter(exhibitor_id__in=ids, role=mail_helpers.VOUCHERS)
         last_sent = dict(
-            ExhibitionEmailQueue.objects.filter(
-                exhibitor_id__in=ids, role=mail_helpers.VOUCHERS, sent_at__isnull=False
-            )
-            .values_list("exhibitor_id")
-            .annotate(last_sent=Max("sent_at"))
+            rows.filter(sent_at__isnull=False).values_list("exhibitor_id").annotate(last_sent=Max("sent_at"))
         )
+        pending = set(rows.filter(sent_at__isnull=True).values_list("exhibitor_id", flat=True))
         for exhibitor in exhibitors:
             exhibitor.voucher_sent_at = last_sent.get(exhibitor.pk)
+            exhibitor.voucher_pending = exhibitor.pk in pending
 
     def build_sponsor_group_sections(self, sponsors):
         groups = list(SponsorGroup.objects.filter(event=self.request.event).order_by("level", "pk"))
@@ -1958,11 +1957,9 @@ class ExhibitorVoucherManageView(EventPermissionRequiredMixin, DetailView):
         default_count = resolve_voucher_defaults(self.object)["count"]
         context.setdefault("form", ExhibitorVoucherBatchForm(initial={"count": default_count}))
         context["vouchers"] = self.voucher_links()
-        context["voucher_sent_at"] = (
-            ExhibitionEmailQueue.objects.filter(
-                exhibitor=self.object, role=mail_helpers.VOUCHERS, sent_at__isnull=False
-            ).aggregate(last_sent=Max("sent_at"))["last_sent"]
-        )
+        emails = ExhibitionEmailQueue.objects.filter(exhibitor=self.object, role=mail_helpers.VOUCHERS)
+        context["voucher_sent_at"] = emails.filter(sent_at__isnull=False).aggregate(last=Max("sent_at"))["last"]
+        context["voucher_pending"] = emails.filter(sent_at__isnull=True).exists()
         return context
 
     def download_csv(self):
@@ -2055,7 +2052,7 @@ class ExhibitorVoucherManageView(EventPermissionRequiredMixin, DetailView):
 
     @transaction.atomic
     def send_vouchers(self, request):
-        """Create any requested vouchers, then email the partner their complete list of codes."""
+        """Create any requested vouchers, then outbox an email with the partner's complete list of codes."""
         form = ExhibitorVoucherBatchForm(request.POST)
         if not form.is_valid():
             return self.render_to_response(self.get_context_data(form=form))
@@ -2069,18 +2066,12 @@ class ExhibitorVoucherManageView(EventPermissionRequiredMixin, DetailView):
         if not vouchers:
             form.add_error("count", _("This partner has no vouchers yet, so there is nothing to email."))
             return self.render_to_response(self.get_context_data(form=form))
-        mail_helpers.queue_voucher_email(
-            request.event,
-            self.object,
-            vouchers,
-            send_now=True,
-            requestor=request.user,
-        )
+        mail_helpers.queue_voucher_email(request.event, self.object, vouchers, requestor=request.user)
         messages.success(
             request,
             ngettext(
-                "%(count)d voucher code emailed to the partner.",
-                "%(count)d voucher codes emailed to the partner.",
+                "An email with %(count)d voucher code was placed in the outbox.",
+                "An email with %(count)d voucher codes was placed in the outbox.",
                 len(vouchers),
             )
             % {"count": len(vouchers)},
