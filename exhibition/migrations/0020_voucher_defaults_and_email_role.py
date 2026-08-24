@@ -21,11 +21,6 @@ class Migration(migrations.Migration):
         ),
         migrations.AddField(
             model_name="exhibitorsettings",
-            name="voucher_default_max_usages",
-            field=models.PositiveIntegerField(default=1, verbose_name="Default maximum usages per voucher"),
-        ),
-        migrations.AddField(
-            model_name="exhibitorsettings",
             name="voucher_default_price_mode",
             field=models.CharField(
                 choices=[
@@ -50,11 +45,6 @@ class Migration(migrations.Migration):
                 to="base.product",
                 verbose_name="Default ticket product",
             ),
-        ),
-        migrations.AddField(
-            model_name="exhibitorsettings",
-            name="voucher_default_valid_until",
-            field=models.DateTimeField(blank=True, null=True, verbose_name="Default valid until"),
         ),
         migrations.AddField(
             model_name="exhibitorsettings",
@@ -70,11 +60,6 @@ class Migration(migrations.Migration):
         ),
         migrations.AddField(
             model_name="sponsorgroup",
-            name="voucher_default_max_usages",
-            field=models.PositiveIntegerField(default=1, verbose_name="Default maximum usages per voucher"),
-        ),
-        migrations.AddField(
-            model_name="sponsorgroup",
             name="voucher_default_price_mode",
             field=models.CharField(
                 choices=[
@@ -99,11 +84,6 @@ class Migration(migrations.Migration):
                 to="base.product",
                 verbose_name="Default ticket product",
             ),
-        ),
-        migrations.AddField(
-            model_name="sponsorgroup",
-            name="voucher_default_valid_until",
-            field=models.DateTimeField(blank=True, null=True, verbose_name="Default valid until"),
         ),
         migrations.AddField(
             model_name="sponsorgroup",

@@ -68,36 +68,6 @@
         {% endif %}
     </fieldset>
 
-    <fieldset>
-        <legend>{% trans "Send vouchers" %}</legend>
-        <p class="help-block">
-            {% blocktrans trimmed %}
-                Creates new vouchers and immediately emails the codes to this partner, using the ticket
-                product, price and validity configured for their sponsor group (or the event-wide defaults).
-                Those settings live under Settings.
-            {% endblocktrans %}
-        </p>
-        {% if already_sent %}
-            <p class="text-success"><i class="fa fa-check"></i> {% trans "Vouchers have already been sent to this partner before." %}</p>
-        {% endif %}
-        {% if not exhibitor.email %}
-            <p class="text-danger">{% trans "This partner has no email address on file, so vouchers cannot be sent." %}</p>
-        {% endif %}
-        <form action="" method="post" class="form-horizontal">
-            {% csrf_token %}
-            {% bootstrap_form_errors send_form %}
-            <input type="hidden" name="action" value="send">
-            {% bootstrap_field send_form.count layout="control" %}
-            <div class="form-group submit-group">
-                <div class="col-md-9 col-md-offset-3">
-                    <button type="submit" class="btn btn-primary" {% if not exhibitor.email %}disabled{% endif %}>
-                        <i class="fa fa-paper-plane"></i> {% trans "Send vouchers" %}
-                    </button>
-                </div>
-            </div>
-        </form>
-    </fieldset>
-
     <form action="" method="post" class="form-horizontal">
         {% csrf_token %}
         {% bootstrap_form_errors form %}
@@ -106,7 +76,8 @@
             <legend>{% trans "Issue new vouchers" %}</legend>
             <p class="help-block">
                 {% blocktrans trimmed %}
-                    Creates vouchers without emailing them, using the same defaults as "Send vouchers".
+                    Creates vouchers without emailing them, using the ticket product, price and validity
+                    configured for this partner's sponsor group (or the event-wide defaults) under Settings.
                 {% endblocktrans %}
             </p>
             {% bootstrap_field form.count layout="control" %}

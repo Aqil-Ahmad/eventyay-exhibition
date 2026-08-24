@@ -219,10 +219,6 @@ class VoucherDefaultsMixin(models.Model):
         related_name="+",
         verbose_name=_("Default ticket product"),
     )
-    voucher_default_max_usages = models.PositiveIntegerField(
-        default=1,
-        verbose_name=_("Default maximum usages per voucher"),
-    )
     voucher_default_price_mode = models.CharField(
         max_length=20,
         choices=PriceModeChoices.choices,
@@ -235,11 +231,6 @@ class VoucherDefaultsMixin(models.Model):
         null=True,
         blank=True,
         verbose_name=_("Default value"),
-    )
-    voucher_default_valid_until = models.DateTimeField(
-        null=True,
-        blank=True,
-        verbose_name=_("Default valid until"),
     )
 
     class Meta:

@@ -239,14 +239,12 @@ def resolve_voucher_defaults(exhibitor):
     return {
         "product": source.voucher_default_product,
         "count": source.voucher_default_count,
-        "max_usages": source.voucher_default_max_usages,
         "price_mode": source.voucher_default_price_mode,
         "value": source.voucher_default_value,
-        "valid_until": source.voucher_default_valid_until,
     }
 
 
-def generate_exhibitor_vouchers(exhibitor, *, product, count, max_usages, price_mode, value, valid_until):
+def generate_exhibitor_vouchers(exhibitor, *, product, count, price_mode, value):
     from eventyay.base.models import Voucher
 
     from .models import ExhibitorVoucher
@@ -257,10 +255,8 @@ def generate_exhibitor_vouchers(exhibitor, *, product, count, max_usages, price_
         voucher = Voucher.objects.create(
             event=exhibitor.event,
             product=product,
-            max_usages=max_usages,
             price_mode=price_mode,
             value=value,
-            valid_until=valid_until,
             tag=tag,
         )
         links.append(ExhibitorVoucher(exhibitor=exhibitor, voucher=voucher))

@@ -139,16 +139,13 @@
                     <legend>{% trans "Voucher defaults" %}</legend>
                     <p>
                         {% blocktrans trimmed %}
-                            Applied when issuing or sending vouchers for any partner without its own sponsor
-                            group (sponsor groups can override these under Sponsor Settings).
+                            Applied when issuing or sending vouchers for exhibitors.
                         {% endblocktrans %}
                     </p>
                     {% bootstrap_field voucher_defaults_form.voucher_default_count layout="control" %}
                     {% bootstrap_field voucher_defaults_form.voucher_default_product layout="control" %}
-                    {% bootstrap_field voucher_defaults_form.voucher_default_max_usages layout="control" %}
                     {% bootstrap_field voucher_defaults_form.voucher_default_price_mode layout="control" %}
                     {% bootstrap_field voucher_defaults_form.voucher_default_value layout="control" %}
-                    {% bootstrap_field voucher_defaults_form.voucher_default_valid_until layout="control" %}
                 </fieldset>
 
                 <fieldset>
@@ -209,10 +206,8 @@
                         <legend>{% trans "Voucher defaults for this group" %}</legend>
                         {% bootstrap_field add_group_form.voucher_default_count layout="control" %}
                         {% bootstrap_field add_group_form.voucher_default_product layout="control" %}
-                        {% bootstrap_field add_group_form.voucher_default_max_usages layout="control" %}
                         {% bootstrap_field add_group_form.voucher_default_price_mode layout="control" %}
                         {% bootstrap_field add_group_form.voucher_default_value layout="control" %}
-                        {% bootstrap_field add_group_form.voucher_default_valid_until layout="control" %}
                     </fieldset>
                     <div class="form-group submit-group sponsor-group-editor-actions">
                         <div class="col-md-9 col-md-offset-3">
@@ -294,10 +289,8 @@
                                                 <legend>{% trans "Voucher defaults for this group" %}</legend>
                                                 {% bootstrap_field group.edit_form.voucher_default_count layout="control" %}
                                                 {% bootstrap_field group.edit_form.voucher_default_product layout="control" %}
-                                                {% bootstrap_field group.edit_form.voucher_default_max_usages layout="control" %}
                                                 {% bootstrap_field group.edit_form.voucher_default_price_mode layout="control" %}
                                                 {% bootstrap_field group.edit_form.voucher_default_value layout="control" %}
-                                                {% bootstrap_field group.edit_form.voucher_default_valid_until layout="control" %}
                                             </fieldset>
                                             <div class="form-group submit-group sponsor-group-editor-actions">
                                                 <div class="col-md-9 col-md-offset-3">

@@ -2039,10 +2039,8 @@ class ExhibitorVoucherManageView(EventPermissionRequiredMixin, DetailView):
             self.object,
             product=defaults["product"],
             count=count,
-            max_usages=defaults["max_usages"],
             price_mode=defaults["price_mode"],
             value=defaults["value"],
-            valid_until=defaults["valid_until"],
         )
         messages.success(
             request,
@@ -2064,10 +2062,8 @@ class ExhibitorVoucherManageView(EventPermissionRequiredMixin, DetailView):
             self.object,
             product=defaults["product"],
             count=count,
-            max_usages=defaults["max_usages"],
             price_mode=defaults["price_mode"],
             value=defaults["value"],
-            valid_until=defaults["valid_until"],
         )
         mail_helpers.queue_voucher_email(
             request.event,

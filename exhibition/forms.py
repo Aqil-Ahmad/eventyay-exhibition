@@ -652,10 +652,8 @@ class VoucherDefaultsFormMixin:
     voucher_default_fields = [
         "voucher_default_count",
         "voucher_default_product",
-        "voucher_default_max_usages",
         "voucher_default_price_mode",
         "voucher_default_value",
-        "voucher_default_valid_until",
     ]
 
     def _wire_voucher_default_fields(self, event):
@@ -664,15 +662,6 @@ class VoucherDefaultsFormMixin:
             if event
             else Product.objects.none()
         )
-        self.fields["voucher_default_valid_until"].widget = HtmlDateTimeInput()
-        if event:
-            self.fields["voucher_default_valid_until"].help_text = get_tz_help(event)
-            self.fields["voucher_default_valid_until"].widget.attrs.update(
-                {
-                    "data-schedule-datetime": "1",
-                    "data-event-timezone": event.timezone,
-                }
-            )
 
     def clean_voucher_defaults(self, cleaned_data):
         price_mode = cleaned_data.get("voucher_default_price_mode")
