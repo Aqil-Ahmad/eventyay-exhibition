@@ -5,7 +5,7 @@ import exhibition.models
 
 class Migration(migrations.Migration):
     dependencies = [
-        ("exhibition", "0018_exhibitordevice"),
+        ("exhibition", "0019_exhibitioncustomemailtemplate"),
     ]
 
     operations = [
