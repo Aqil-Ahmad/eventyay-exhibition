@@ -28,7 +28,7 @@ from eventyay.consts import SizeKey
 from eventyay.control.forms import ExtFileField, SplitDateTimeField
 from eventyay.helpers.countries import CachedCountries
 from eventyay.helpers.i18n import get_format_without_seconds
-from i18nfield.forms import I18nFormField, I18nTextarea, I18nTextInput
+from i18nfield.forms import I18nFormField, I18nTextInput
 from phonenumber_field.formfields import PhoneNumberField
 from phonenumber_field.widgets import PhoneNumberPrefixWidget
 
