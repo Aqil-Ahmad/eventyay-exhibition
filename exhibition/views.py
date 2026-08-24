@@ -12,7 +12,6 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.functional import cached_property
-from django.utils.http import url_has_allowed_host_and_scheme
 from django.utils.translation import gettext_lazy as _, ngettext
 from django.views import View
 from django.views.generic import DeleteView, DetailView, FormView, ListView, TemplateView
@@ -90,7 +89,6 @@ from .utils import (
     add_external_image_csp_sources,
     allow_blob_image_previews,
     build_exhibitor_video_embed,
-    event_voucher_settings,
     generate_exhibitor_vouchers,
     provision_exhibitor_devices,
     public_exhibitors_queryset,
@@ -501,10 +499,7 @@ class ExhibitorListView(EventPermissionRequiredMixin, FilteredListMixin, ListVie
             .values_list("exhibitor_id")
             .annotate(last_sent=Max("sent_at"))
         )
-        event_settings = event_voucher_settings(self.request.event)
         for exhibitor in exhibitors:
-            defaults = resolve_voucher_defaults(exhibitor, event_settings=event_settings)
-            exhibitor.voucher_send_default_count = defaults["count"]
             exhibitor.voucher_sent_at = last_sent.get(exhibitor.pk)
 
     def build_sponsor_group_sections(self, sponsors):
@@ -1963,6 +1958,11 @@ class ExhibitorVoucherManageView(EventPermissionRequiredMixin, DetailView):
         default_count = resolve_voucher_defaults(self.object)["count"]
         context.setdefault("form", ExhibitorVoucherBatchForm(initial={"count": default_count}))
         context["vouchers"] = self.voucher_links()
+        context["voucher_sent_at"] = (
+            ExhibitionEmailQueue.objects.filter(
+                exhibitor=self.object, role=mail_helpers.VOUCHERS, sent_at__isnull=False
+            ).aggregate(last_sent=Max("sent_at"))["last_sent"]
+        )
         return context
 
     def download_csv(self):
@@ -2002,10 +2002,6 @@ class ExhibitorVoucherManageView(EventPermissionRequiredMixin, DetailView):
         return response
 
     def get_success_url(self):
-        """Back where the action was triggered from, so sending from the partner list stays on the list."""
-        next_url = self.request.POST.get("next") or ""
-        if next_url and url_has_allowed_host_and_scheme(next_url, allowed_hosts={self.request.get_host()}):
-            return next_url
         return reverse(
             "plugins:exhibition:vouchers",
             kwargs={**event_kwargs(self.request.event), "pk": self.object.pk},
