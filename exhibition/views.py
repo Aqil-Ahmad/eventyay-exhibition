@@ -1808,11 +1808,20 @@ class ExhibitorEditView(ExhibitorLinkFormsetMixin, EventPermissionRequiredMixin,
 
         response = super().form_valid(form)
         self.save_link_formsets()
-        self.object.log_action(
-            LOG_PARTNER_CHANGED,
-            data={"changed": form.changed_data},
-            user=self.request.user,
-        )
+        profile_changes = [key for key in form.changed_data if not key.startswith("question_")]
+        question_changes = [int(key.split("_", 1)[1]) for key in form.changed_data if key.startswith("question_")]
+        if profile_changes:
+            self.object.log_action(
+                LOG_PARTNER_CHANGED,
+                data={"changed": profile_changes},
+                user=self.request.user,
+            )
+        if question_changes and form.linked_proposal:
+            form.linked_proposal.log_action(
+                LOG_PROPOSAL_CHANGED,
+                data={"changed_questions": question_changes},
+                user=self.request.user,
+            )
         if access_newly_granted(form.instance, previous) and queue_exhibitor_access_mail(
             self.request.event, self.object, self.request.user
         ):
