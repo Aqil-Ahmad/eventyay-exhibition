@@ -1,4 +1,6 @@
+import dateutil.parser
 from django import forms
+from django.conf import settings as django_settings
 from django.core.files.storage import default_storage
 from django.core.files.uploadedfile import UploadedFile
 from django.db import transaction
@@ -6,7 +8,13 @@ from django.db.models import Max
 from django.forms import inlineformset_factory
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
+from django_countries.fields import CountryField
 from eventyay.base.forms import I18nModelForm, SettingsForm
+from eventyay.base.forms.widgets import (
+    DatePickerWidget,
+    SplitDateTimePickerWidget,
+    TimePickerWidget,
+)
 from eventyay.base.models import PriceModeChoices, Product
 from eventyay.common.forms.fields import I18nEmailBodyFormField
 from eventyay.common.forms.mixins import (
@@ -16,12 +24,19 @@ from eventyay.common.forms.mixins import (
 from eventyay.common.forms.widgets import EmailEditorWidget, HtmlDateTimeInput, I18nEmailEditorWidget
 from eventyay.common.urls import normalize_url_scheme
 from eventyay.common.utils.language import localize_event_text
+from eventyay.consts import SizeKey
+from eventyay.control.forms import ExtFileField, SplitDateTimeField
+from eventyay.helpers.countries import CachedCountries
+from eventyay.helpers.i18n import get_format_without_seconds
 from i18nfield.forms import I18nFormField, I18nTextInput
+from phonenumber_field.formfields import PhoneNumberField
+from phonenumber_field.widgets import PhoneNumberPrefixWidget
 
 from . import mail as mail_helpers
 from .models import (
     PROPOSAL_DEFAULT_FIELD_KEYS,
     PROPOSAL_FORMSET_FIELD_KEYS,
+    QUESTION_OPTION_VARIANTS,
     ExhibitionAnswer,
     ExhibitionCustomEmailTemplate,
     ExhibitionEmailQueue,
@@ -734,6 +749,275 @@ class CallSettingsForm(I18nModelForm):
             )
 
 
+ANSWER_FILE_EXTENSIONS = (
+    ".png",
+    ".jpg",
+    ".jpeg",
+    ".jfif",
+    ".gif",
+    ".bmp",
+    ".tif",
+    ".tiff",
+    ".heic",
+    ".heif",
+    ".svg",
+    ".pdf",
+    ".txt",
+    ".doc",
+    ".docx",
+    ".xls",
+    ".xlsx",
+    ".ppt",
+    ".pptx",
+    ".pages",
+)
+
+
+def parse_answer_datetime(value):
+    if not value:
+        return None
+    try:
+        return dateutil.parser.parse(value).astimezone(timezone.get_current_timezone())
+    except (ValueError, OverflowError):
+        return None
+
+
+def parse_answer_date(value):
+    parsed = parse_answer_datetime(value)
+    return parsed.date() if parsed else None
+
+
+def parse_answer_time(value):
+    if not value:
+        return None
+    try:
+        return dateutil.parser.parse(value).time()
+    except (ValueError, OverflowError):
+        return None
+
+
+class ExhibitionQuestionFieldsMixin:
+    def inject_exhibition_questions(self, *, event, proposal=None, readonly=False):
+        answers_by_question = {}
+        if proposal and proposal.pk:
+            for answer in proposal.answers.prefetch_related("options"):
+                answers_by_question[answer.question_id] = answer
+
+        questions = (
+            ExhibitionQuestion.objects.filter(event=event, active=True)
+            .prefetch_related("options")
+            .order_by("position", "pk")
+        )
+        for question in questions:
+            answer = answers_by_question.get(question.pk)
+            field = self.get_exhibition_question_field(
+                question=question,
+                answer=answer,
+                readonly=readonly,
+            )
+            field.question = question
+            field.answer = answer
+            self.fields[f"question_{question.pk}"] = field
+
+    def get_exhibition_question_field(self, *, question, answer, readonly):
+        label = localize_event_text(question.question)
+        help_text = localize_event_text(question.help_text) or ""
+        initial = answer.answer if answer else ""
+
+        if question.variant == ExhibitionQuestionVariant.BOOLEAN:
+            return forms.BooleanField(
+                disabled=readonly,
+                help_text=help_text,
+                initial=initial == "True",
+                label=label,
+                required=question.required,
+            )
+        if question.variant == ExhibitionQuestionVariant.TEXT:
+            return forms.CharField(
+                disabled=readonly,
+                help_text=help_text,
+                initial=initial,
+                label=label,
+                required=question.required,
+                widget=forms.Textarea(attrs={"rows": 4}),
+            )
+        if question.variant == ExhibitionQuestionVariant.URL:
+            return forms.URLField(
+                disabled=readonly,
+                help_text=help_text,
+                initial=initial,
+                label=label,
+                required=question.required,
+            )
+        if question.variant == ExhibitionQuestionVariant.EMAIL:
+            return forms.EmailField(
+                disabled=readonly,
+                help_text=help_text,
+                initial=initial,
+                label=label,
+                required=question.required,
+            )
+        if question.variant == ExhibitionQuestionVariant.NUMBER:
+            return forms.DecimalField(
+                disabled=readonly,
+                help_text=help_text,
+                initial=initial or None,
+                label=label,
+                required=question.required,
+                widget=forms.NumberInput(attrs={"placeholder": _("Your answer")}),
+            )
+        if question.variant == ExhibitionQuestionVariant.PHONE:
+            return PhoneNumberField(
+                disabled=readonly,
+                help_text=help_text,
+                initial=initial or None,
+                label=label,
+                required=question.required,
+                widget=PhoneNumberPrefixWidget(),
+            )
+        if question.variant == ExhibitionQuestionVariant.COUNTRY:
+            return CountryField(countries=CachedCountries, blank=True, blank_label=" ").formfield(
+                disabled=readonly,
+                empty_label=" ",
+                help_text=help_text,
+                initial=initial or None,
+                label=label,
+                required=question.required,
+                widget=forms.Select,
+            )
+        if question.variant == ExhibitionQuestionVariant.DATE:
+            return forms.DateField(
+                disabled=readonly,
+                help_text=help_text,
+                initial=parse_answer_date(initial),
+                label=label,
+                required=question.required,
+                widget=DatePickerWidget(),
+            )
+        if question.variant == ExhibitionQuestionVariant.TIME:
+            return forms.TimeField(
+                disabled=readonly,
+                help_text=help_text,
+                initial=parse_answer_time(initial),
+                label=label,
+                required=question.required,
+                widget=TimePickerWidget(time_format=get_format_without_seconds("TIME_INPUT_FORMATS")),
+            )
+        if question.variant == ExhibitionQuestionVariant.DATETIME:
+            return SplitDateTimeField(
+                disabled=readonly,
+                help_text=help_text,
+                initial=parse_answer_datetime(initial),
+                label=label,
+                required=question.required,
+                widget=SplitDateTimePickerWidget(
+                    time_format=get_format_without_seconds("TIME_INPUT_FORMATS"),
+                ),
+            )
+        if question.variant == ExhibitionQuestionVariant.FILE:
+            return ExtFileField(
+                disabled=readonly,
+                ext_whitelist=ANSWER_FILE_EXTENSIONS,
+                help_text=help_text,
+                initial=answer.file if answer else None,
+                label=label,
+                max_size=django_settings.MAX_SIZE_CONFIG[SizeKey.UPLOAD_SIZE_QUESTION],
+                required=question.required,
+            )
+
+        choices = question.options.all()
+        if question.variant == ExhibitionQuestionVariant.CHOICES:
+            return EventLocalizedModelChoiceField(
+                disabled=readonly,
+                empty_label=None if question.required else _("— No selection —"),
+                help_text=help_text,
+                initial=answer.options.first() if answer else None,
+                label=label,
+                queryset=choices,
+                required=question.required,
+                widget=forms.RadioSelect,
+            )
+        if question.variant == ExhibitionQuestionVariant.SELECT:
+            return EventLocalizedModelChoiceField(
+                disabled=readonly,
+                empty_label=None if question.required else _("— No selection —"),
+                help_text=help_text,
+                initial=answer.options.first() if answer else None,
+                label=label,
+                queryset=choices,
+                required=question.required,
+            )
+        if question.variant == ExhibitionQuestionVariant.MULTIPLE:
+            return EventLocalizedModelMultipleChoiceField(
+                disabled=readonly,
+                help_text=help_text,
+                initial=list(answer.options.all()) if answer else [],
+                label=label,
+                queryset=choices,
+                required=question.required,
+                widget=forms.CheckboxSelectMultiple,
+            )
+
+        return forms.CharField(
+            disabled=readonly,
+            help_text=help_text,
+            initial=initial,
+            label=label,
+            required=question.required,
+        )
+
+    def save_exhibition_questions(self, proposal):
+        for key, value in self.cleaned_data.items():
+            if not key.startswith("question_"):
+                continue
+            field = self.fields[key]
+            question = field.question
+            answer = field.answer
+            empty = value in ("", None) or (
+                hasattr(value, "__len__") and not isinstance(value, str) and len(value) == 0
+            )
+            if isinstance(field, ExtFileField):
+                empty = value is None
+            elif value is False:
+                empty = True
+
+            if empty:
+                if answer:
+                    answer.delete()
+                continue
+
+            if not answer:
+                answer = ExhibitionAnswer(proposal=proposal, question=question)
+
+            if isinstance(field, ExtFileField):
+                if value is False:
+                    answer.file.delete(save=False)
+                    answer.file = None
+                    answer.answer = ""
+                elif isinstance(value, UploadedFile):
+                    answer.file = value
+                    answer.answer = value.name
+                answer.save()
+                answer.options.clear()
+            elif isinstance(field, forms.ModelMultipleChoiceField):
+                selected_options = list(value)
+                answer.answer = ", ".join(str(option) for option in selected_options)
+                answer.save()
+                answer.options.set(selected_options)
+            elif isinstance(field, forms.ModelChoiceField):
+                answer.answer = str(value.answer) if value else ""
+                answer.save()
+                answer.options.set([value] if value else [])
+            elif isinstance(field, forms.BooleanField):
+                answer.answer = "True" if value else "False"
+                answer.save()
+                answer.options.clear()
+            else:
+                answer.answer = value.isoformat() if hasattr(value, "isoformat") else str(value)
+                answer.save()
+                answer.options.clear()
+
+
 class ExhibitionProposalForm(ExhibitionQuestionFieldsMixin, I18nModelForm):
     file_url_fields = {
         "slides": "slides_url",
@@ -1124,17 +1408,18 @@ class ExhibitionQuestionForm(I18nModelForm):
             "active": _("Active"),
         }
 
-    choice_variants = {
-        ExhibitionQuestionVariant.CHOICES,
-        ExhibitionQuestionVariant.MULTIPLE,
-        ExhibitionQuestionVariant.SELECT,
-    }
+    choice_variants = QUESTION_OPTION_VARIANTS
 
     def __init__(self, *args, **kwargs):
         self.event = kwargs.get("event")
         super().__init__(*args, **kwargs)
+        self.fields["variant"].widget.attrs["data-question-variant"] = "1"
         if self.instance and self.instance.pk:
             self.fields["options_text"].initial = "\n".join(str(option) for option in self.instance.options.all())
+
+    @property
+    def choice_variant_values(self):
+        return " ".join(sorted(str(variant) for variant in self.choice_variants))
 
     def clean(self):
         cleaned_data = super().clean()

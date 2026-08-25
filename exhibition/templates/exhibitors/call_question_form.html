@@ -1,6 +1,12 @@
 {% extends "exhibitors/base.html" %}
 {% load i18n %}
 {% load bootstrap3 %}
+{% load static %}
+
+{% block custom_header %}
+    {{ block.super }}
+    <script defer src="{% static 'exhibition/js/question-form.js' %}"></script>
+{% endblock %}
 
 {% block title %}{{ request.event.name }} - {% trans "Form field" %}{% endblock %}
 
@@ -17,7 +23,9 @@
         {% bootstrap_field form.help_text layout="control" %}
         {% bootstrap_field form.required layout="control" %}
         {% bootstrap_field form.active layout="control" %}
-        {% bootstrap_field form.options_text layout="control" %}
+        <div data-question-options data-choice-variants="{{ form.choice_variant_values }}">
+            {% bootstrap_field form.options_text layout="control" %}
+        </div>
         <div class="form-group submit-group">
             <button type="submit" class="btn btn-primary btn-save">{% trans "Save" %}</button>
             <a class="btn btn-default btn-lg" href="{% url 'plugins:exhibition:call.questions' organizer=request.event.organizer.slug event=request.event.slug %}">
