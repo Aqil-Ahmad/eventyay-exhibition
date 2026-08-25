@@ -8,6 +8,7 @@ from django.db.models import Max, Q
 from django.utils import timezone
 from django.utils.crypto import get_random_string
 from django.utils.translation import gettext_lazy as _
+from django_countries import Countries
 from eventyay.base.models import Device, Event, Voucher
 from eventyay.base.models.base import LoggedModel
 from eventyay.common.utils.language import localize_event_text
@@ -112,6 +113,11 @@ def proposal_logo_path(instance, filename):
 
 def proposal_header_image_path(instance, filename):
     return proposal_file_path(instance, filename, "headers")
+
+
+def exhibition_answer_path(instance, filename):
+    code = instance.proposal.code or "new"
+    return os.path.join("exhibition-proposals", str(code), "answers", str(instance.question_id), filename)
 
 
 def proposal_slides_path(instance, filename):
@@ -832,13 +838,30 @@ class ExhibitionProposalExtraLink(models.Model):
 
 
 class ExhibitionQuestionVariant(models.TextChoices):
-    STRING = "string", _("Text (one-line)")
-    TEXT = "text", _("Multi-line text")
+    NUMBER = "number", _("Number")
+    STRING = "string", _("Text (one line)")
+    TEXT = "text", _("Multiline text")
     URL = "url", _("URL")
-    BOOLEAN = "boolean", _("Confirmation")
+    EMAIL = "email", _("Email address")
+    BOOLEAN = "boolean", _("Confirm Checkbox")
     CHOICES = "choices", _("Radio button (Choose one option)")
+    SELECT = "select", _("Dropdown (Choose one option)")
     MULTIPLE = "multiple_choice", _("Checkbox (Choose one or several options)")
-    SELECT = "select", _("Select (one option)")
+    FILE = "file", _("File upload")
+    DATE = "date", _("Date")
+    TIME = "time", _("Time")
+    DATETIME = "datetime", _("Date and time")
+    COUNTRY = "country", _("Country code (ISO 3166-1 alpha-2)")
+    PHONE = "phone", _("Phone number")
+
+
+QUESTION_OPTION_VARIANTS = frozenset(
+    {
+        ExhibitionQuestionVariant.CHOICES,
+        ExhibitionQuestionVariant.MULTIPLE,
+        ExhibitionQuestionVariant.SELECT,
+    }
+)
 
 
 class ExhibitionQuestion(LoggedModel):
@@ -902,6 +925,7 @@ class ExhibitionAnswer(models.Model):
         related_name="answers",
     )
     answer = models.TextField(blank=True)
+    file = models.FileField(upload_to=exhibition_answer_path, null=True, blank=True)
     options = models.ManyToManyField(ExhibitionQuestionOption, related_name="answers")
 
     class Meta:
@@ -915,13 +939,17 @@ class ExhibitionAnswer(models.Model):
             if self.answer == "False":
                 return _("No")
             return ""
-        if self.question.variant in {
-            ExhibitionQuestionVariant.CHOICES,
-            ExhibitionQuestionVariant.MULTIPLE,
-            ExhibitionQuestionVariant.SELECT,
-        }:
+        if self.question.variant in QUESTION_OPTION_VARIANTS:
             return ", ".join(str(option) for option in self.options.all())
+        if self.question.variant == ExhibitionQuestionVariant.FILE:
+            return os.path.basename(self.file.name) if self.file else ""
+        if self.question.variant == ExhibitionQuestionVariant.COUNTRY:
+            return Countries().name(self.answer) or self.answer or ""
         return self.answer or ""
+
+    @property
+    def file_url(self):
+        return self.file.url if self.file else ""
 
 
 class Lead(models.Model):
