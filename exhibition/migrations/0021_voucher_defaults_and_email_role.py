@@ -5,7 +5,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
     dependencies = [
         ("base", "0001_initial"),
-        ("exhibition", "0019_exhibitioncustomemailtemplate"),
+        ("exhibition", "0020_question_variants_and_answer_file"),
     ]
 
     operations = [
