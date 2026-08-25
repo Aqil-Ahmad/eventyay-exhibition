@@ -13,7 +13,7 @@ def backfill_content_locale(apps, schema_editor):
 
 class Migration(migrations.Migration):
     dependencies = [
-        ("exhibition", "0019_exhibitioncustomemailtemplate"),
+        ("exhibition", "0020_question_variants_and_answer_file"),
     ]
 
     operations = [
