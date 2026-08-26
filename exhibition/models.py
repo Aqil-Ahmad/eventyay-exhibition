@@ -151,6 +151,7 @@ PROPOSAL_DEFAULT_FIELDS = (
         "key": "logo",
         "label": _("Logo"),
         "help_text": LOGO_HELP_TEXT,
+        "lock_notice": LOCKED_FIELD_NOTICE,
         "active": True,
         "required": True,
         "active_locked": True,
@@ -160,6 +161,7 @@ PROPOSAL_DEFAULT_FIELDS = (
         "key": "header_image",
         "label": _("Header image"),
         "help_text": HEADER_IMAGE_HELP_TEXT,
+        "lock_notice": LOCKED_FIELD_NOTICE,
         "active": True,
         "required": True,
         "active_locked": True,
@@ -282,7 +284,7 @@ class ExhibitorSettings(LoggedModel):
             normalized[key]["help_text"] = custom_help_text or field.get("help_text") or ""
             normalized[key]["default_label"] = field["label"]
             normalized[key]["default_help_text"] = field.get("help_text") or ""
-            normalized[key]["lock_notice"] = LOCKED_FIELD_NOTICE if field.get("active_locked") else ""
+            normalized[key]["lock_notice"] = field.get("lock_notice") or ""
             if field.get("active_locked"):
                 normalized[key]["active"] = True
             if field.get("required_locked"):
