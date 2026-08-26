@@ -17,7 +17,6 @@ from exhibition.models import (
 )
 from exhibition.views import UserProposalEditView
 
-
 _PNG_BYTES = base64.b64decode(
     b"iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="
 )

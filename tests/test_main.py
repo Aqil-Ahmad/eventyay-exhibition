@@ -44,6 +44,7 @@ def no_optional_profile_fields():
     """Deactivate every default field, leaving only the locked name, for tests that ignore profile fields."""
     return {key: {"active": False, "required": False} for key in PROPOSAL_DEFAULT_FIELD_KEYS}
 
+
 _PNG_BYTES = base64.b64decode(
     b"iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="
 )
