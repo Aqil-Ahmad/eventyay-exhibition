@@ -6,7 +6,7 @@ import logging
 import re
 import uuid
 from collections import defaultdict
-from urllib.parse import urljoin
+from urllib.parse import quote_plus, urljoin
 
 from django.conf import settings as django_settings
 from django.urls import reverse
@@ -285,16 +285,36 @@ def _voucher_applies_to_text(voucher):
     return f"{product_name}{effect}"
 
 
-def _voucher_block_html(code, applies_to_text):
-    return (
+def voucher_redeem_url(event, voucher):
+    """Public checkout link that pre-applies this voucher code."""
+    from eventyay.multidomain.urlreverse import build_absolute_uri
+
+    url = f"{build_absolute_uri(event, 'presale:event.redeem')}?voucher={quote_plus(voucher.code)}"
+    if voucher.subevent_id:
+        url = f"{url}&subevent={voucher.subevent_id}"
+    return url
+
+
+def _voucher_block_html(code, applies_to_text, redeem_url=None):
+    block = (
         f"<p>{escape(str(_lazy('Voucher code')))}: <code>{escape(code)}</code><br>"
-        f"{escape(str(_lazy('Applies to')))}: {escape(applies_to_text)}</p>"
+        f"{escape(str(_lazy('Applies to')))}: {escape(applies_to_text)}"
     )
+    if redeem_url:
+        block += f'<br>{escape(str(_lazy("Redeem")))}: <a href="{escape(redeem_url)}">{escape(redeem_url)}</a>'
+    return f"{block}</p>"
 
 
-def format_voucher_list(vouchers):
-    """One block per voucher: its code and what it applies to."""
-    return "".join(_voucher_block_html(voucher.code, _voucher_applies_to_text(voucher)) for voucher in vouchers)
+def format_voucher_list(vouchers, event=None):
+    """One block per voucher: its code, what it applies to, and its redemption link."""
+    return "".join(
+        _voucher_block_html(
+            voucher.code,
+            _voucher_applies_to_text(voucher),
+            voucher_redeem_url(event or voucher.event, voucher),
+        )
+        for voucher in vouchers
+    )
 
 
 def render_voucher_list(exhibitor):
@@ -302,12 +322,26 @@ def render_voucher_list(exhibitor):
     from .models import ExhibitorVoucher
 
     links = ExhibitorVoucher.objects.filter(exhibitor=exhibitor).select_related("voucher", "voucher__product")
-    return format_voucher_list([link.voucher for link in links])
+    return format_voucher_list([link.voucher for link in links], event=exhibitor.event)
+
+
+def _sample_redeem_url(event, code):
+    if event is None:
+        return f"{django_settings.SITE_URL.rstrip('/')}/redeem?voucher={code}"
+    from eventyay.multidomain.urlreverse import build_absolute_uri
+
+    return f"{build_absolute_uri(event, 'presale:event.redeem')}?voucher={code}"
 
 
 def sample_voucher_list(event=None):
-    return _voucher_block_html("ACME-3XKQ-7T2P", "Standard Public Ticket") + _voucher_block_html(
-        "ACME-9WFD-4M8N", "Standard Public Ticket — 20% discount"
+    return _voucher_block_html(
+        "ACME-3XKQ-7T2P",
+        "Standard Public Ticket",
+        _sample_redeem_url(event, "ACME-3XKQ-7T2P"),
+    ) + _voucher_block_html(
+        "ACME-9WFD-4M8N",
+        "Standard Public Ticket — 20% discount",
+        _sample_redeem_url(event, "ACME-9WFD-4M8N"),
     )
 
 
@@ -421,7 +455,7 @@ def queue_voucher_email(event, exhibitor, vouchers, *, send_now=False, requestor
     subject_tpl, body_tpl = get_email_template(event, VOUCHERS)
     locale = recipient_locale(event)
     context = build_exhibitor_context(event, exhibitor)
-    context["voucher_list"] = format_voucher_list(vouchers)
+    context["voucher_list"] = format_voucher_list(vouchers, event=event)
 
     queued = ExhibitionEmailQueue.objects.create(
         event=event,
