@@ -171,13 +171,13 @@ PROPOSAL_DEFAULT_FIELDS = (
     {
         "key": "notes",
         "label": _("Message to the organizers"),
-        "active": True,
-        "required": True,
+        "active": False,
     },
     {
         "key": "social_links",
         "label": _("Social media"),
         "active": True,
+        "required": True,
     },
     {
         "key": "extra_links",
