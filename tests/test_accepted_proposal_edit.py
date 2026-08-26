@@ -1,11 +1,15 @@
+import base64
+
 import pytest
 from django.contrib.messages.storage.fallback import FallbackStorage
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import RequestFactory
 from django_scopes import scopes_disabled
 from eventyay.base.models.auth import User
 
 from exhibition.forms import ExhibitionProposalForm
 from exhibition.models import (
+    PROPOSAL_DEFAULT_FIELD_KEYS,
     ExhibitionProposal,
     ExhibitionProposalState,
     ExhibitorInfo,
@@ -14,12 +18,27 @@ from exhibition.models import (
 from exhibition.views import UserProposalEditView
 
 
+_PNG_BYTES = base64.b64decode(
+    b"iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="
+)
+
+
+def _locked_image_uploads():
+    """Logo and header image stay locked-active, so any valid form post must include them."""
+    return {
+        "logo": SimpleUploadedFile("logo.png", _PNG_BYTES, content_type="image/png"),
+        "header_image": SimpleUploadedFile("header.png", _PNG_BYTES, content_type="image/png"),
+    }
+
+
 def _settings_with_required_email(event):
+    field_settings = {key: {"active": False, "required": False} for key in PROPOSAL_DEFAULT_FIELD_KEYS}
+    field_settings["email"] = {"active": True, "required": True}
     return ExhibitorSettings.objects.create(
         event=event,
         exhibitors_access_mail_subject="",
         exhibitors_access_mail_body="",
-        proposal_field_settings={"email": {"active": True, "required": True}},
+        proposal_field_settings=field_settings,
     )
 
 
@@ -85,7 +104,7 @@ def test_form_valid_syncs_accepted_proposal_and_marks_edited(event):
 
         request = RequestFactory().post(
             "/",
-            data={"action": "draft", "name_0": "Acme", "email": "new@example.com"},
+            data={"action": "draft", "name_0": "Acme", "email": "new@example.com", **_locked_image_uploads()},
         )
         request.user = proposal.user
         request.event = event
