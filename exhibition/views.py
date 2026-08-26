@@ -1432,13 +1432,12 @@ class ExhibitionQuestionListView(EventPermissionRequiredMixin, ListView):
     context_object_name = "questions"
 
     def get_queryset(self):
-        return ExhibitionQuestion.objects.filter(event=self.request.event).annotate(answer_count=Count("answers"))
+        return ExhibitionQuestion.objects.filter(event=self.request.event)
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         settings = ExhibitorSettings.objects.get_or_create(event=self.request.event)[0]
         field_settings = settings.normalized_proposal_field_settings
-        answer_counts = self.get_default_field_answer_counts()
         field_definitions = {field["key"]: field for field in PROPOSAL_DEFAULT_FIELDS}
 
         rows = []
@@ -1456,7 +1455,7 @@ class ExhibitionQuestionListView(EventPermissionRequiredMixin, ListView):
                     "supports_required": definition.get("supports_required", True),
                     "active_locked": definition.get("active_locked", False),
                     "required_locked": definition.get("required_locked", False),
-                    "answer_count": answer_counts.get(key, 0),
+                    "lock_notice": field_settings[key]["lock_notice"],
                     "is_custom": False,
                 }
             )
@@ -1473,7 +1472,7 @@ class ExhibitionQuestionListView(EventPermissionRequiredMixin, ListView):
                     "supports_required": True,
                     "active_locked": False,
                     "required_locked": False,
-                    "answer_count": question.answer_count,
+                    "lock_notice": "",
                     "is_custom": True,
                     "pk": question.pk,
                 }
@@ -1481,39 +1480,6 @@ class ExhibitionQuestionListView(EventPermissionRequiredMixin, ListView):
         rows.sort(key=lambda row: (row["sort_position"], row["sort_kind"]))
         context["proposal_fields"] = rows
         return context
-
-    def get_default_field_answer_counts(self):
-        proposals = ExhibitionProposal.objects.filter(event=self.request.event).exclude(
-            state=ExhibitionProposalState.DRAFT
-        )
-        file_has_value = {
-            "slides": (Q(slides__isnull=False) & ~Q(slides="")) | (Q(slides_url__isnull=False) & ~Q(slides_url="")),
-            "logo": (Q(logo__isnull=False) & ~Q(logo="")) | (Q(logo_url__isnull=False) & ~Q(logo_url="")),
-            "header_image": (Q(header_image__isnull=False) & ~Q(header_image=""))
-            | (Q(header_image_url__isnull=False) & ~Q(header_image_url="")),
-        }
-        text_fields = (
-            "description",
-            "email",
-            "url",
-            "contact_url",
-            "video_url",
-            "booth_name",
-            "notes",
-        )
-        counts = {
-            "name": proposals.count(),
-            "social_links": proposals.filter(social_links__isnull=False).distinct().count(),
-            "extra_links": proposals.filter(extra_links__isnull=False).distinct().count(),
-        }
-        counts.update({key: proposals.filter(condition).count() for key, condition in file_has_value.items()})
-        counts.update(
-            {
-                field: proposals.exclude(**{f"{field}__isnull": True}).exclude(**{field: ""}).count()
-                for field in text_fields
-            }
-        )
-        return counts
 
     def post(self, request, *args, **kwargs):
         settings = ExhibitorSettings.objects.get_or_create(event=request.event)[0]

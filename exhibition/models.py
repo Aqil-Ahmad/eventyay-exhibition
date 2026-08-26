@@ -124,6 +124,14 @@ def proposal_slides_path(instance, filename):
     return proposal_file_path(instance, filename, "slides")
 
 
+LOCKED_FIELD_NOTICE = _(
+    "This field is required for the exhibitor profile to display on the public event page and cannot be removed."
+)
+
+LOGO_HELP_TEXT = _("PNG, JPG or SVG, up to 10 MB. A square image of at least 400 × 400 pixels works best.")
+
+HEADER_IMAGE_HELP_TEXT = _("PNG, JPG or SVG, up to 10 MB. A wide image of at least 1200 × 400 pixels works best.")
+
 PROPOSAL_DEFAULT_FIELDS = (
     {
         "key": "name",
@@ -133,28 +141,41 @@ PROPOSAL_DEFAULT_FIELDS = (
         "active_locked": True,
         "required_locked": True,
     },
-    {"key": "description", "label": _("Organization description"), "active": True},
+    {"key": "description", "label": _("Organization description"), "active": True, "required": True},
     {"key": "email", "label": _("Contact email"), "active": False},
-    {"key": "url", "label": _("Organization website"), "active": False},
+    {"key": "url", "label": _("Organization website"), "active": True, "required": True},
     {"key": "contact_url", "label": _("Contact page URL"), "active": False},
     {"key": "video_url", "label": _("Promotional video URL"), "active": False},
     {"key": "slides", "label": _("Promotional slides"), "active": False},
-    {"key": "logo", "label": _("Logo"), "active": False},
+    {
+        "key": "logo",
+        "label": _("Logo"),
+        "help_text": LOGO_HELP_TEXT,
+        "active": True,
+        "required": True,
+        "active_locked": True,
+        "required_locked": True,
+    },
     {
         "key": "header_image",
         "label": _("Header image"),
-        "active": False,
+        "help_text": HEADER_IMAGE_HELP_TEXT,
+        "active": True,
+        "required": True,
+        "active_locked": True,
+        "required_locked": True,
     },
     {"key": "booth_name", "label": _("Preferred booth name"), "active": False},
     {
         "key": "notes",
         "label": _("Message to the organizers"),
-        "active": False,
+        "active": True,
+        "required": True,
     },
     {
         "key": "social_links",
         "label": _("Social media"),
-        "active": False,
+        "active": True,
     },
     {
         "key": "extra_links",
@@ -258,8 +279,10 @@ class ExhibitorSettings(LoggedModel):
             normalized[key]["custom_label"] = custom_label
             normalized[key]["custom_help_text"] = custom_help_text
             normalized[key]["label"] = custom_label or field["label"]
-            normalized[key]["help_text"] = custom_help_text or ""
+            normalized[key]["help_text"] = custom_help_text or field.get("help_text") or ""
             normalized[key]["default_label"] = field["label"]
+            normalized[key]["default_help_text"] = field.get("help_text") or ""
+            normalized[key]["lock_notice"] = LOCKED_FIELD_NOTICE if field.get("active_locked") else ""
             if field.get("active_locked"):
                 normalized[key]["active"] = True
             if field.get("required_locked"):

@@ -430,8 +430,8 @@ class ExhibitorInfoForm(ExhibitionQuestionFieldsMixin, I18nModelForm):
                 if index == 0:
                     if setting.get("custom_label"):
                         field.label = setting["custom_label"]
-                    if setting.get("custom_help_text"):
-                        field.help_text = setting["custom_help_text"]
+                    if setting.get("help_text"):
+                        field.help_text = setting["help_text"]
                 field._required = is_required
                 if key in self.PROFILE_COMPOSITE_KEYS or key == "booth_name":
                     continue
@@ -1140,8 +1140,8 @@ class ExhibitionProposalForm(ExhibitionQuestionFieldsMixin, I18nModelForm):
                 if index == 0:
                     if setting.get("custom_label"):
                         field.label = setting["custom_label"]
-                    if setting.get("custom_help_text"):
-                        field.help_text = setting["custom_help_text"]
+                    if setting.get("help_text"):
+                        field.help_text = setting["help_text"]
                 field._required = is_required
                 if key in file_field_keys or key == "booth_name":
                     continue
@@ -1380,6 +1380,12 @@ class ExhibitionDefaultFieldForm(forms.Form):
             "label": self.field_setting["default_label"]
         }
         self.fields["label"].widget.attrs.setdefault("placeholder", self.field_setting["default_label"])
+        default_help_text = self.field_setting.get("default_help_text")
+        if default_help_text:
+            self.fields["help_text"].help_text = _("Leave empty to use the default: %(help_text)s") % {
+                "help_text": default_help_text
+            }
+            self.fields["help_text"].widget.attrs.setdefault("placeholder", default_help_text)
 
 
 class ExhibitionQuestionForm(I18nModelForm):
