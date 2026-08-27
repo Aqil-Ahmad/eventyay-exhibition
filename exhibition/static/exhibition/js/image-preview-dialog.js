@@ -1,17 +1,14 @@
 (function () {
     var TRIGGER_SELECTOR = '.exhibition-image-preview a[data-image-preview-link]'
 
-    function scrollToTop() {
-        var prefersReducedMotion =
-            typeof window.matchMedia === 'function' &&
-            window.matchMedia('(prefers-reduced-motion: reduce)').matches
-        window.scrollTo({ top: 0, left: 0, behavior: prefersReducedMotion ? 'auto' : 'smooth' })
-    }
-
     function init() {
         var dialog = document.getElementById('exhibition-image-dialog')
         if (!dialog || typeof dialog.showModal !== 'function') {
             return
+        }
+
+        if (dialog.parentNode !== document.body) {
+            document.body.appendChild(dialog)
         }
 
         var image = dialog.querySelector('[data-image-dialog-image]')
@@ -30,11 +27,15 @@
             image.src = link.href
             image.alt = label
             caption.textContent = label
-            if (!dialog.open) {
-                scrollToTop()
-                dialog.showModal()
-                dialog.focus()
+            if (dialog.open) {
+                return
             }
+
+            var scrollX = window.scrollX
+            var scrollY = window.scrollY
+            dialog.showModal()
+            dialog.focus({ preventScroll: true })
+            window.scrollTo({ top: scrollY, left: scrollX, behavior: 'instant' })
         }
 
         dialog.addEventListener('click', close)
