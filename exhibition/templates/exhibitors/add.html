@@ -268,5 +268,7 @@
         {% include "pretixcontrol/includes/logs.html" with obj=object %}
     </div>
 {% endif %}
+{% include "exhibitors/_image_preview_dialog.html" %}
 <script type="text/javascript" src="{% static 'exhibition/js/exhibitors-add.js' %}"></script>
+<script type="text/javascript" src="{% static 'exhibition/js/image-preview-dialog.js' %}"></script>
 {% endblock %}

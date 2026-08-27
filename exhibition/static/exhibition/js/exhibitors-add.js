@@ -5,77 +5,7 @@
         element.style.display = visible ? '' : 'none'
     }
 
-    var imageDialog = null
-
-    function buildImageDialog() {
-        var dialog = document.createElement('dialog')
-        dialog.className = 'exhibition-image-dialog'
-        dialog.setAttribute('role', 'alertdialog')
-        dialog.innerHTML =
-            '<div class="modal-card">' +
-            '<div class="modal-card-content">' +
-            '<figure class="text-center text-muted">' +
-            '<img alt="">' +
-            '<figcaption></figcaption>' +
-            '</figure>' +
-            '<button type="button" class="btn btn-default btn-xs exhibition-image-dialog-close">' +
-            '<i class="fa fa-times"></i>' +
-            '</button>' +
-            '</div>' +
-            '</div>'
-
-        function close() {
-            if (dialog.open) {
-                dialog.close()
-            }
-            dialog.querySelector('img').removeAttribute('src')
-        }
-
-        dialog.addEventListener('click', close)
-        dialog.querySelector('.modal-card-content').addEventListener('click', function (event) {
-            event.stopPropagation()
-        })
-        dialog.querySelector('.exhibition-image-dialog-close').addEventListener('click', close)
-        dialog.addEventListener('cancel', function () {
-            dialog.querySelector('img').removeAttribute('src')
-        })
-        document.body.appendChild(dialog)
-        return dialog
-    }
-
-    function openImageDialog(url, label) {
-        if (!url) return
-        if (!imageDialog) {
-            imageDialog = buildImageDialog()
-        }
-        imageDialog.querySelector('img').src = url
-        imageDialog.querySelector('img').alt = label || ''
-        imageDialog.querySelector('figcaption').textContent = label || ''
-        if (!imageDialog.open) {
-            imageDialog.showModal()
-        }
-    }
-
-    function initImageDialogTriggers() {
-        document.addEventListener('click', function (event) {
-            if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) {
-                return
-            }
-            if (!event.target || typeof event.target.closest !== 'function') {
-                return
-            }
-            var link = event.target.closest('.exhibition-image-preview a[data-image-preview-link]')
-            if (!link || !link.getAttribute('href')) {
-                return
-            }
-            event.preventDefault()
-            var image = link.querySelector('img')
-            openImageDialog(link.href, image ? image.alt : '')
-        })
-    }
-
     document.addEventListener('DOMContentLoaded', function () {
-        initImageDialogTriggers()
         var previewObjectUrls = new WeakMap()
         var sponsorCheckbox = document.getElementById('id_is_sponsor')
         var sponsorGroupWrapper = document.getElementById('sponsor-group-wrapper')

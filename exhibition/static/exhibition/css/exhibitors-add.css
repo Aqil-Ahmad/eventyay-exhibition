@@ -36,10 +36,6 @@
     background-color: #ddd;
 }
 
-/* Mirrors .form-image-preview from core's common/css/_forms.css, which the control and
-   presale bases do not load: transparency checkerboard behind the thumbnail.
-   Shadows are spelled out rather than using core's --shadow-* variables, because
-   common/css/_variables.css is loaded on the control base but not the presale one. */
 .exhibition-image-preview {
     background-size: 21px 21px;
     background-position:
@@ -91,8 +87,6 @@
     max-width: 420px;
 }
 
-/* Mirrors core's #lightbox-dialog (common/includes/modals.html + _pretalx.css), which is
-   only wired up on the pretalx-side bases. */
 dialog.exhibition-image-dialog {
     border: none;
     padding: 0;
@@ -139,8 +133,33 @@ dialog.exhibition-image-dialog .exhibition-image-dialog-close {
     cursor: pointer;
     color: rgb(0 0 0 / 0.7);
     font-size: 20px;
-    border: none;
+    line-height: 1;
+    padding: 4px 8px;
+    border: 0;
+    border-radius: 0;
     background: transparent;
+    box-shadow: none;
+    appearance: none;
+}
+
+dialog.exhibition-image-dialog .exhibition-image-dialog-close:hover,
+dialog.exhibition-image-dialog .exhibition-image-dialog-close:active {
+    color: rgb(0 0 0 / 0.9);
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+}
+
+dialog.exhibition-image-dialog .exhibition-image-dialog-close:focus {
+    outline: none;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+}
+
+dialog.exhibition-image-dialog .exhibition-image-dialog-close:focus-visible {
+    outline: 2px solid rgb(0 0 0 / 0.4);
+    outline-offset: 2px;
 }
 
 .partner-link-formset {

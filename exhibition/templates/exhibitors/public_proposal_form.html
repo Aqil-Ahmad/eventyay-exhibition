@@ -202,7 +202,9 @@
             </div>
         {% endif %}
     </form>
+    {% include "exhibitors/_image_preview_dialog.html" %}
     {% if can_edit %}
         <script type="text/javascript" src="{% static 'exhibition/js/exhibitors-add.js' %}"></script>
     {% endif %}
+    <script type="text/javascript" src="{% static 'exhibition/js/image-preview-dialog.js' %}"></script>
 {% endblock %}
