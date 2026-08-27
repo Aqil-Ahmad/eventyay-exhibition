@@ -480,11 +480,9 @@ LOG_EMAIL_SENT = f"{LOG_PREFIX}.email.sent"
 
 SUBMITTER_PROFILE_FIELD_LABELS = {
     "description": _("Organization Description"),
-    "email": _("Contact email"),
     "url": _("Organization Website"),
     "logo": _("Logo"),
     "header_image": _("Header Image"),
-    "booth_name": _("Preferred booth name"),
     "social_links": _("Social Media"),
 }
 
@@ -655,11 +653,9 @@ class ExhibitionProposal(LoggedModel):
         """Serialise the submitter-owned profile fields into a comparable {key: text} mapping."""
         values = {
             "description": localize_event_text(self.description) or "",
-            "email": self.email or "",
             "url": self.url or "",
             "logo": self.visible_logo_url,
             "header_image": self.visible_header_image_url,
-            "booth_name": self.localized_booth_name,
             "social_links": "\n".join(f"{link.get_network_display()}: {link.url}" for link in self.social_links.all()),
         }
         for answer in self.answers.all():
