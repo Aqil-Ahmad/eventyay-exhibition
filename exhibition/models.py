@@ -93,6 +93,16 @@ def exhibitor_header_image_path(instance, filename):
     return os.path.join("exhibitors", "headers", str(name), filename)
 
 
+def exhibitor_slides_path(instance, filename):
+    """Retained for historical migrations; no current model field uses it."""
+    name = instance.name
+    if isinstance(name, LazyI18nString):
+        event = getattr(instance, "event", None)
+        locale = getattr(event, "locale", None) if event is not None else None
+        name = name.localize(locale) if locale else str(name)
+    return os.path.join("exhibitors", "slides", str(name), filename)
+
+
 def proposal_file_path(instance, filename, file_type):
     code = instance.code or "new"
     return os.path.join("exhibition-proposals", str(code), file_type, filename)
@@ -104,6 +114,11 @@ def proposal_logo_path(instance, filename):
 
 def proposal_header_image_path(instance, filename):
     return proposal_file_path(instance, filename, "headers")
+
+
+def proposal_slides_path(instance, filename):
+    """Retained for historical migrations; no current model field uses it."""
+    return proposal_file_path(instance, filename, "slides")
 
 
 def exhibition_answer_path(instance, filename):
