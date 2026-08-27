@@ -36,21 +36,111 @@
     background-color: #ddd;
 }
 
-.partner-image-preview {
-    object-fit: contain;
-    object-position: center;
-    background: #f8f8f8;
+/* Mirrors .form-image-preview from core's common/css/_forms.css, which the control and
+   presale bases do not load: transparency checkerboard behind the thumbnail.
+   Shadows are spelled out rather than using core's --shadow-* variables, because
+   common/css/_variables.css is loaded on the control base but not the presale one. */
+.exhibition-image-preview {
+    background-size: 21px 21px;
+    background-position:
+        0 0,
+        10px 10px;
+    background-image:
+        linear-gradient(
+            45deg,
+            #efefef 25%,
+            rgb(239 239 239 / 0) 25%,
+            rgb(239 239 239 / 0) 75%,
+            #efefef 75%,
+            #efefef
+        ),
+        linear-gradient(
+            45deg,
+            #efefef 25%,
+            rgb(239 239 239 / 0) 25%,
+            rgb(239 239 239 / 0) 75%,
+            #efefef 75%,
+            #efefef
+        );
+    border-radius: 6px;
+    display: inline-block;
+    max-width: 100%;
+}
+
+.exhibition-image-preview img {
+    border-radius: 6px;
+    max-width: 100%;
+    height: auto;
+    box-shadow:
+        0 1px 3px rgb(0 0 0 / 0.12),
+        0 1px 2px rgb(0 0 0 / 0.24);
+}
+
+.exhibition-image-preview a:hover img,
+.exhibition-image-preview a:focus img {
+    box-shadow:
+        0 2px 5px rgb(0 0 0 / 0.25),
+        0 3px 5px rgb(0 0 0 / 0.22);
 }
 
 .partner-image-preview-logo {
-    width: 180px;
-    height: 180px;
+    max-width: 180px;
 }
 
 .partner-image-preview-header {
-    width: 420px;
-    height: 180px;
-    max-width: 100%;
+    max-width: 420px;
+}
+
+/* Mirrors core's #lightbox-dialog (common/includes/modals.html + _pretalx.css), which is
+   only wired up on the pretalx-side bases. */
+dialog.exhibition-image-dialog {
+    border: none;
+    padding: 0;
+    background: transparent;
+    max-width: none;
+    max-height: none;
+    overflow: visible;
+}
+
+dialog.exhibition-image-dialog::backdrop {
+    background: rgb(0 0 0 / 0.5);
+}
+
+dialog.exhibition-image-dialog .modal-card-content {
+    position: relative;
+    padding: 20px;
+    background: #fff;
+    border-radius: 6px;
+    box-shadow:
+        0 0 10px rgb(0 0 0 / 0.5),
+        0 1px 2px rgb(0 0 0 / 0.24);
+}
+
+dialog.exhibition-image-dialog figure {
+    margin: 0;
+}
+
+dialog.exhibition-image-dialog img {
+    object-fit: contain;
+    max-height: 80vh;
+    max-width: 80vw;
+    height: 100%;
+    width: 100%;
+}
+
+dialog.exhibition-image-dialog figcaption {
+    margin-top: 8px;
+}
+
+dialog.exhibition-image-dialog .exhibition-image-dialog-close {
+    position: absolute;
+    top: -4px;
+    right: 0;
+    cursor: pointer;
+    color: rgb(0 0 0 / 0.7);
+    font-size: 20px;
+    border: none;
+    background: transparent;
 }
 
 .partner-link-formset {
