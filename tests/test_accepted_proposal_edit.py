@@ -115,7 +115,6 @@ def test_form_valid_syncs_accepted_proposal_and_marks_edited(event):
         assert form.is_valid(), form.errors
 
         view.social_media_formset = None
-        view.extra_links_formset = None
         view.form_valid(form)
 
         proposal.refresh_from_db()

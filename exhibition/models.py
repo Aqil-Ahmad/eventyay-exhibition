@@ -93,15 +93,6 @@ def exhibitor_header_image_path(instance, filename):
     return os.path.join("exhibitors", "headers", str(name), filename)
 
 
-def exhibitor_slides_path(instance, filename):
-    name = instance.name
-    if isinstance(name, LazyI18nString):
-        event = getattr(instance, "event", None)
-        locale = getattr(event, "locale", None) if event is not None else None
-        name = name.localize(locale) if locale else str(name)
-    return os.path.join("exhibitors", "slides", str(name), filename)
-
-
 def proposal_file_path(instance, filename, file_type):
     code = instance.code or "new"
     return os.path.join("exhibition-proposals", str(code), file_type, filename)
@@ -118,10 +109,6 @@ def proposal_header_image_path(instance, filename):
 def exhibition_answer_path(instance, filename):
     code = instance.proposal.code or "new"
     return os.path.join("exhibition-proposals", str(code), "answers", str(instance.question_id), filename)
-
-
-def proposal_slides_path(instance, filename):
-    return proposal_file_path(instance, filename, "slides")
 
 
 LOCKED_FIELD_NOTICE = _(
@@ -142,11 +129,7 @@ PROPOSAL_DEFAULT_FIELDS = (
         "required_locked": True,
     },
     {"key": "description", "label": _("Organization description"), "active": True, "required": True},
-    {"key": "email", "label": _("Contact email"), "active": False},
     {"key": "url", "label": _("Organization website"), "active": True, "required": True},
-    {"key": "contact_url", "label": _("Contact page URL"), "active": False},
-    {"key": "video_url", "label": _("Promotional video URL"), "active": False},
-    {"key": "slides", "label": _("Promotional slides"), "active": False},
     {
         "key": "logo",
         "label": _("Logo"),
@@ -167,29 +150,18 @@ PROPOSAL_DEFAULT_FIELDS = (
         "active_locked": True,
         "required_locked": True,
     },
-    {"key": "booth_name", "label": _("Preferred booth name"), "active": False},
-    {
-        "key": "notes",
-        "label": _("Message to the organizers"),
-        "active": False,
-    },
     {
         "key": "social_links",
         "label": _("Social media"),
         "active": True,
         "required": True,
     },
-    {
-        "key": "extra_links",
-        "label": _("Extra links"),
-        "active": False,
-    },
 )
 
 
 PROPOSAL_DEFAULT_FIELD_KEYS = tuple(field["key"] for field in PROPOSAL_DEFAULT_FIELDS)
 
-PROPOSAL_FORMSET_FIELD_KEYS = ("social_links", "extra_links")
+PROPOSAL_FORMSET_FIELD_KEYS = ("social_links",)
 
 
 def default_proposal_field_settings():
@@ -340,15 +312,6 @@ class ExhibitorInfo(LoggedModel):
     description = I18nTextField(verbose_name=_("Description"), null=True, blank=True)
     url = models.URLField(verbose_name=_("URL"), null=True, blank=True)
     email = models.EmailField(verbose_name=_("Email"), null=True, blank=True)
-    contact_url = models.URLField(verbose_name=_("Contact URL"), null=True, blank=True)
-    video_url = models.URLField(verbose_name=_("Video URL"), null=True, blank=True)
-    slides = models.FileField(
-        upload_to=exhibitor_slides_path,
-        verbose_name=_("Slides"),
-        null=True,
-        blank=True,
-    )
-    slides_url = models.URLField(verbose_name=_("Slides URL"), null=True, blank=True)
     logo = models.ImageField(upload_to=exhibitor_logo_path, null=True, blank=True)
     logo_url = models.URLField(verbose_name=_("Logo URL"), null=True, blank=True)
     header_image = models.ImageField(upload_to=exhibitor_header_image_path, null=True, blank=True)
@@ -429,14 +392,6 @@ class ExhibitorInfo(LoggedModel):
             return self.header_image.url
         return ""
 
-    @property
-    def visible_slides_url(self):
-        if self.slides_url:
-            return self.slides_url
-        if self.slides:
-            return self.slides.url
-        return ""
-
 
 class ExhibitorSocialLink(models.Model):
     exhibitor = models.ForeignKey(ExhibitorInfo, on_delete=models.CASCADE, related_name="social_links")
@@ -452,18 +407,6 @@ class ExhibitorSocialLink(models.Model):
 
     def __str__(self):
         return f"{self.get_network_display()}: {self.url}"
-
-
-class ExhibitorExtraLink(models.Model):
-    exhibitor = models.ForeignKey(ExhibitorInfo, on_delete=models.CASCADE, related_name="extra_links")
-    label = models.CharField(max_length=120, verbose_name=_("Label"))
-    url = models.URLField(verbose_name=_("URL"))
-
-    class Meta:
-        ordering = ("label", "url")
-
-    def __str__(self):
-        return f"{self.label}: {self.url}"
 
 
 class ExhibitionProposalState(models.TextChoices):
@@ -539,15 +482,10 @@ SUBMITTER_PROFILE_FIELD_LABELS = {
     "description": _("Organization Description"),
     "email": _("Contact email"),
     "url": _("Organization Website"),
-    "contact_url": _("Contact Page URL"),
-    "video_url": _("Promotional Video URL"),
-    "slides": _("Promotional Slides"),
     "logo": _("Logo"),
     "header_image": _("Header Image"),
     "booth_name": _("Preferred booth name"),
-    "notes": _("Message to the organizers"),
     "social_links": _("Social Media"),
-    "extra_links": _("Extra Links"),
 }
 
 
@@ -584,15 +522,6 @@ class ExhibitionProposal(LoggedModel):
     description = I18nTextField(verbose_name=_("Description"), null=True, blank=True)
     url = models.URLField(verbose_name=_("URL"), null=True, blank=True)
     email = models.EmailField(verbose_name=_("Email"), null=True, blank=True)
-    contact_url = models.URLField(verbose_name=_("Contact URL"), null=True, blank=True)
-    video_url = models.URLField(verbose_name=_("Video URL"), null=True, blank=True)
-    slides = models.FileField(
-        upload_to=proposal_slides_path,
-        verbose_name=_("Slides"),
-        null=True,
-        blank=True,
-    )
-    slides_url = models.URLField(verbose_name=_("Slides URL"), null=True, blank=True)
     logo = models.ImageField(upload_to=proposal_logo_path, null=True, blank=True)
     logo_url = models.URLField(verbose_name=_("Logo URL"), null=True, blank=True)
     header_image = models.ImageField(upload_to=proposal_header_image_path, null=True, blank=True)
@@ -615,11 +544,6 @@ class ExhibitionProposal(LoggedModel):
         max_length=100,
         verbose_name=_("Booth name"),
         blank=True,
-    )
-    notes = models.TextField(
-        null=True,
-        blank=True,
-        verbose_name=_("Message to the organizers"),
     )
     review_notes = models.TextField(
         null=True,
@@ -733,15 +657,10 @@ class ExhibitionProposal(LoggedModel):
             "description": localize_event_text(self.description) or "",
             "email": self.email or "",
             "url": self.url or "",
-            "contact_url": self.contact_url or "",
-            "video_url": self.video_url or "",
-            "slides": self.visible_slides_url,
             "logo": self.visible_logo_url,
             "header_image": self.visible_header_image_url,
             "booth_name": self.localized_booth_name,
-            "notes": self.notes or "",
             "social_links": "\n".join(f"{link.get_network_display()}: {link.url}" for link in self.social_links.all()),
-            "extra_links": "\n".join(f"{link.label}: {link.url}" for link in self.extra_links.all()),
         }
         for answer in self.answers.all():
             values[f"answer_{answer.question_id}"] = str(answer.answer_string)
@@ -815,14 +734,6 @@ class ExhibitionProposal(LoggedModel):
             return self.header_image.url
         return ""
 
-    @property
-    def visible_slides_url(self):
-        if self.slides_url:
-            return self.slides_url
-        if self.slides:
-            return self.slides.url
-        return ""
-
 
 class ExhibitionProposalSocialLink(models.Model):
     proposal = models.ForeignKey(ExhibitionProposal, on_delete=models.CASCADE, related_name="social_links")
@@ -838,18 +749,6 @@ class ExhibitionProposalSocialLink(models.Model):
 
     def __str__(self):
         return f"{self.get_network_display()}: {self.url}"
-
-
-class ExhibitionProposalExtraLink(models.Model):
-    proposal = models.ForeignKey(ExhibitionProposal, on_delete=models.CASCADE, related_name="extra_links")
-    label = models.CharField(max_length=120, verbose_name=_("Label"))
-    url = models.URLField(verbose_name=_("URL"))
-
-    class Meta:
-        ordering = ("label", "url")
-
-    def __str__(self):
-        return f"{self.label}: {self.url}"
 
 
 class ExhibitionQuestionVariant(models.TextChoices):
