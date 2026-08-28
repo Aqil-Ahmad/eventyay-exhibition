@@ -5,7 +5,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
     dependencies = [
         ("base", "0001_initial"),
-        ("exhibition", "0020_question_variants_and_answer_file"),
+        ("exhibition", "0021_alter_exhibitionproposal_booth_name_and_more"),
     ]
 
     operations = [
