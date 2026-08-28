@@ -115,10 +115,10 @@ DEFAULT_TEMPLATES = {
         ),
     ),
     VOUCHERS: (
-        LazyI18nString({"en": "Your vouchers for {event_name} — {exhibitor_name}"}),
-        LazyI18nString(
-            {
-                "en": "Dear {exhibitor_name},\n\n"
+        LazyI18nString.from_gettext(gettext_noop("Your vouchers for {event_name} — {exhibitor_name}")),
+        LazyI18nString.from_gettext(
+            gettext_noop(
+                "Dear {exhibitor_name},\n\n"
                 "Thank you for participating in {event_name}. Please share the voucher codes below with "
                 "your audience — anyone who uses one gets credited to you as a lead.\n\n"
                 "{voucher_list}\n\n"
@@ -126,7 +126,7 @@ DEFAULT_TEMPLATES = {
                 "If you have any questions, please don't hesitate to reach out.\n\n"
                 "Best regards,\n"
                 "The {event_name} Team"
-            }
+            )
         ),
     ),
 }
