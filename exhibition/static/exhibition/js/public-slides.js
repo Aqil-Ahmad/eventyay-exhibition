@@ -13,7 +13,9 @@
         if (!state.status) {
             return
         }
-        state.status.textContent = 'Slide ' + state.pageNumber + ' of ' + state.pdf.numPages
+        state.status.textContent = state.statusLabel
+            .replace('{current}', state.pageNumber)
+            .replace('{total}', state.pdf.numPages)
     }
 
     function updateControls(state) {
@@ -160,6 +162,7 @@
             prevButton: prevButton,
             nextButton: nextButton,
             status: status,
+            statusLabel: container.dataset.statusLabel || '{current} / {total}',
             pdf: pdf,
             pageNumber: 1,
             rendering: false,

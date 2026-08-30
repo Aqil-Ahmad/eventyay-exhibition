@@ -84,7 +84,8 @@
                                 data-pdf-slides
                                 data-pdf-url="{{ slides_document_url }}"
                                 data-worker-url="{% static 'pdfjs/pdf.worker.js' %}"
-                                data-fallback-label="{% trans 'Open slides PDF' %}">
+                                data-fallback-label="{% trans 'Open slides PDF' %}"
+                                data-status-label="{% blocktrans trimmed %}Slide {current} of {total}{% endblocktrans %}">
                                 <div class="exhibition-detail-slides-frame" data-pdf-slides-frame>
                                     <canvas class="exhibition-detail-slides-canvas" data-pdf-slides-canvas></canvas>
                                 </div>
