@@ -70,13 +70,13 @@
                             <td class="text-center">{{ field.answer_count }}</td>
                             <td class="text-right">
                                 {% if field.is_custom %}
-                                    <a class="btn btn-default btn-sm" href="{% url 'plugins:exhibition:call.questions.edit' organizer=request.event.organizer.slug event=request.event.slug pk=field.pk %}" title="{% trans 'Edit' %}"><i class="fa fa-edit"></i></a>
-                                    <a class="btn btn-delete btn-danger btn-sm" href="{% url 'plugins:exhibition:call.questions.delete' organizer=request.event.organizer.slug event=request.event.slug pk=field.pk %}" title="{% trans 'Delete' %}"><i class="fa fa-trash"></i></a>
+                                    <a class="btn btn-default btn-sm" href="{% url 'plugins:exhibition:call.questions.edit' organizer=request.event.organizer.slug event=request.event.slug pk=field.pk %}" title="{% trans 'Edit' %}" data-toggle="tooltip"><i class="fa fa-edit"></i></a>
+                                    <a class="btn btn-delete btn-danger btn-sm" href="{% url 'plugins:exhibition:call.questions.delete' organizer=request.event.organizer.slug event=request.event.slug pk=field.pk %}" title="{% trans 'Delete' %}" data-toggle="tooltip"><i class="fa fa-trash"></i></a>
                                 {% else %}
-                                    <a class="btn btn-default btn-sm" href="{% url 'plugins:exhibition:call.fields.edit' organizer=request.event.organizer.slug event=request.event.slug key=field.dragsort_id %}" title="{% trans 'Edit' %}"><i class="fa fa-edit"></i></a>
-                                    <a class="btn btn-delete btn-danger btn-sm" href="{% url 'plugins:exhibition:call.fields.reset' organizer=request.event.organizer.slug event=request.event.slug key=field.dragsort_id %}" title="{% trans 'Reset to default' %}"><i class="fa fa-trash"></i></a>
+                                    <a class="btn btn-default btn-sm" href="{% url 'plugins:exhibition:call.fields.edit' organizer=request.event.organizer.slug event=request.event.slug key=field.dragsort_id %}" title="{% trans 'Edit' %}" data-toggle="tooltip"><i class="fa fa-edit"></i></a>
+                                    <a class="btn btn-delete btn-danger btn-sm" href="{% url 'plugins:exhibition:call.fields.reset' organizer=request.event.organizer.slug event=request.event.slug key=field.dragsort_id %}" title="{% trans 'Reset to default' %}" data-toggle="tooltip"><i class="fa fa-trash"></i></a>
                                 {% endif %}
-                                <button type="button" draggable="true" class="btn btn-primary btn-sm dragsort-button" title="{% trans 'Move field' %}" aria-label="{% trans 'Move field' %}">
+                                <button type="button" draggable="true" class="btn btn-primary btn-sm dragsort-button" title="{% trans 'Move field' %}" aria-label="{% trans 'Move field' %}" data-toggle="tooltip">
                                     <i class="fa fa-arrows"></i>
                                 </button>
                             </td>

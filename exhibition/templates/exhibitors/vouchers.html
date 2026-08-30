@@ -52,10 +52,17 @@
                                     {% csrf_token %}
                                     <input type="hidden" name="action" value="delete">
                                     <input type="hidden" name="voucher" value="{{ link.pk }}">
-                                    <button type="submit" class="btn btn-delete btn-danger btn-sm"
-                                            {% if link.voucher.redeemed %}disabled title="{% trans "Already redeemed" %}"{% endif %}>
-                                        <i class="fa fa-trash"></i>
-                                    </button>
+                                    {% if link.voucher.redeemed %}
+                                        <span data-toggle="tooltip" title="{% trans "Already redeemed" %}">
+                                            <button type="button" class="btn btn-delete btn-danger btn-sm" disabled>
+                                                <i class="fa fa-trash"></i>
+                                            </button>
+                                        </span>
+                                    {% else %}
+                                        <button type="submit" class="btn btn-delete btn-danger btn-sm" title="{% trans "Delete" %}" data-toggle="tooltip">
+                                            <i class="fa fa-trash"></i>
+                                        </button>
+                                    {% endif %}
                                 </form>
                             </td>
                         </tr>

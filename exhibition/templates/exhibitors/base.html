@@ -1,8 +1,14 @@
 {% extends 'pretixcontrol/base.html' %}
 {% load i18n %}
+{% load static %}
 {% load exhibition_email %}
 
 {% block title %}{{ request.event.name }} - {% trans "Exhibitors & Sponsors" %}{% endblock %}
+
+{% block custom_header %}
+    {{ block.super }}
+    <script defer src="{% static 'exhibition/js/tooltip-init.js' %}"></script>
+{% endblock %}
 
 {% block nav %}
   <li>

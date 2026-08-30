@@ -238,7 +238,9 @@
                                                 type="button"
                                                 class="btn btn-default btn-sm sponsor-group-edit-toggle"
                                                 data-group-editor-toggle="group-editor-{{ group.pk }}"
-                                                aria-expanded="{% if expanded_group_pk == group.pk %}true{% else %}false{% endif %}">
+                                                aria-expanded="{% if expanded_group_pk == group.pk %}true{% else %}false{% endif %}"
+                                                title="{% trans 'Edit sponsor group' %}"
+                                                data-toggle="tooltip">
                                                 <i class="fa fa-angle-down"></i>
                                             </button>
                                             <form action="" method="post" class="sponsor-group-delete-form">
@@ -246,9 +248,9 @@
                                                 <input type="hidden" name="tab" value="sponsors">
                                                 <input type="hidden" name="action" value="delete_group">
                                                 <input type="hidden" name="group_id" value="{{ group.pk }}">
-                                                <button type="submit" class="btn btn-delete btn-danger btn-sm"><i class="fa fa-trash"></i></button>
+                                                <button type="submit" class="btn btn-delete btn-danger btn-sm" title="{% trans 'Delete' %}" data-toggle="tooltip"><i class="fa fa-trash"></i></button>
                                             </form>
-                                            <button type="button" class="btn btn-primary btn-sm sponsor-group-drag-handle" data-group-drag-handle aria-label="{% trans 'Reorder sponsor group' %}" title="{% trans 'Reorder sponsor group' %}">
+                                            <button type="button" class="btn btn-primary btn-sm sponsor-group-drag-handle" data-group-drag-handle aria-label="{% trans 'Reorder sponsor group' %}" title="{% trans 'Reorder sponsor group' %}" data-toggle="tooltip">
                                                 <i class="fa fa-arrows"></i>
                                             </button>
                                         </div>

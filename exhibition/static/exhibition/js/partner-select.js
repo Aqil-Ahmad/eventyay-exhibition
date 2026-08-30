@@ -5,6 +5,10 @@
             return
         }
 
+        if (window.jQuery) {
+            $(scope).find('[data-toggle="tooltip"]').tooltip()
+        }
+
         var selectAll = scope.querySelector('[data-partner-select-all]')
         var countLabel = scope.querySelector('[data-partner-selected-count]')
         var downloadLink = scope.querySelector('[data-partner-download-link]')
