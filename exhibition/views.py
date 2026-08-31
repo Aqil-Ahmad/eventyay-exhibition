@@ -278,7 +278,7 @@ class SettingsView(EventPermissionRequiredMixin, ListView):
 
     def get_active_tab(self):
         tab = self.request.GET.get("tab") or self.request.POST.get("tab") or self.active_tab
-        if tab not in {"exhibitors", "sponsors", "call"}:
+        if tab not in {"exhibitors", "sponsors", "call", "vouchers"}:
             return "exhibitors"
         return tab
 
@@ -286,6 +286,7 @@ class SettingsView(EventPermissionRequiredMixin, ListView):
         route_names = {
             "call": "plugins:exhibition:settings.call",
             "sponsors": "plugins:exhibition:settings.sponsors",
+            "vouchers": "plugins:exhibition:settings.vouchers",
         }
         route_name = route_names.get(tab, "plugins:exhibition:settings.exhibitors")
         return reverse(
@@ -378,6 +379,17 @@ class SettingsView(EventPermissionRequiredMixin, ListView):
         active_tab = self.get_active_tab()
 
         if action == "save_exhibitor_settings":
+            settings.allowed_fields = request.POST.getlist("exhibitors_access_voucher")
+            settings.save(update_fields=["allowed_fields"])
+            settings.log_action(
+                LOG_SETTINGS_CHANGED,
+                data={"allowed_fields": settings.allowed_fields},
+                user=request.user,
+            )
+            messages.success(self.request, _("Settings have been saved."))
+            return redirect(self.get_settings_url("exhibitors"))
+
+        if action == "save_voucher_settings":
             voucher_defaults_form = ExhibitorVoucherDefaultsForm(
                 request.POST,
                 instance=settings,
@@ -385,15 +397,14 @@ class SettingsView(EventPermissionRequiredMixin, ListView):
             )
             if not voucher_defaults_form.is_valid():
                 return self.render_to_response(self.get_context_data(voucher_defaults_form=voucher_defaults_form))
-            settings.allowed_fields = request.POST.getlist("exhibitors_access_voucher")
             voucher_defaults_form.save()
             settings.log_action(
                 LOG_SETTINGS_CHANGED,
-                data={"allowed_fields": settings.allowed_fields, "changed": voucher_defaults_form.changed_data},
+                data={"changed": voucher_defaults_form.changed_data},
                 user=request.user,
             )
             messages.success(self.request, _("Settings have been saved."))
-            return redirect(self.get_settings_url("exhibitors"))
+            return redirect(self.get_settings_url("vouchers"))
 
         if action == "save_call_settings":
             form = CallSettingsForm(
