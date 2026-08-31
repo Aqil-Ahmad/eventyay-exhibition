@@ -6,7 +6,7 @@ import logging
 import re
 import uuid
 from collections import defaultdict
-from urllib.parse import quote_plus, urljoin
+from urllib.parse import urljoin
 
 from django.conf import settings as django_settings
 from django.urls import reverse
@@ -294,16 +294,6 @@ def _voucher_applies_to_text(voucher):
     return f"{product_name}{effect}"
 
 
-def voucher_redeem_url(event, voucher):
-    """Public checkout link that pre-applies this voucher code."""
-    from eventyay.multidomain.urlreverse import build_absolute_uri
-
-    url = f"{build_absolute_uri(event, 'presale:event.redeem')}?voucher={quote_plus(voucher.code)}"
-    if voucher.subevent_id:
-        url = f"{url}&subevent={voucher.subevent_id}"
-    return url
-
-
 def _voucher_block_html(code, applies_to_text, redeem_url=None):
     block = (
         f"<p>{escape(str(_lazy('Voucher code')))}: <code>{escape(code)}</code><br>"
@@ -316,6 +306,8 @@ def _voucher_block_html(code, applies_to_text, redeem_url=None):
 
 def format_voucher_list(vouchers, event=None):
     """One block per voucher: its code, what it applies to, and its redemption link."""
+    from .utils import voucher_redeem_url
+
     return "".join(
         _voucher_block_html(
             voucher.code,

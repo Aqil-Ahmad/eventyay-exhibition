@@ -433,15 +433,23 @@ def sync_exhibitor_from_proposal(proposal, requestor=None):
 VOUCHER_CSV_FILENAME = "exhibitor-vouchers.csv"
 
 
+def voucher_redeem_url(event, voucher):
+    """Public checkout link that pre-applies this voucher code."""
+    from eventyay.multidomain.urlreverse import build_absolute_uri
+
+    url = f"{build_absolute_uri(event, 'presale:event.redeem')}?voucher={quote_plus(voucher.code)}"
+    if voucher.subevent_id:
+        url = f"{url}&subevent={voucher.subevent_id}"
+    return url
+
+
 def build_voucher_csv(event, vouchers) -> str:
     """Render an exhibitor's vouchers as CSV, shared by the download view and the voucher email."""
     import io
 
     from defusedcsv import csv
     from django.utils.translation import gettext_lazy as _
-    from eventyay.multidomain.urlreverse import build_absolute_uri
 
-    redeem_base = build_absolute_uri(event, "presale:event.redeem")
     output = io.StringIO()
     writer = csv.writer(output, quoting=csv.QUOTE_NONNUMERIC, delimiter=",")
     writer.writerow(
@@ -460,7 +468,7 @@ def build_voucher_csv(event, vouchers) -> str:
         writer.writerow(
             [
                 voucher.code,
-                f"{redeem_base}?voucher={quote_plus(voucher.code)}",
+                voucher_redeem_url(event, voucher),
                 str(voucher.product) if voucher.product else "",
                 str(voucher.get_price_mode_display()),
                 str(voucher.value) if voucher.value is not None else "",
