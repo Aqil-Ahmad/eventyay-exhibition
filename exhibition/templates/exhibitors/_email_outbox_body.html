@@ -43,7 +43,8 @@
                         <input type="checkbox" name="selected" value="{{ entry.pk }}" data-select-row>
                     </td>
                     <td>
-                        <span class="email-recipients" title="{{ entry.recipients|join:', ' }}">{{ entry.recipients|join:", " }}</span>
+                        <span class="email-recipients" title="{{ entry.recipients|join:', ' }}"
+                              data-toggle="tooltip">{{ entry.recipients|join:", " }}</span>
                         {% if entry.is_batch %}
                             <span class="label label-default">{{ entry.recipients|length }}</span>
                         {% endif %}
@@ -64,19 +65,22 @@
                     <td class="email-actions">
                         <div class="btn-toolbar" role="toolbar">
                             <div class="btn-group" role="group">
-                                <button type="submit" class="btn btn-sm btn-primary" title="{% trans 'Send this email' %}"
+                                <button type="submit" class="btn btn-sm btn-primary" title="{% trans 'Send' %}"
+                                        data-toggle="tooltip"
                                         formaction="{% url 'plugins:exhibition:email.send' organizer=request.event.organizer.slug event=request.event.slug pk=entry.pk %}">
                                     <i class="fa fa-mail-forward"></i>
                                 </button>
                             </div>
                             <div class="btn-group" role="group">
-                                <a class="btn btn-sm btn-info" title="{% trans 'Edit this email' %}"
+                                <a class="btn btn-sm btn-info" title="{% trans 'Edit' %}"
+                                   data-toggle="tooltip"
                                    href="{% url 'plugins:exhibition:email.edit' organizer=request.event.organizer.slug event=request.event.slug pk=entry.pk %}">
                                     <i class="fa fa-edit"></i>
                                 </a>
                             </div>
                             <div class="btn-group" role="group">
-                                <a class="btn btn-sm btn-danger" title="{% trans 'Discard this email' %}"
+                                <a class="btn btn-sm btn-danger" title="{% trans 'Discard' %}"
+                                   data-toggle="tooltip"
                                    href="{% url 'plugins:exhibition:email.delete' organizer=request.event.organizer.slug event=request.event.slug pk=entry.pk %}">
                                     <i class="fa fa-trash"></i>
                                 </a>

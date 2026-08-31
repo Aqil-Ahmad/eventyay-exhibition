@@ -1,6 +1,7 @@
 (function () {
-    document.addEventListener('DOMContentLoaded', function () {
-        document.querySelectorAll('.exhibitor-copy-key').forEach(function (button) {
+    function init() {
+        document.querySelectorAll('.exhibitor-copy-key:not([data-copy-key-bound])').forEach(function (button) {
+            button.setAttribute('data-copy-key-bound', 'true')
             var $button = $(button)
             var originalTitle = $button.attr('data-original-title') || button.getAttribute('title')
 
@@ -35,5 +36,12 @@
                     })
             })
         })
-    })
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', init)
+    } else {
+        init()
+    }
+    document.addEventListener('eventyay:ajax-results-replaced', init)
 })()

@@ -78,7 +78,7 @@
                             <strong>{{ panel.label }}</strong>
                             <span class="pull-right">
                                 <a href="{% url 'plugins:exhibition:email.custom_templates.delete' organizer=request.event.organizer.slug event=request.event.slug pk=panel.pk %}"
-                                   class="btn btn-sm btn-danger" title="{% trans 'Discard this template' %}">
+                                   class="btn btn-sm btn-danger" title="{% trans 'Discard this template' %}" data-toggle="tooltip">
                                     <i class="fa fa-trash"></i>
                                 </a>
                                 <i class="fa fa-angle-down collapse-indicator"></i>

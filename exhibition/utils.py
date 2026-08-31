@@ -187,7 +187,32 @@ def create_exhibitor_from_proposal(proposal, requestor=None):
     return exhibitor
 
 
-def generate_exhibitor_vouchers(exhibitor, *, product, count, max_usages, price_mode, value, valid_until):
+def event_voucher_settings(event):
+    """Event-wide voucher defaults, without creating a settings row on a read path."""
+    from .models import ExhibitorSettings
+
+    return ExhibitorSettings.objects.filter(event=event).first() or ExhibitorSettings(event=event)
+
+
+def resolve_voucher_defaults(exhibitor, *, event_settings=None):
+    """Voucher settings for this exhibitor: their sponsor group's, or the event-wide default.
+
+    Pass ``event_settings`` when resolving for many exhibitors to avoid a query per row.
+    """
+    source = (
+        exhibitor.sponsor_group
+        if exhibitor.sponsor_group_id
+        else (event_settings or event_voucher_settings(exhibitor.event))
+    )
+    return {
+        "product": source.voucher_default_product,
+        "count": source.voucher_default_count,
+        "price_mode": source.voucher_default_price_mode,
+        "value": source.voucher_default_value,
+    }
+
+
+def generate_exhibitor_vouchers(exhibitor, *, product, count, price_mode, value):
     from eventyay.base.models import Voucher
 
     from .models import ExhibitorVoucher
@@ -198,10 +223,8 @@ def generate_exhibitor_vouchers(exhibitor, *, product, count, max_usages, price_
         voucher = Voucher.objects.create(
             event=exhibitor.event,
             product=product,
-            max_usages=max_usages,
             price_mode=price_mode,
             value=value,
-            valid_until=valid_until,
             tag=tag,
         )
         links.append(ExhibitorVoucher(exhibitor=exhibitor, voucher=voucher))

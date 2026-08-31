@@ -18,6 +18,9 @@
             .then(function (html) {
                 target.innerHTML = html;
                 target.classList.remove("email-list-loading");
+                target.dispatchEvent(
+                    new CustomEvent("eventyay:ajax-results-replaced", { bubbles: true, detail: { container: target } })
+                );
                 if (push) {
                     window.history.pushState({ emailList: true }, "", url);
                 }

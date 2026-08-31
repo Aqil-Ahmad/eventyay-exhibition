@@ -9,7 +9,7 @@ from django.utils import timezone
 from django.utils.crypto import get_random_string
 from django.utils.translation import gettext_lazy as _
 from django_countries import Countries
-from eventyay.base.models import Device, Event, Voucher
+from eventyay.base.models import Device, Event, PriceModeChoices, Product, Voucher
 from eventyay.base.models.base import LoggedModel
 from eventyay.common.utils.language import localize_event_text
 from i18nfield.fields import I18nCharField, I18nTextField
@@ -199,7 +199,40 @@ def default_allowed_fields():
     return ["attendee_name", "attendee_email"]
 
 
-class ExhibitorSettings(LoggedModel):
+class VoucherDefaultsMixin(models.Model):
+    """Default voucher settings applied when issuing/sending vouchers without overriding them."""
+
+    voucher_default_count = models.PositiveIntegerField(
+        default=1,
+        verbose_name=_("Default number of vouchers"),
+    )
+    voucher_default_product = models.ForeignKey(
+        Product,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="+",
+        verbose_name=_("Default ticket product"),
+    )
+    voucher_default_price_mode = models.CharField(
+        max_length=20,
+        choices=PriceModeChoices.choices,
+        default=PriceModeChoices.NONE,
+        verbose_name=_("Default price effect"),
+    )
+    voucher_default_value = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        verbose_name=_("Default value"),
+    )
+
+    class Meta:
+        abstract = True
+
+
+class ExhibitorSettings(VoucherDefaultsMixin, LoggedModel):
     event = models.ForeignKey("base.Event", on_delete=models.CASCADE)
     exhibitors_access_mail_subject = models.CharField(max_length=255)
     exhibitors_access_mail_body = models.TextField()
@@ -286,7 +319,7 @@ class ExhibitorSettings(LoggedModel):
         unique_together = ("event",)
 
 
-class SponsorGroup(LoggedModel):
+class SponsorGroup(VoucherDefaultsMixin, LoggedModel):
     event = models.ForeignKey(Event, on_delete=models.CASCADE, related_name="sponsor_groups")
     name = I18nCharField(max_length=120, verbose_name=_("Group name"))
     level = models.PositiveIntegerField(default=1, db_index=True, verbose_name=_("Level"))
@@ -951,6 +984,7 @@ class ExhibitionEmailQueue(LoggedModel):
         related_name="emails",
     )
     batch = models.UUIDField(null=True, blank=True, db_index=True)
+    role = models.CharField(max_length=40, blank=True, default="", db_index=True)
     to_email = models.EmailField(verbose_name=_("Recipient"))
     subject = models.CharField(max_length=255, verbose_name=_("Subject"))
     body = models.TextField(verbose_name=_("Body"))

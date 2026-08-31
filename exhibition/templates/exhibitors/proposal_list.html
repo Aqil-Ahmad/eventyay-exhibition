@@ -107,34 +107,35 @@
                                 <a class="proposal-edited-dot"
                                    href="{% url 'plugins:exhibition:proposal.detail' organizer=request.event.organizer.slug event=request.event.slug code=proposal.code %}#post-acceptance-changes"
                                    title="{{ edited_hint }}"
-                                   aria-label="{{ edited_hint }}"></a>
+                                   aria-label="{{ edited_hint }}"
+                                   data-toggle="tooltip"></a>
                             {% endif %}
                         </td>
                         <td>{{ proposal.updated|date:"SHORT_DATETIME_FORMAT" }}</td>
                         <td class="text-right proposal-row-actions" data-proposal-actions-cell>
                             {% if can_manage %}
                                 {% if "approve" in proposal.review_actions %}
-                                    <button type="button" class="btn btn-success btn-sm proposal-action-btn proposal-action-approve" data-proposal-action="approve" data-proposal-code="{{ proposal.code }}" title="{% trans 'Approve' %}">
+                                    <button type="button" class="btn btn-success btn-sm proposal-action-btn proposal-action-approve" data-proposal-action="approve" data-proposal-code="{{ proposal.code }}" title="{% trans 'Approve' %}" data-toggle="tooltip">
                                         <i class="fa fa-check"></i>
                                     </button>
                                 {% endif %}
                                 {% if "reject" in proposal.review_actions %}
-                                    <button type="button" class="btn btn-danger btn-sm proposal-action-btn proposal-action-reject" data-proposal-action="reject" data-proposal-code="{{ proposal.code }}" title="{% trans 'Reject' %}">
+                                    <button type="button" class="btn btn-danger btn-sm proposal-action-btn proposal-action-reject" data-proposal-action="reject" data-proposal-code="{{ proposal.code }}" title="{% trans 'Reject' %}" data-toggle="tooltip">
                                         <i class="fa fa-times"></i>
                                     </button>
                                 {% endif %}
                                 {% if "withdraw" in proposal.review_actions %}
-                                    <button type="button" class="btn btn-sm proposal-action-btn proposal-action-withdraw" data-proposal-action="withdraw" data-proposal-code="{{ proposal.code }}" title="{% trans 'Withdraw' %}">
+                                    <button type="button" class="btn btn-sm proposal-action-btn proposal-action-withdraw" data-proposal-action="withdraw" data-proposal-code="{{ proposal.code }}" title="{% trans 'Withdraw' %}" data-toggle="tooltip">
                                         <i class="fa fa-undo"></i>
                                     </button>
                                 {% endif %}
                                 {% if "reopen" in proposal.review_actions %}
-                                    <button type="button" class="btn btn-sm proposal-action-btn proposal-action-reopen" data-proposal-action="reopen" data-proposal-code="{{ proposal.code }}" title="{% trans 'Reopen for review' %}">
+                                    <button type="button" class="btn btn-sm proposal-action-btn proposal-action-reopen" data-proposal-action="reopen" data-proposal-code="{{ proposal.code }}" title="{% trans 'Reopen for review' %}" data-toggle="tooltip">
                                         <i class="fa fa-inbox"></i>
                                     </button>
                                 {% endif %}
                             {% endif %}
-                            <a class="btn btn-default btn-sm" href="{% url 'plugins:exhibition:proposal.detail' organizer=request.event.organizer.slug event=request.event.slug code=proposal.code %}" title="{% trans 'View' %}">
+                            <a class="btn btn-default btn-sm" href="{% url 'plugins:exhibition:proposal.detail' organizer=request.event.organizer.slug event=request.event.slug code=proposal.code %}" title="{% trans 'View' %}" data-toggle="tooltip">
                                 <i class="fa fa-eye"></i>
                             </a>
                         </td>

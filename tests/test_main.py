@@ -159,13 +159,14 @@ def test_delete_exhibitor_info(event):
 
 @pytest.mark.django_db
 def test_sponsor_group_form_accepts_event_kwarg_and_preserves_existing_level(event):
-    form = SponsorGroupForm(event=event)
-    assert form.event == event
+    with scopes_disabled():
+        form = SponsorGroupForm(event=event)
+        assert form.event == event
 
-    group = SponsorGroup.objects.create(event=event, name="Legacy Group", level=0)
-    form = SponsorGroupForm(instance=group, event=event)
-    form.cleaned_data = {"level": None}
-    assert form.clean_level() == 0
+        group = SponsorGroup.objects.create(event=event, name="Legacy Group", level=0)
+        form = SponsorGroupForm(instance=group, event=event)
+        form.cleaned_data = {"level": None}
+        assert form.clean_level() == 0
 
 
 @pytest.mark.django_db

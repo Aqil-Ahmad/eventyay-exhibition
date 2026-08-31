@@ -6,7 +6,7 @@ from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.exceptions import PermissionDenied
 from django.db import transaction
-from django.db.models import Count, Min, Q
+from django.db.models import Count, Max, Min, Q
 from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -44,10 +44,12 @@ from .forms import (
     ExhibitionProposalReviewNotesForm,
     ExhibitionProposalSocialLinkFormSet,
     ExhibitionQuestionForm,
+    ExhibitionQuestionOptionFormSet,
     ExhibitorDeviceProvisionForm,
     ExhibitorInfoForm,
     ExhibitorSocialLinkFormSet,
     ExhibitorVoucherBatchForm,
+    ExhibitorVoucherDefaultsForm,
     SponsorGroupForm,
     social_link_prefixes,
 )
@@ -67,11 +69,13 @@ from .models import (
     PROPOSAL_DEFAULT_FIELD_KEYS,
     PROPOSAL_DEFAULT_FIELDS,
     PROPOSAL_REVIEW_ACTIONS,
+    QUESTION_OPTION_VARIANTS,
     ExhibitionCustomEmailTemplate,
     ExhibitionEmailQueue,
     ExhibitionProposal,
     ExhibitionProposalState,
     ExhibitionQuestion,
+    ExhibitionQuestionOption,
     ExhibitorDevice,
     ExhibitorInfo,
     ExhibitorSettings,
@@ -89,6 +93,7 @@ from .utils import (
     provision_exhibitor_devices,
     public_exhibitors_queryset,
     reset_exhibitor_device_setup,
+    resolve_voucher_defaults,
     should_hide_applicant_emails,
     sync_exhibitor_from_proposal,
 )
@@ -313,6 +318,10 @@ class SettingsView(EventPermissionRequiredMixin, ListView):
             instance=settings,
             event=self.request.event,
         )
+        ctx["voucher_defaults_form"] = kwargs.get("voucher_defaults_form") or ExhibitorVoucherDefaultsForm(
+            instance=settings,
+            event=self.request.event,
+        )
         ctx["show_add_group_form"] = kwargs.get("show_add_group_form", False)
         ctx["expanded_group_pk"] = kwargs.get("expanded_group_pk")
         return ctx
@@ -364,11 +373,18 @@ class SettingsView(EventPermissionRequiredMixin, ListView):
         active_tab = self.get_active_tab()
 
         if action == "save_exhibitor_settings":
+            voucher_defaults_form = ExhibitorVoucherDefaultsForm(
+                request.POST,
+                instance=settings,
+                event=self.request.event,
+            )
+            if not voucher_defaults_form.is_valid():
+                return self.render_to_response(self.get_context_data(voucher_defaults_form=voucher_defaults_form))
             settings.allowed_fields = request.POST.getlist("exhibitors_access_voucher")
-            settings.save()
+            voucher_defaults_form.save()
             settings.log_action(
                 LOG_SETTINGS_CHANGED,
-                data={"allowed_fields": settings.allowed_fields},
+                data={"allowed_fields": settings.allowed_fields, "changed": voucher_defaults_form.changed_data},
                 user=request.user,
             )
             messages.success(self.request, _("Settings have been saved."))
@@ -525,7 +541,21 @@ class ExhibitorListView(EventPermissionRequiredMixin, FilteredListMixin, ListVie
         context["reorder_enabled"] = not self.filter_form.filtered and not context["is_paginated"]
         if self.partner_type == "sponsor":
             context["sponsor_group_sections"] = self.build_sponsor_group_sections(context["exhibitors"])
+        self.annotate_voucher_status(context["exhibitors"])
         return context
+
+    def annotate_voucher_status(self, exhibitors):
+        ids = [exhibitor.pk for exhibitor in exhibitors]
+        if not ids:
+            return
+        rows = ExhibitionEmailQueue.objects.filter(exhibitor_id__in=ids, role=mail_helpers.VOUCHERS)
+        last_sent = dict(
+            rows.filter(sent_at__isnull=False).values_list("exhibitor_id").annotate(last_sent=Max("sent_at"))
+        )
+        pending = set(rows.filter(sent_at__isnull=True).values_list("exhibitor_id", flat=True))
+        for exhibitor in exhibitors:
+            exhibitor.voucher_sent_at = last_sent.get(exhibitor.pk)
+            exhibitor.voucher_pending = exhibitor.pk in pending
 
     def build_sponsor_group_sections(self, sponsors):
         groups = list(SponsorGroup.objects.filter(event=self.request.event).order_by("level", "pk"))
@@ -1539,7 +1569,58 @@ class ExhibitionQuestionListView(EventPermissionRequiredMixin, ListView):
             ExhibitionQuestion.objects.bulk_update(reordered_questions, ["position"])
 
 
-class ExhibitionQuestionCreateView(EventPermissionRequiredMixin, CreateView):
+class ExhibitionQuestionOptionFormSetMixin:
+    option_formset_prefix = "options"
+
+    @cached_property
+    def option_formset(self):
+        requires_option = (
+            self.request.POST.get("variant") in QUESTION_OPTION_VARIANTS
+            if self.request.method == "POST"
+            else self.object is not None and self.object.variant in QUESTION_OPTION_VARIANTS
+        )
+        return ExhibitionQuestionOptionFormSet(
+            self.request.POST if self.request.method == "POST" else None,
+            queryset=self.object.options.all() if self.object else ExhibitionQuestionOption.objects.none(),
+            event=self.request.event,
+            prefix=self.option_formset_prefix,
+            requires_option=requires_option,
+        )
+
+    def save_option_formset(self):
+        if self.object.variant not in QUESTION_OPTION_VARIANTS:
+            self.object.options.all().delete()
+            return
+
+        deleted_forms = self.option_formset.deleted_forms
+        for option_form in deleted_forms:
+            if option_form.instance.pk is not None:
+                option_form.instance.delete()
+
+        ordered_forms = self.option_formset.ordered_forms + [
+            option_form
+            for option_form in self.option_formset.extra_forms
+            if option_form not in self.option_formset.ordered_forms
+            and option_form not in deleted_forms
+        ]
+        option_forms = [
+            option_form
+            for option_form in ordered_forms
+            if option_form not in deleted_forms and option_form.cleaned_data.get("answer")
+        ]
+        for position, option_form in enumerate(option_forms):
+            option = option_form.save(commit=False)
+            option.question = self.object
+            option.position = position
+            option.save()
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["option_formset"] = self.option_formset
+        return context
+
+
+class ExhibitionQuestionCreateView(EventPermissionRequiredMixin, ExhibitionQuestionOptionFormSetMixin, CreateView):
     model = ExhibitionQuestion
     form_class = ExhibitionQuestionForm
     permission = "can_change_settings"
@@ -1551,12 +1632,16 @@ class ExhibitionQuestionCreateView(EventPermissionRequiredMixin, CreateView):
         return kwargs
 
     def form_valid(self, form):
-        response = super().form_valid(form)
-        self.object.log_action(
-            LOG_QUESTION_ADDED,
-            data={"question": self.object.localized_question},
-            user=self.request.user,
-        )
+        if not self.option_formset.is_valid():
+            return self.form_invalid(form)
+        with transaction.atomic():
+            response = super().form_valid(form)
+            self.save_option_formset()
+            self.object.log_action(
+                LOG_QUESTION_ADDED,
+                data={"question": self.object.localized_question},
+                user=self.request.user,
+            )
         return response
 
     def get_success_url(self):
@@ -1566,7 +1651,7 @@ class ExhibitionQuestionCreateView(EventPermissionRequiredMixin, CreateView):
         )
 
 
-class ExhibitionQuestionEditView(EventPermissionRequiredMixin, UpdateView):
+class ExhibitionQuestionEditView(EventPermissionRequiredMixin, ExhibitionQuestionOptionFormSetMixin, UpdateView):
     model = ExhibitionQuestion
     form_class = ExhibitionQuestionForm
     permission = "can_change_settings"
@@ -1581,12 +1666,16 @@ class ExhibitionQuestionEditView(EventPermissionRequiredMixin, UpdateView):
         return kwargs
 
     def form_valid(self, form):
-        response = super().form_valid(form)
-        self.object.log_action(
-            LOG_QUESTION_CHANGED,
-            data={"changed": form.changed_data},
-            user=self.request.user,
-        )
+        if not self.option_formset.is_valid():
+            return self.form_invalid(form)
+        with transaction.atomic():
+            response = super().form_valid(form)
+            self.save_option_formset()
+            self.object.log_action(
+                LOG_QUESTION_CHANGED,
+                data={"changed": form.changed_data},
+                user=self.request.user,
+            )
         return response
 
     def get_success_url(self):
@@ -1874,8 +1963,12 @@ class ExhibitorVoucherManageView(EventPermissionRequiredMixin, DetailView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context.setdefault("form", ExhibitorVoucherBatchForm(event=self.request.event))
+        default_count = resolve_voucher_defaults(self.object)["count"]
+        context.setdefault("form", ExhibitorVoucherBatchForm(initial={"count": default_count}))
         context["vouchers"] = self.voucher_links()
+        emails = ExhibitionEmailQueue.objects.filter(exhibitor=self.object, role=mail_helpers.VOUCHERS)
+        context["voucher_sent_at"] = emails.filter(sent_at__isnull=False).aggregate(last=Max("sent_at"))["last"]
+        context["voucher_pending"] = emails.filter(sent_at__isnull=True).exists()
         return context
 
     def download_csv(self):
@@ -1922,8 +2015,11 @@ class ExhibitorVoucherManageView(EventPermissionRequiredMixin, DetailView):
 
     def post(self, request, *args, **kwargs):
         self.object = self.get_object()
-        if request.POST.get("action") == "delete":
+        action = request.POST.get("action")
+        if action == "delete":
             return self.remove_voucher(request)
+        if action == "send":
+            return self.send_vouchers(request)
         return self.create_vouchers(request)
 
     def remove_voucher(self, request):
@@ -1939,22 +2035,55 @@ class ExhibitorVoucherManageView(EventPermissionRequiredMixin, DetailView):
 
     @transaction.atomic
     def create_vouchers(self, request):
-        form = ExhibitorVoucherBatchForm(request.POST, event=self.request.event)
+        form = ExhibitorVoucherBatchForm(request.POST)
         if not form.is_valid():
             return self.render_to_response(self.get_context_data(form=form))
         count = form.cleaned_data["count"]
-        generate_exhibitor_vouchers(
-            self.object,
-            product=form.cleaned_data["product"],
-            count=count,
-            max_usages=form.cleaned_data["max_usages"],
-            price_mode=form.cleaned_data["price_mode"],
-            value=form.cleaned_data["value"],
-            valid_until=form.cleaned_data["valid_until"],
-        )
+        if not count:
+            form.add_error("count", _("Enter how many vouchers to create."))
+            return self.render_to_response(self.get_context_data(form=form))
+        self.issue_vouchers(count)
         messages.success(
             request,
             ngettext("%(count)d voucher created.", "%(count)d vouchers created.", count) % {"count": count},
+        )
+        return redirect(self.get_success_url())
+
+    def issue_vouchers(self, count):
+        defaults = resolve_voucher_defaults(self.object)
+        return generate_exhibitor_vouchers(
+            self.object,
+            product=defaults["product"],
+            count=count,
+            price_mode=defaults["price_mode"],
+            value=defaults["value"],
+        )
+
+    @transaction.atomic
+    def send_vouchers(self, request):
+        """Create any requested vouchers, then outbox an email with the partner's complete list of codes."""
+        form = ExhibitorVoucherBatchForm(request.POST)
+        if not form.is_valid():
+            return self.render_to_response(self.get_context_data(form=form))
+        if not (self.object.email or "").strip():
+            messages.error(request, _("This partner has no email address on file, so vouchers cannot be emailed."))
+            return redirect(self.get_success_url())
+        count = form.cleaned_data["count"]
+        if count:
+            self.issue_vouchers(count)
+        vouchers = [link.voucher for link in self.voucher_links()]
+        if not vouchers:
+            form.add_error("count", _("This partner has no vouchers yet, so there is nothing to email."))
+            return self.render_to_response(self.get_context_data(form=form))
+        mail_helpers.queue_voucher_email(request.event, self.object, vouchers, requestor=request.user)
+        messages.success(
+            request,
+            ngettext(
+                "An email with %(count)d voucher code was placed in the outbox.",
+                "An email with %(count)d voucher codes was placed in the outbox.",
+                len(vouchers),
+            )
+            % {"count": len(vouchers)},
         )
         return redirect(self.get_success_url())
 
@@ -2474,6 +2603,7 @@ class EmailTemplatesView(EventPermissionRequiredMixin, TemplateView):
                 (mail_helpers.PROPOSAL_ACCEPTED, _("Request accepted")),
                 (mail_helpers.PROPOSAL_REJECTED, _("Request rejected")),
                 (mail_helpers.EXHIBITOR_ACCESS, _("Exhibitor lead scanning key")),
+                (mail_helpers.VOUCHERS, _("Vouchers")),
             )
         ]
         context["custom_panels"] = custom_panels

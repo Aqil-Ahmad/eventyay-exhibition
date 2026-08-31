@@ -1,6 +1,7 @@
 import dateutil.parser
 from django import forms
 from django.conf import settings as django_settings
+from django.core.exceptions import ValidationError
 from django.core.files.storage import default_storage
 from django.core.files.uploadedfile import UploadedFile
 from django.db import transaction
@@ -9,7 +10,7 @@ from django.forms import inlineformset_factory
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 from django_countries.fields import CountryField
-from eventyay.base.forms import I18nModelForm, SettingsForm
+from eventyay.base.forms import I18nFormSet, I18nModelForm, SettingsForm
 from eventyay.base.forms.widgets import (
     DatePickerWidget,
     SplitDateTimePickerWidget,
@@ -566,66 +567,66 @@ class ExhibitorDeviceProvisionForm(forms.Form):
 
 
 class ExhibitorVoucherBatchForm(forms.Form):
-    product = forms.ModelChoiceField(
-        queryset=Product.objects.none(),
-        required=True,
-        empty_label=_("Select a product…"),
-        label=_("Ticket product"),
-        help_text=_("The product a redeemed voucher applies to."),
-    )
+    """How many vouchers to issue; the rest of the settings come from the resolved defaults."""
+
     count = forms.IntegerField(
-        min_value=1,
+        min_value=0,
         max_value=1000,
         initial=1,
-        label=_("Number of vouchers"),
-    )
-    max_usages = forms.IntegerField(
-        min_value=1,
-        initial=1,
-        label=_("Maximum usages per voucher"),
-    )
-    price_mode = forms.ChoiceField(
-        choices=PriceModeChoices.choices,
-        initial=PriceModeChoices.NONE,
-        label=_("Price effect"),
-    )
-    value = forms.DecimalField(
-        required=False,
-        decimal_places=2,
-        max_digits=10,
-        label=_("Value"),
-        help_text=_("Amount or percentage, depending on the selected price effect."),
-    )
-    valid_until = forms.DateTimeField(
-        required=False,
-        widget=HtmlDateTimeInput,
-        label=_("Valid until"),
+        label=_("New vouchers to create"),
+        help_text=_("Set to 0 to email the codes this partner already has without creating new ones."),
     )
 
-    def __init__(self, *args, **kwargs):
-        self.event = kwargs.pop("event", None)
-        super().__init__(*args, **kwargs)
-        if self.event:
-            self.fields["product"].queryset = Product.objects.filter(event=self.event, active=True).order_by(
-                "position", "pk"
-            )
 
-    def clean(self):
-        cleaned_data = super().clean()
-        price_mode = cleaned_data.get("price_mode")
-        value = cleaned_data.get("value")
+def _voucher_default_product_field():
+    """A fresh, unscoped ``ModelChoiceField`` for ``voucher_default_product``.
+
+    Must be declared directly on each concrete form (not just in ``Meta.fields``), otherwise Django's
+    ModelForm metaclass auto-builds it from the model FK at class-definition time via ``Product.objects.all()``
+    — outside any request's django_scopes context, which raises ``ScopeError``. A real queryset is set later,
+    per-event, in ``_wire_voucher_default_fields``.
+    """
+    return forms.ModelChoiceField(
+        queryset=Product.objects.none(),
+        required=False,
+        empty_label=_("Any eligible product"),
+        label=_("Default ticket product"),
+    )
+
+
+class VoucherDefaultsFormMixin:
+    """Shared field wiring for the voucher-defaults forms (event-scoped product, tz-aware deadline)."""
+
+    voucher_default_fields = [
+        "voucher_default_count",
+        "voucher_default_product",
+        "voucher_default_price_mode",
+        "voucher_default_value",
+    ]
+
+    def _wire_voucher_default_fields(self, event):
+        self.fields["voucher_default_product"].queryset = (
+            Product.objects.filter(event=event, active=True).order_by("position", "pk")
+            if event
+            else Product.objects.none()
+        )
+
+    def clean_voucher_defaults(self, cleaned_data):
+        price_mode = cleaned_data.get("voucher_default_price_mode")
+        value = cleaned_data.get("voucher_default_value")
         if price_mode and price_mode != PriceModeChoices.NONE and value is None:
-            self.add_error("value", _("Enter a value for the selected price effect."))
+            self.add_error("voucher_default_value", _("Enter a value for the selected price effect."))
         return cleaned_data
 
 
-class SponsorGroupForm(I18nModelForm):
+class SponsorGroupForm(VoucherDefaultsFormMixin, I18nModelForm):
     level = forms.IntegerField(min_value=1, required=False, label=_("Level"))
+    voucher_default_product = _voucher_default_product_field()
 
     class Meta:
         model = SponsorGroup
         localized_fields = "__all__"
-        fields = ["name", "level"]
+        fields = ["name", "level", *VoucherDefaultsFormMixin.voucher_default_fields]
         labels = {
             "name": _("Group name"),
         }
@@ -634,6 +635,7 @@ class SponsorGroupForm(I18nModelForm):
         event = kwargs.get("event")
         super().__init__(*args, **kwargs)
         self.event = event or getattr(self.instance, "event", None)
+        self._wire_voucher_default_fields(self.event)
 
     def clean_level(self):
         level = self.cleaned_data.get("level")
@@ -645,6 +647,27 @@ class SponsorGroupForm(I18nModelForm):
 
     def _default_level(self):
         return get_next_sponsor_group_level(self.event)
+
+    def clean(self):
+        return self.clean_voucher_defaults(super().clean())
+
+
+class ExhibitorVoucherDefaultsForm(VoucherDefaultsFormMixin, forms.ModelForm):
+    """Event-wide voucher defaults, used for any exhibitor with no sponsor group of their own."""
+
+    voucher_default_product = _voucher_default_product_field()
+
+    class Meta:
+        model = ExhibitorSettings
+        fields = VoucherDefaultsFormMixin.voucher_default_fields
+
+    def __init__(self, *args, **kwargs):
+        self.event = kwargs.pop("event", None)
+        super().__init__(*args, **kwargs)
+        self._wire_voucher_default_fields(self.event)
+
+    def clean(self):
+        return self.clean_voucher_defaults(super().clean())
 
 
 class CallSettingsForm(I18nModelForm):
@@ -1391,14 +1414,54 @@ class ExhibitionDefaultFieldForm(forms.Form):
             self.fields["help_text"].widget.attrs.setdefault("placeholder", default_help_text)
 
 
-class ExhibitionQuestionForm(I18nModelForm):
-    options_text = forms.CharField(
-        required=False,
-        label=_("Options"),
-        help_text=_("For choice fields, enter one option per line."),
-        widget=forms.Textarea(attrs={"rows": 6}),
-    )
+class ExhibitionQuestionOptionForm(I18nModelForm):
+    def has_changed(self):
+        """Ignore the automatically submitted ordering value on blank extra rows."""
+        for name, field in self.fields.items():
+            if name in {"ORDER", "id"}:
+                continue
 
+            prefixed_name = self.add_prefix(name)
+            data_value = field.widget.value_from_datadict(self.data, self.files, prefixed_name)
+            initial_value = self.initial.get(name, field.initial)
+            if callable(initial_value):
+                initial_value = initial_value()
+            if field.has_changed(initial_value, data_value):
+                return True
+        return False
+
+    class Meta:
+        model = ExhibitionQuestionOption
+        localized_fields = "__all__"
+        fields = ["answer"]
+
+
+class BaseExhibitionQuestionOptionFormSet(I18nFormSet):
+    def __init__(self, *args, requires_option=False, **kwargs):
+        self.requires_option = requires_option
+        super().__init__(*args, **kwargs)
+
+    def clean(self):
+        super().clean()
+        if any(self.errors) or not self.requires_option:
+            return
+
+        if not any(form.cleaned_data.get("answer") and not form.cleaned_data.get("DELETE") for form in self.forms):
+            raise ValidationError(_("Please provide at least one option for this question type."))
+
+
+ExhibitionQuestionOptionFormSet = inlineformset_factory(
+    ExhibitionQuestion,
+    ExhibitionQuestionOption,
+    form=ExhibitionQuestionOptionForm,
+    formset=BaseExhibitionQuestionOptionFormSet,
+    can_order=True,
+    can_delete=True,
+    extra=0,
+)
+
+
+class ExhibitionQuestionForm(I18nModelForm):
     class Meta:
         model = ExhibitionQuestion
         localized_fields = "__all__"
@@ -1423,23 +1486,10 @@ class ExhibitionQuestionForm(I18nModelForm):
         self.event = kwargs.get("event")
         super().__init__(*args, **kwargs)
         self.fields["variant"].widget.attrs["data-question-variant"] = "1"
-        if self.instance and self.instance.pk:
-            self.fields["options_text"].initial = "\n".join(str(option) for option in self.instance.options.all())
 
     @property
     def choice_variant_values(self):
         return " ".join(sorted(str(variant) for variant in self.choice_variants))
-
-    def clean(self):
-        cleaned_data = super().clean()
-        variant = cleaned_data.get("variant")
-        options = [option.strip() for option in (cleaned_data.get("options_text") or "").splitlines() if option.strip()]
-        if variant in self.choice_variants and not options:
-            self.add_error(
-                "options_text",
-                _("Please provide at least one option for this question type."),
-            )
-        return cleaned_data
 
     def save(self, commit=True):
         instance = super().save(commit=False)
@@ -1452,28 +1502,7 @@ class ExhibitionQuestionForm(I18nModelForm):
             instance.position = max((max_position or -1) + 1, len(PROPOSAL_DEFAULT_FIELD_KEYS))
         if commit:
             instance.save()
-            self.save_options(instance)
         return instance
-
-    def save_options(self, question):
-        if question.variant not in self.choice_variants:
-            question.options.all().delete()
-            return
-        options = [
-            option.strip() for option in (self.cleaned_data.get("options_text") or "").splitlines() if option.strip()
-        ]
-        question.options.all().delete()
-        locale = self.event.locale if self.event else "en"
-        ExhibitionQuestionOption.objects.bulk_create(
-            [
-                ExhibitionQuestionOption(
-                    question=question,
-                    answer={locale: option},
-                    position=index,
-                )
-                for index, option in enumerate(options)
-            ]
-        )
 
 
 class ExhibitorSocialLinkForm(forms.ModelForm):
@@ -1725,6 +1754,7 @@ class ExhibitionMailTemplatesForm(SettingsForm):
         mail_helpers.PROPOSAL_ACCEPTED: _("Request accepted"),
         mail_helpers.PROPOSAL_REJECTED: _("Request rejected"),
         mail_helpers.EXHIBITOR_ACCESS: _("Exhibitor lead scanning key"),
+        mail_helpers.VOUCHERS: _("Vouchers"),
     }
 
     def __init__(self, *args, **kwargs):
