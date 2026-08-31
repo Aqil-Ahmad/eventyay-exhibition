@@ -328,10 +328,7 @@ def format_voucher_list(vouchers, event=None):
 
 def render_voucher_list(exhibitor):
     """All vouchers currently linked to this exhibitor, as a fallback when not overridden by the sender."""
-    from .models import ExhibitorVoucher
-
-    links = ExhibitorVoucher.objects.filter(exhibitor=exhibitor).select_related("voucher", "voucher__product")
-    return format_voucher_list([link.voucher for link in links], event=exhibitor.event)
+    return format_voucher_list(exhibitor_vouchers(exhibitor), event=exhibitor.event)
 
 
 def _sample_redeem_url(event, code):
@@ -453,9 +450,18 @@ def queue_exhibitor_access_email(event, exhibitor, *, requestor=None):
     )
 
 
+def exhibitor_vouchers(exhibitor):
+    """Every voucher currently linked to this exhibitor, in issue order."""
+    from .models import ExhibitorVoucher
+
+    links = ExhibitorVoucher.objects.filter(exhibitor=exhibitor).select_related("voucher", "voucher__product")
+    return [link.voucher for link in links]
+
+
 def queue_voucher_email(event, exhibitor, vouchers, *, send_now=False, requestor=None):
     """Queue the voucher email for one exhibitor; ``None`` if there is no recipient address."""
-    from .models import ExhibitionEmailQueue
+    from .models import ExhibitionEmailQueue, ExhibitorSettings
+    from .utils import store_voucher_csv
 
     to_email = (exhibitor.email or "").strip()
     if not to_email:
@@ -466,6 +472,9 @@ def queue_voucher_email(event, exhibitor, vouchers, *, send_now=False, requestor
     context = build_exhibitor_context(event, exhibitor)
     context["voucher_list"] = format_voucher_list(vouchers, event=event)
 
+    settings = ExhibitorSettings.objects.get_or_create(event=event)[0]
+    attachment = store_voucher_csv(event, vouchers) if settings.voucher_attach_csv else None
+
     queued = ExhibitionEmailQueue.objects.create(
         event=event,
         exhibitor=exhibitor,
@@ -474,7 +483,30 @@ def queue_voucher_email(event, exhibitor, vouchers, *, send_now=False, requestor
         subject=_render(subject_tpl, context, locale),
         body=_render(body_tpl, context, locale),
         locale=locale or "",
+        attachment=attachment,
     )
     if send_now:
         queued.send(requestor=requestor)
     return queued
+
+
+VOUCHER_SKIP_NO_EMAIL = "no_email"
+VOUCHER_SKIP_NO_VOUCHERS = "no_vouchers"
+
+
+def queue_voucher_emails(event, exhibitors, *, requestor=None):
+    """Queue one voucher email per exhibitor, reporting who was skipped and why."""
+    queued = []
+    skipped = {VOUCHER_SKIP_NO_EMAIL: [], VOUCHER_SKIP_NO_VOUCHERS: []}
+    for exhibitor in exhibitors:
+        if not (exhibitor.email or "").strip():
+            skipped[VOUCHER_SKIP_NO_EMAIL].append(exhibitor)
+            continue
+        vouchers = exhibitor_vouchers(exhibitor)
+        if not vouchers:
+            skipped[VOUCHER_SKIP_NO_VOUCHERS].append(exhibitor)
+            continue
+        email = queue_voucher_email(event, exhibitor, vouchers, requestor=requestor)
+        if email is not None:
+            queued.append(email)
+    return queued, skipped

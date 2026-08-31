@@ -1,5 +1,6 @@
+from datetime import timedelta
 from typing import TYPE_CHECKING
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import parse_qs, quote_plus, urlparse
 
 from django.db.models import Q, QuerySet
 from django.utils import timezone
@@ -427,3 +428,64 @@ def sync_exhibitor_from_proposal(proposal, requestor=None):
         user=requestor,
     )
     return exhibitor
+
+
+VOUCHER_CSV_FILENAME = "exhibitor-vouchers.csv"
+
+
+def build_voucher_csv(event, vouchers) -> str:
+    """Render an exhibitor's vouchers as CSV, shared by the download view and the voucher email."""
+    import io
+
+    from defusedcsv import csv
+    from django.utils.translation import gettext_lazy as _
+    from eventyay.multidomain.urlreverse import build_absolute_uri
+
+    redeem_base = build_absolute_uri(event, "presale:event.redeem")
+    output = io.StringIO()
+    writer = csv.writer(output, quoting=csv.QUOTE_NONNUMERIC, delimiter=",")
+    writer.writerow(
+        [
+            str(_("Voucher code")),
+            str(_("Redeem link")),
+            str(_("Product")),
+            str(_("Price effect")),
+            str(_("Value")),
+            str(_("Valid until")),
+            str(_("Redeemed")),
+            str(_("Maximum usages")),
+        ]
+    )
+    for voucher in vouchers:
+        writer.writerow(
+            [
+                voucher.code,
+                f"{redeem_base}?voucher={quote_plus(voucher.code)}",
+                str(voucher.product) if voucher.product else "",
+                str(voucher.get_price_mode_display()),
+                str(voucher.value) if voucher.value is not None else "",
+                voucher.valid_until.isoformat() if voucher.valid_until else "",
+                str(voucher.redeemed),
+                str(voucher.max_usages),
+            ]
+        )
+    return output.getvalue()
+
+
+VOUCHER_CSV_RETENTION = timedelta(days=30)
+
+
+def store_voucher_csv(event, vouchers):
+    """Persist the voucher CSV as a CachedFile so it can be attached to an outgoing email."""
+    from django.core.files.base import ContentFile
+    from eventyay.base.models import CachedFile
+
+    cached = CachedFile.objects.create(
+        filename=VOUCHER_CSV_FILENAME,
+        type="text/csv",
+        web_download=False,
+        expires=timezone.now() + VOUCHER_CSV_RETENTION,
+    )
+    cached.file.save(VOUCHER_CSV_FILENAME, ContentFile(build_voucher_csv(event, vouchers).encode("utf-8")))
+    cached.save()
+    return cached

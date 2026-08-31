@@ -1,0 +1,61 @@
+{% extends "exhibitors/base.html" %}
+{% load i18n %}
+
+{% block title %}{{ request.event.name }} - {% trans "Send vouchers" %}{% endblock %}
+
+{% block exhibitors_header %}
+    <h1>{% trans "Send vouchers" %}</h1>
+{% endblock %}
+
+{% block exhibitors_content %}
+    <form action="?{{ query_string }}" method="post">
+        {% csrf_token %}
+        <input type="hidden" name="confirmed" value="1">
+
+        {% if sendable %}
+            <p>
+                {% blocktrans trimmed count counter=sendable|length %}
+                    A voucher email will be placed in the outbox for {{ counter }} partner.
+                {% plural %}
+                    A voucher email will be placed in the outbox for {{ counter }} partners.
+                {% endblocktrans %}
+            </p>
+            <ul>
+                {% for exhibitor in sendable %}
+                    <li>{{ exhibitor.name }} <span class="text-muted">{{ exhibitor.email }}</span></li>
+                {% endfor %}
+            </ul>
+        {% else %}
+            <div class="alert alert-warning" role="alert">
+                {% trans "None of the partners in this list can be emailed yet." %}
+            </div>
+        {% endif %}
+
+        {% if no_email %}
+            <h4>{% trans "Skipped: no email address" %}</h4>
+            <ul>
+                {% for exhibitor in no_email %}
+                    <li>{{ exhibitor.name }}</li>
+                {% endfor %}
+            </ul>
+        {% endif %}
+
+        {% if no_vouchers %}
+            <h4>{% trans "Skipped: no vouchers issued yet" %}</h4>
+            <ul>
+                {% for exhibitor in no_vouchers %}
+                    <li>{{ exhibitor.name }}</li>
+                {% endfor %}
+            </ul>
+        {% endif %}
+
+        <div class="form-group submit-group">
+            <a class="btn btn-default" href="{{ list_url }}">{% trans "Cancel" %}</a>
+            {% if sendable %}
+                <button type="submit" class="btn btn-primary">
+                    <i class="fa fa-envelope"></i> {% trans "Queue emails" %}
+                </button>
+            {% endif %}
+        </div>
+    </form>
+{% endblock %}

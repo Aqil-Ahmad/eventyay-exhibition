@@ -714,7 +714,7 @@ class ExhibitorVoucherDefaultsForm(VoucherDefaultsFormMixin, forms.ModelForm):
 
     class Meta:
         model = ExhibitorSettings
-        fields = VoucherDefaultsFormMixin.voucher_default_fields
+        fields = [*VoucherDefaultsFormMixin.voucher_default_fields, "voucher_attach_csv"]
 
     def __init__(self, *args, **kwargs):
         self.event = kwargs.pop("event", None)
