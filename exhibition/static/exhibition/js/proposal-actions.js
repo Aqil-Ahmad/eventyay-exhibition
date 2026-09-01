@@ -137,6 +137,7 @@
             button.className = 'btn btn-sm proposal-action-btn ' + config.cls + (config.variant ? ' ' + config.variant : '')
             button.setAttribute('data-proposal-action', action)
             button.setAttribute('data-proposal-code', code)
+            button.setAttribute('data-toggle', 'tooltip')
             if (config.label) {
                 button.title = config.label
             }
@@ -161,6 +162,9 @@
                     actionsCell.insertBefore(button, viewLink)
                 }
             })
+            if (window.jQuery) {
+                $(actionsCell).find('[data-toggle="tooltip"]').tooltip()
+            }
         }
 
         function rebuildCheckbox(row, result) {

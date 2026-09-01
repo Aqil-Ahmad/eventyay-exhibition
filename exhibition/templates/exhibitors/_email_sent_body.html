@@ -19,7 +19,8 @@
         {% for entry in entries %}
             <tr>
                 <td>
-                    <span class="email-recipients" title="{{ entry.recipients|join:', ' }}">{{ entry.recipients|join:", " }}</span>
+                    <span class="email-recipients" title="{{ entry.recipients|join:', ' }}"
+                          data-toggle="tooltip">{{ entry.recipients|join:", " }}</span>
                     {% if entry.is_batch %}
                         <span class="label label-default">{{ entry.recipients|length }}</span>
                     {% endif %}

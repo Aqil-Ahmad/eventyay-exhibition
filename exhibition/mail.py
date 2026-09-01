@@ -6,12 +6,13 @@ import logging
 import re
 import uuid
 from collections import defaultdict
-from urllib.parse import urljoin
+from urllib.parse import quote_plus, urljoin
 
 from django.conf import settings as django_settings
 from django.urls import reverse
 from django.utils.html import escape
 from django.utils.translation import gettext, gettext_lazy as _lazy, gettext_noop, override
+from eventyay.base.models import PriceModeChoices
 from i18nfield.strings import LazyI18nString
 
 logger = logging.getLogger(__name__)
@@ -20,8 +21,9 @@ PROPOSAL_NEW = "proposal_new"
 PROPOSAL_ACCEPTED = "proposal_accepted"
 PROPOSAL_REJECTED = "proposal_rejected"
 EXHIBITOR_ACCESS = "exhibitor_access"
+VOUCHERS = "vouchers"
 
-LIFECYCLE_ROLES = (PROPOSAL_NEW, PROPOSAL_ACCEPTED, PROPOSAL_REJECTED, EXHIBITOR_ACCESS)
+LIFECYCLE_ROLES = (PROPOSAL_NEW, PROPOSAL_ACCEPTED, PROPOSAL_REJECTED, EXHIBITOR_ACCESS, VOUCHERS)
 
 PLACEHOLDER_DOCS = (
     ("{event_name}", _lazy("The event's name")),
@@ -104,6 +106,19 @@ DEFAULT_TEMPLATE_SOURCES = {
             "The {event_name} Team"
         ),
     ),
+    VOUCHERS: (
+        gettext_noop("Your vouchers for {event_name} — {exhibitor_name}"),
+        gettext_noop(
+            "Dear {exhibitor_name},\n\n"
+            "Thank you for participating in {event_name}. Please share the voucher codes below with "
+            "your audience — anyone who uses one gets credited to you as a lead.\n\n"
+            "{voucher_list}\n\n"
+            "They can redeem a code on the event ticket shop at checkout.\n\n"
+            "If you have any questions, please don't hesitate to reach out.\n\n"
+            "Best regards,\n"
+            "The {event_name} Team"
+        ),
+    ),
 }
 
 DEFAULT_TEMPLATES = {
@@ -150,6 +165,7 @@ ROLE_PLACEHOLDER_CONTEXT = {
     PROPOSAL_ACCEPTED: PROPOSAL_PLACEHOLDER_CONTEXT,
     PROPOSAL_REJECTED: PROPOSAL_PLACEHOLDER_CONTEXT,
     EXHIBITOR_ACCESS: EXHIBITOR_PLACEHOLDER_CONTEXT,
+    VOUCHERS: EXHIBITOR_PLACEHOLDER_CONTEXT,
 }
 
 
@@ -263,6 +279,81 @@ def sample_device_tokens(event=None):
     return _render_device_block(str(_lazy("Acme Corp #1")), device_setup_url(), "SAMPLETOKEN123456")
 
 
+def _voucher_applies_to_text(voucher):
+    product_name = str(voucher.product) if voucher.product else str(_lazy("Any eligible product"))
+    effect = ""
+    if voucher.value is not None:
+        if voucher.price_mode == PriceModeChoices.PERCENT:
+            effect = f" — {voucher.value}% {_lazy('discount')}"
+        elif voucher.price_mode == PriceModeChoices.SUBTRACT:
+            effect = f" — {voucher.value} {_lazy('off')}"
+        elif voucher.price_mode == PriceModeChoices.SET:
+            effect = f" — {_lazy('price set to')} {voucher.value}"
+    if voucher.max_usages > 1:
+        effect = f"{effect} ({voucher.max_usages} {_lazy('uses')})"
+    return f"{product_name}{effect}"
+
+
+def voucher_redeem_url(event, voucher):
+    """Public checkout link that pre-applies this voucher code."""
+    from eventyay.multidomain.urlreverse import build_absolute_uri
+
+    url = f"{build_absolute_uri(event, 'presale:event.redeem')}?voucher={quote_plus(voucher.code)}"
+    if voucher.subevent_id:
+        url = f"{url}&subevent={voucher.subevent_id}"
+    return url
+
+
+def _voucher_block_html(code, applies_to_text, redeem_url=None):
+    block = (
+        f"<p>{escape(str(_lazy('Voucher code')))}: <code>{escape(code)}</code><br>"
+        f"{escape(str(_lazy('Applies to')))}: {escape(applies_to_text)}"
+    )
+    if redeem_url:
+        block += f'<br>{escape(str(_lazy("Redeem")))}: <a href="{escape(redeem_url)}">{escape(redeem_url)}</a>'
+    return f"{block}</p>"
+
+
+def format_voucher_list(vouchers, event=None):
+    """One block per voucher: its code, what it applies to, and its redemption link."""
+    return "".join(
+        _voucher_block_html(
+            voucher.code,
+            _voucher_applies_to_text(voucher),
+            voucher_redeem_url(event or voucher.event, voucher),
+        )
+        for voucher in vouchers
+    )
+
+
+def render_voucher_list(exhibitor):
+    """All vouchers currently linked to this exhibitor, as a fallback when not overridden by the sender."""
+    from .models import ExhibitorVoucher
+
+    links = ExhibitorVoucher.objects.filter(exhibitor=exhibitor).select_related("voucher", "voucher__product")
+    return format_voucher_list([link.voucher for link in links], event=exhibitor.event)
+
+
+def _sample_redeem_url(event, code):
+    if event is None:
+        return f"{django_settings.SITE_URL.rstrip('/')}/redeem?voucher={code}"
+    from eventyay.multidomain.urlreverse import build_absolute_uri
+
+    return f"{build_absolute_uri(event, 'presale:event.redeem')}?voucher={code}"
+
+
+def sample_voucher_list(event=None):
+    return _voucher_block_html(
+        "ACME-3XKQ-7T2P",
+        "Standard Public Ticket",
+        _sample_redeem_url(event, "ACME-3XKQ-7T2P"),
+    ) + _voucher_block_html(
+        "ACME-9WFD-4M8N",
+        "Standard Public Ticket — 20% discount",
+        _sample_redeem_url(event, "ACME-9WFD-4M8N"),
+    )
+
+
 def queue_proposal_email(event, proposal, role, *, send_now=False, requestor=None):
     """Queue a lifecycle email; ``send_now`` sends it instead of leaving it in the outbox."""
     from .models import ExhibitionEmailQueue
@@ -279,6 +370,7 @@ def queue_proposal_email(event, proposal, role, *, send_now=False, requestor=Non
     queued = ExhibitionEmailQueue.objects.create(
         event=event,
         proposal=proposal,
+        role=role,
         to_email=to_email,
         subject=_render(subject_tpl, context, locale),
         body=_render(body_tpl, context, locale),
@@ -353,8 +445,36 @@ def queue_exhibitor_access_email(event, exhibitor, *, requestor=None):
     return ExhibitionEmailQueue.objects.create(
         event=event,
         exhibitor=exhibitor,
+        role=EXHIBITOR_ACCESS,
         to_email=to_email,
         subject=_render(subject_tpl, context, locale),
         body=_render(body_tpl, context, locale),
         locale=locale or "",
     )
+
+
+def queue_voucher_email(event, exhibitor, vouchers, *, send_now=False, requestor=None):
+    """Queue the voucher email for one exhibitor; ``None`` if there is no recipient address."""
+    from .models import ExhibitionEmailQueue
+
+    to_email = (exhibitor.email or "").strip()
+    if not to_email:
+        return None
+
+    subject_tpl, body_tpl = get_email_template(event, VOUCHERS)
+    locale = recipient_locale(event)
+    context = build_exhibitor_context(event, exhibitor)
+    context["voucher_list"] = format_voucher_list(vouchers, event=event)
+
+    queued = ExhibitionEmailQueue.objects.create(
+        event=event,
+        exhibitor=exhibitor,
+        role=VOUCHERS,
+        to_email=to_email,
+        subject=_render(subject_tpl, context, locale),
+        body=_render(body_tpl, context, locale),
+        locale=locale or "",
+    )
+    if send_now:
+        queued.send(requestor=requestor)
+    return queued

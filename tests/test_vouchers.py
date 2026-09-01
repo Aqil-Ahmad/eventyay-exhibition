@@ -6,9 +6,9 @@ from django_scopes import scopes_disabled
 from eventyay.base.models import PriceModeChoices, Product, Voucher
 
 from exhibition.api import VoucherRedemptionRetrieveView, get_allowed_attendee_data
-from exhibition.forms import ExhibitorVoucherBatchForm
-from exhibition.models import ExhibitorInfo, ExhibitorVoucher
-from exhibition.utils import generate_exhibitor_vouchers
+from exhibition.forms import ExhibitorVoucherBatchForm, ExhibitorVoucherDefaultsForm
+from exhibition.models import ExhibitorInfo, ExhibitorSettings, ExhibitorVoucher, SponsorGroup
+from exhibition.utils import generate_exhibitor_vouchers, resolve_voucher_defaults
 
 
 def _exhibitor(event, **kwargs):
@@ -36,38 +36,58 @@ def test_generate_exhibitor_vouchers_creates_links_and_vouchers(event):
             exhibitor,
             product=product,
             count=3,
-            max_usages=2,
             price_mode=PriceModeChoices.PERCENT,
             value=100,
-            valid_until=None,
         )
         links = ExhibitorVoucher.objects.filter(exhibitor=exhibitor)
         assert links.count() == 3
         voucher = links.first().voucher
-        assert voucher.max_usages == 2
+        assert voucher.max_usages == 1
         assert voucher.price_mode == PriceModeChoices.PERCENT
         assert voucher.tag == f"exhibitor-{exhibitor.key}"
         assert Voucher.objects.filter(event=event).count() == 3
 
 
+def test_batch_form_accepts_zero_to_email_existing_codes():
+    assert ExhibitorVoucherBatchForm(data={"count": 0}).is_valid()
+    assert not ExhibitorVoucherBatchForm(data={"count": -1}).is_valid()
+
+
 @pytest.mark.django_db
-def test_batch_form_requires_value_for_non_none_price_mode(event):
+def test_voucher_defaults_form_requires_value_for_non_none_price_mode(event):
     with scopes_disabled():
-        product = _product(event)
-        form = ExhibitorVoucherBatchForm(
-            data={"product": product.pk, "count": 1, "max_usages": 1, "price_mode": PriceModeChoices.PERCENT},
+        form = ExhibitorVoucherDefaultsForm(
+            data={"voucher_default_count": 1, "voucher_default_price_mode": PriceModeChoices.PERCENT},
             event=event,
         )
         assert not form.is_valid()
-        assert "value" in form.errors
+        assert "voucher_default_value" in form.errors
 
 
 @pytest.mark.django_db
-def test_batch_form_limits_products_to_event(event):
+def test_voucher_defaults_form_limits_products_to_event(event):
     with scopes_disabled():
         product = _product(event)
-        form = ExhibitorVoucherBatchForm(event=event)
-        assert list(form.fields["product"].queryset) == [product]
+        form = ExhibitorVoucherDefaultsForm(event=event)
+        assert list(form.fields["voucher_default_product"].queryset) == [product]
+
+
+@pytest.mark.django_db
+def test_resolve_voucher_defaults_prefers_sponsor_group_over_event_settings(event):
+    with scopes_disabled():
+        ExhibitorSettings.objects.create(event=event, voucher_default_count=2)
+        group = SponsorGroup.objects.create(event=event, name="Gold", voucher_default_count=7)
+        assert resolve_voucher_defaults(_exhibitor(event, sponsor_group=group))["count"] == 7
+        assert resolve_voucher_defaults(_exhibitor(event, name="Ungrouped"))["count"] == 2
+
+
+@pytest.mark.django_db
+def test_resolve_voucher_defaults_falls_back_without_settings_row(event):
+    with scopes_disabled():
+        defaults = resolve_voucher_defaults(_exhibitor(event))
+        assert defaults["count"] == 1
+        assert defaults["product"] is None
+        assert not ExhibitorSettings.objects.filter(event=event).exists()
 
 
 def _settings(*allowed):
