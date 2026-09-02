@@ -529,3 +529,72 @@ def test_bulk_send_queues_nothing_when_nobody_is_reachable(voucher_event):
 
         assert response.status_code == 302
         assert not ExhibitionEmailQueue.objects.filter(event=voucher_event).exists()
+
+
+@pytest.mark.django_db
+def test_format_voucher_list_lists_everything_without_a_limit(voucher_event):
+    with scopes_disabled():
+        vouchers = _issue(_mailed_exhibitor(voucher_event), count=8)
+        rendered = mail_helpers.format_voucher_list(vouchers, event=voucher_event)
+
+    assert all(voucher.code in rendered for voucher in vouchers)
+    assert "more voucher codes" not in rendered
+
+
+@pytest.mark.django_db
+def test_format_voucher_list_caps_and_summarises_the_rest(voucher_event):
+    with scopes_disabled():
+        vouchers = _issue(_mailed_exhibitor(voucher_event), count=8)
+        rendered = mail_helpers.format_voucher_list(vouchers, event=voucher_event, limit=5)
+
+    assert all(voucher.code in rendered for voucher in vouchers[:5])
+    assert not any(voucher.code in rendered for voucher in vouchers[5:])
+    assert "3 more voucher codes" in rendered
+
+
+@pytest.mark.django_db
+def test_format_voucher_list_does_not_summarise_when_exactly_at_the_limit(voucher_event):
+    with scopes_disabled():
+        vouchers = _issue(_mailed_exhibitor(voucher_event), count=5)
+        rendered = mail_helpers.format_voucher_list(vouchers, event=voucher_event, limit=5)
+
+    assert all(voucher.code in rendered for voucher in vouchers)
+    assert "more voucher" not in rendered
+
+
+@pytest.mark.django_db
+def test_voucher_email_caps_the_inline_list_when_the_csv_is_attached(voucher_event):
+    with scopes_disabled():
+        exhibitor = _mailed_exhibitor(voucher_event)
+        vouchers = _issue(exhibitor, count=9)
+        queued = mail_helpers.queue_voucher_email(voucher_event, exhibitor, vouchers)
+
+        assert queued.attachment is not None
+        listed = [voucher for voucher in vouchers if voucher.code in queued.body]
+        assert len(listed) == mail_helpers.VOUCHER_LIST_INLINE_LIMIT
+        assert "4 more voucher codes" in queued.body
+        assert all(voucher.code in queued.attachment.file.read().decode("utf-8") for voucher in vouchers)
+
+
+@pytest.mark.django_db
+def test_voucher_email_lists_them_all_when_the_csv_is_off(voucher_event):
+    with scopes_disabled():
+        ExhibitorSettings.objects.create(event=voucher_event, voucher_attach_csv=False)
+        exhibitor = _mailed_exhibitor(voucher_event)
+        vouchers = _issue(exhibitor, count=9)
+        queued = mail_helpers.queue_voucher_email(voucher_event, exhibitor, vouchers)
+
+    assert queued.attachment is None
+    assert all(voucher.code in queued.body for voucher in vouchers)
+    assert "more voucher" not in queued.body
+
+
+@pytest.mark.django_db
+def test_voucher_email_under_the_limit_is_unchanged_by_the_cap(voucher_event):
+    with scopes_disabled():
+        exhibitor = _mailed_exhibitor(voucher_event)
+        vouchers = _issue(exhibitor, count=3)
+        queued = mail_helpers.queue_voucher_email(voucher_event, exhibitor, vouchers)
+
+    assert all(voucher.code in queued.body for voucher in vouchers)
+    assert "more voucher" not in queued.body

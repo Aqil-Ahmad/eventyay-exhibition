@@ -11,7 +11,7 @@ from urllib.parse import urljoin
 from django.conf import settings as django_settings
 from django.urls import reverse
 from django.utils.html import escape
-from django.utils.translation import gettext, gettext_lazy as _lazy, gettext_noop, override
+from django.utils.translation import gettext, gettext_lazy as _lazy, gettext_noop, ngettext, override
 from eventyay.base.models import PriceModeChoices
 from i18nfield.strings import LazyI18nString
 
@@ -304,18 +304,38 @@ def _voucher_block_html(code, applies_to_text, redeem_url=None):
     return f"{block}</p>"
 
 
-def format_voucher_list(vouchers, event=None):
-    """One block per voucher: its code, what it applies to, and its redemption link."""
+VOUCHER_LIST_INLINE_LIMIT = 5
+
+
+def _voucher_overflow_html(remaining):
+    text = ngettext(
+        "…and %(count)d more voucher code in the attached CSV file.",
+        "…and %(count)d more voucher codes in the attached CSV file.",
+        remaining,
+    ) % {"count": remaining}
+    return f"<p>{escape(text)}</p>"
+
+
+def format_voucher_list(vouchers, event=None, *, limit=None):
+    """One block per voucher: its code, what it applies to, and its redemption link.
+
+    With ``limit``, only the first ``limit`` are listed and the rest are summarised; callers pass
+    it only when the complete list travels with the mail as a CSV attachment.
+    """
     from .utils import voucher_redeem_url
 
-    return "".join(
+    vouchers = list(vouchers)
+    shown = vouchers[:limit] if limit else vouchers
+    blocks = "".join(
         _voucher_block_html(
             voucher.code,
             _voucher_applies_to_text(voucher),
             voucher_redeem_url(event or voucher.event, voucher),
         )
-        for voucher in vouchers
+        for voucher in shown
     )
+    remaining = len(vouchers) - len(shown)
+    return f"{blocks}{_voucher_overflow_html(remaining)}" if remaining else blocks
 
 
 def render_voucher_list(exhibitor):
@@ -462,10 +482,12 @@ def queue_voucher_email(event, exhibitor, vouchers, *, send_now=False, requestor
     subject_tpl, body_tpl = get_email_template(event, VOUCHERS)
     locale = recipient_locale(event)
     context = build_exhibitor_context(event, exhibitor)
-    context["voucher_list"] = format_voucher_list(vouchers, event=event)
 
     settings = ExhibitorSettings.objects.get_or_create(event=event)[0]
     attachment = store_voucher_csv(event, vouchers) if settings.voucher_attach_csv else None
+    context["voucher_list"] = format_voucher_list(
+        vouchers, event=event, limit=VOUCHER_LIST_INLINE_LIMIT if attachment else None
+    )
 
     queued = ExhibitionEmailQueue.objects.create(
         event=event,
