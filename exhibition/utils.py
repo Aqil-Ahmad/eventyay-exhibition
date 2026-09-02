@@ -1,5 +1,6 @@
 from datetime import timedelta
 from typing import TYPE_CHECKING
+from urllib.parse import quote_plus
 
 from django.db.models import Q, QuerySet
 from django.utils import timezone
