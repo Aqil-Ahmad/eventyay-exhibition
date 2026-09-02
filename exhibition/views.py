@@ -39,7 +39,6 @@ from .forms import (
     ExhibitionDefaultFieldForm,
     ExhibitionEmailQueueForm,
     ExhibitionMailTemplatesForm,
-    ExhibitionProposalExtraLinkFormSet,
     ExhibitionProposalForm,
     ExhibitionProposalReviewForm,
     ExhibitionProposalReviewNotesForm,
@@ -47,7 +46,6 @@ from .forms import (
     ExhibitionQuestionForm,
     ExhibitionQuestionOptionFormSet,
     ExhibitorDeviceProvisionForm,
-    ExhibitorExtraLinkFormSet,
     ExhibitorInfoForm,
     ExhibitorSocialLinkFormSet,
     ExhibitorVoucherBatchForm,
@@ -92,7 +90,6 @@ from .utils import (
     VOUCHER_CSV_FILENAME,
     add_external_image_csp_sources,
     allow_blob_image_previews,
-    build_exhibitor_video_embed,
     build_voucher_csv,
     event_voucher_settings,
     generate_exhibitor_vouchers,
@@ -655,9 +652,6 @@ class PublicExhibitorDetailView(DetailView):
             context["next_exhibitor"] = None
 
         context["social_links"] = [serialize_social_link(link) for link in self.object.social_links.all()]
-        context["extra_links"] = list(self.object.extra_links.all())
-        context["video_embed"] = build_exhibitor_video_embed(self.object.video_url or "")
-        context["slides_document_url"] = self.object.visible_slides_url
 
         add_external_image_csp_sources(
             self.request,
@@ -751,7 +745,6 @@ def formset_has_entries(formset):
 
 class ProposalLinkFormsetMixin:
     social_formset_prefix = "social_links"
-    extra_formset_prefix = "extra_links"
 
     def get_proposal_field_settings(self):
         settings = ExhibitorSettings.objects.get_or_create(event=self.request.event)[0]
@@ -776,25 +769,11 @@ class ProposalLinkFormsetMixin:
             prefix=self.social_formset_prefix,
         )
 
-    def get_extra_link_formset(self):
-        return ExhibitionProposalExtraLinkFormSet(
-            data=self.request.POST if self.request.method == "POST" else None,
-            instance=self.get_formset_instance(),
-            prefix=self.extra_formset_prefix,
-        )
-
     def post_with_formsets(self):
         form = self.get_form()
         self.social_media_formset = self.get_social_formset() if self.proposal_field_is_active("social_links") else None
-        self.extra_links_formset = (
-            self.get_extra_link_formset() if self.proposal_field_is_active("extra_links") else None
-        )
 
-        valid = (
-            form.is_valid()
-            and (self.social_media_formset is None or self.social_media_formset.is_valid())
-            and (self.extra_links_formset is None or self.extra_links_formset.is_valid())
-        )
+        valid = form.is_valid() and (self.social_media_formset is None or self.social_media_formset.is_valid())
 
         if (
             valid
@@ -803,15 +782,6 @@ class ProposalLinkFormsetMixin:
         ):
             self.social_media_formset._non_form_errors = self.social_media_formset.error_class(
                 [_("Add at least one social media link.")]
-            )
-            valid = False
-        if (
-            valid
-            and self.proposal_field_is_required("extra_links")
-            and not formset_has_entries(self.extra_links_formset)
-        ):
-            self.extra_links_formset._non_form_errors = self.extra_links_formset.error_class(
-                [_("Add at least one extra link.")]
             )
             valid = False
 
@@ -826,10 +796,6 @@ class ProposalLinkFormsetMixin:
             "social_media_formset",
             getattr(self, "social_media_formset", None) or self.get_social_formset(),
         )
-        context["extra_links_formset"] = kwargs.get(
-            "extra_links_formset",
-            getattr(self, "extra_links_formset", None) or self.get_extra_link_formset(),
-        )
         context["social_link_prefixes"] = social_link_prefixes()
         context["settings"] = self.get_exhibition_settings()
         context.setdefault("can_edit", True)
@@ -842,9 +808,6 @@ class ProposalLinkFormsetMixin:
         if self.social_media_formset is not None:
             self.social_media_formset.instance = self.object
             self.social_media_formset.save()
-        if self.extra_links_formset is not None:
-            self.extra_links_formset.instance = self.object
-            self.extra_links_formset.save()
 
 
 class UserProposalCreateView(
@@ -1068,7 +1031,6 @@ class UserProposalReinstateView(PublicCallEnabledMixin, PublicEventLoginRequired
 
 class ExhibitorLinkFormsetMixin:
     social_formset_prefix = "social_links"
-    extra_formset_prefix = "extra_links"
 
     def get_proposal_field_settings(self):
         settings = ExhibitorSettings.objects.get_or_create(event=self.request.event)[0]
@@ -1091,25 +1053,11 @@ class ExhibitorLinkFormsetMixin:
             prefix=self.social_formset_prefix,
         )
 
-    def get_extra_link_formset(self):
-        return ExhibitorExtraLinkFormSet(
-            data=self.request.POST if self.request.method == "POST" else None,
-            instance=self.get_formset_instance(),
-            prefix=self.extra_formset_prefix,
-        )
-
     def post_with_formsets(self):
         form = self.get_form()
         self.social_media_formset = self.get_social_formset() if self.proposal_field_is_active("social_links") else None
-        self.extra_links_formset = (
-            self.get_extra_link_formset() if self.proposal_field_is_active("extra_links") else None
-        )
 
-        valid = (
-            form.is_valid()
-            and (self.social_media_formset is None or self.social_media_formset.is_valid())
-            and (self.extra_links_formset is None or self.extra_links_formset.is_valid())
-        )
+        valid = form.is_valid() and (self.social_media_formset is None or self.social_media_formset.is_valid())
 
         if (
             valid
@@ -1118,15 +1066,6 @@ class ExhibitorLinkFormsetMixin:
         ):
             self.social_media_formset._non_form_errors = self.social_media_formset.error_class(
                 [_("Add at least one social media link.")]
-            )
-            valid = False
-        if (
-            valid
-            and self.proposal_field_is_required("extra_links")
-            and not formset_has_entries(self.extra_links_formset)
-        ):
-            self.extra_links_formset._non_form_errors = self.extra_links_formset.error_class(
-                [_("Add at least one extra link.")]
             )
             valid = False
 
@@ -1138,14 +1077,9 @@ class ExhibitorLinkFormsetMixin:
         context = super().get_context_data(**kwargs)
         allow_blob_image_previews(self.request)
         show_social_links = self.proposal_field_is_active("social_links")
-        show_extra_links = self.proposal_field_is_active("extra_links")
         context["social_media_formset"] = kwargs.get(
             "social_media_formset",
             getattr(self, "social_media_formset", self.get_social_formset() if show_social_links else None),
-        )
-        context["extra_links_formset"] = kwargs.get(
-            "extra_links_formset",
-            getattr(self, "extra_links_formset", self.get_extra_link_formset() if show_extra_links else None),
         )
         context["social_link_prefixes"] = social_link_prefixes()
         return context
@@ -1154,11 +1088,9 @@ class ExhibitorLinkFormsetMixin:
         return self.render_to_response(self.get_context_data(form=form))
 
     def save_link_formsets(self):
-        for formset in (self.social_media_formset, self.extra_links_formset):
-            if formset is None:
-                continue
-            formset.instance = self.object
-            formset.save()
+        if self.social_media_formset is not None:
+            self.social_media_formset.instance = self.object
+            self.social_media_formset.save()
 
 
 class SponsorGroupFrontPageToggleView(EventPermissionRequiredMixin, View):
@@ -1368,7 +1300,6 @@ class ProposalDetailView(EventPermissionRequiredMixin, UpdateView):
                 "answers__options",
                 "answers__question",
                 "social_links",
-                "extra_links",
             )
         )
 
@@ -1548,13 +1479,12 @@ class ExhibitionQuestionListView(EventPermissionRequiredMixin, ListView):
     context_object_name = "questions"
 
     def get_queryset(self):
-        return ExhibitionQuestion.objects.filter(event=self.request.event).annotate(answer_count=Count("answers"))
+        return ExhibitionQuestion.objects.filter(event=self.request.event)
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         settings = ExhibitorSettings.objects.get_or_create(event=self.request.event)[0]
         field_settings = settings.normalized_proposal_field_settings
-        answer_counts = self.get_default_field_answer_counts()
         field_definitions = {field["key"]: field for field in PROPOSAL_DEFAULT_FIELDS}
 
         rows = []
@@ -1572,7 +1502,7 @@ class ExhibitionQuestionListView(EventPermissionRequiredMixin, ListView):
                     "supports_required": definition.get("supports_required", True),
                     "active_locked": definition.get("active_locked", False),
                     "required_locked": definition.get("required_locked", False),
-                    "answer_count": answer_counts.get(key, 0),
+                    "lock_notice": field_settings[key]["lock_notice"],
                     "is_custom": False,
                 }
             )
@@ -1589,7 +1519,7 @@ class ExhibitionQuestionListView(EventPermissionRequiredMixin, ListView):
                     "supports_required": True,
                     "active_locked": False,
                     "required_locked": False,
-                    "answer_count": question.answer_count,
+                    "lock_notice": "",
                     "is_custom": True,
                     "pk": question.pk,
                 }
@@ -1597,39 +1527,6 @@ class ExhibitionQuestionListView(EventPermissionRequiredMixin, ListView):
         rows.sort(key=lambda row: (row["sort_position"], row["sort_kind"]))
         context["proposal_fields"] = rows
         return context
-
-    def get_default_field_answer_counts(self):
-        proposals = ExhibitionProposal.objects.filter(event=self.request.event).exclude(
-            state=ExhibitionProposalState.DRAFT
-        )
-        file_has_value = {
-            "slides": (Q(slides__isnull=False) & ~Q(slides="")) | (Q(slides_url__isnull=False) & ~Q(slides_url="")),
-            "logo": (Q(logo__isnull=False) & ~Q(logo="")) | (Q(logo_url__isnull=False) & ~Q(logo_url="")),
-            "header_image": (Q(header_image__isnull=False) & ~Q(header_image=""))
-            | (Q(header_image_url__isnull=False) & ~Q(header_image_url="")),
-        }
-        text_fields = (
-            "description",
-            "email",
-            "url",
-            "contact_url",
-            "video_url",
-            "booth_name",
-            "notes",
-        )
-        counts = {
-            "name": proposals.count(),
-            "social_links": proposals.filter(social_links__isnull=False).distinct().count(),
-            "extra_links": proposals.filter(extra_links__isnull=False).distinct().count(),
-        }
-        counts.update({key: proposals.filter(condition).count() for key, condition in file_has_value.items()})
-        counts.update(
-            {
-                field: proposals.exclude(**{f"{field}__isnull": True}).exclude(**{field: ""}).count()
-                for field in text_fields
-            }
-        )
-        return counts
 
     def post(self, request, *args, **kwargs):
         settings = ExhibitorSettings.objects.get_or_create(event=request.event)[0]
