@@ -573,7 +573,9 @@ def test_voucher_email_caps_the_inline_list_when_the_csv_is_attached(voucher_eve
         listed = [voucher for voucher in vouchers if voucher.code in queued.body]
         assert len(listed) == mail_helpers.VOUCHER_LIST_INLINE_LIMIT
         assert "4 more voucher codes" in queued.body
-        assert all(voucher.code in queued.attachment.file.read().decode("utf-8") for voucher in vouchers)
+
+        payload = queued.attachment.file.read().decode("utf-8")
+        assert all(voucher.code in payload for voucher in vouchers)
 
 
 @pytest.mark.django_db
