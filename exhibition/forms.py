@@ -1680,7 +1680,7 @@ class ExhibitionEmailBodyFormField(I18nEmailBodyFormField):
         kwargs.setdefault("widget", _EmailBodyEditorWidget)
         super().__init__(*args, **kwargs)
 
-        
+
 def _is_html_empty(html: str) -> bool:
     """Check whether an HTML snippet contains no substantive text or media."""
     if not html:
