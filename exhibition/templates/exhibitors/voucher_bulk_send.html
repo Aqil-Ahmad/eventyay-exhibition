@@ -30,7 +30,26 @@
             </p>
             <ul>
                 {% for exhibitor in sendable %}
-                    <li>{{ exhibitor.name }} <span class="text-muted">{{ exhibitor.email }}</span></li>
+                    <li>
+                        {{ exhibitor.name }} <span class="text-muted">{{ exhibitor.email }}</span>
+                        {% if exhibitor.voucher_new %}
+                            <span class="text-muted">
+                                {% blocktrans trimmed count counter=exhibitor.voucher_new %}
+                                    &mdash; {{ counter }} voucher will be created
+                                {% plural %}
+                                    &mdash; {{ counter }} vouchers will be created
+                                {% endblocktrans %}
+                            </span>
+                        {% else %}
+                            <span class="text-muted">
+                                {% blocktrans trimmed count counter=exhibitor.voucher_total %}
+                                    &mdash; {{ counter }} existing voucher
+                                {% plural %}
+                                    &mdash; {{ counter }} existing vouchers
+                                {% endblocktrans %}
+                            </span>
+                        {% endif %}
+                    </li>
                 {% endfor %}
             </ul>
         {% else %}
@@ -53,7 +72,7 @@
         {% endif %}
 
         {% if no_vouchers %}
-            <h4>{% trans "Skipped: no vouchers issued yet" %}</h4>
+            <h4>{% trans "Skipped: default number of vouchers is 0" %}</h4>
             <ul>
                 {% for exhibitor in no_vouchers %}
                     <li>{{ exhibitor.name }}</li>

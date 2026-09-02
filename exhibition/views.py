@@ -94,6 +94,7 @@ from .utils import (
     allow_blob_image_previews,
     build_exhibitor_video_embed,
     build_voucher_csv,
+    event_voucher_settings,
     generate_exhibitor_vouchers,
     provision_exhibitor_devices,
     public_exhibitors_queryset,
@@ -2218,15 +2219,25 @@ class ExhibitorVoucherBulkSendView(EventPermissionRequiredMixin, View):
         return partner_list_url(self.request.event, self.partner_type)
 
     def preview(self, exhibitors):
-        """Split the list into who will be emailed and who cannot be, without queueing anything."""
+        """Split the list into who will be emailed and who cannot be, without creating anything.
+
+        Anyone holding no vouchers is still sendable when their defaults would issue some; the
+        counts annotated here are what the confirmation page reports.
+        """
+        event_settings = event_voucher_settings(self.request.event)
         sendable, no_email, no_vouchers = [], [], []
         for exhibitor in exhibitors:
             if not (exhibitor.email or "").strip():
                 no_email.append(exhibitor)
-            elif not mail_helpers.exhibitor_vouchers(exhibitor):
+                continue
+            existing = len(mail_helpers.exhibitor_vouchers(exhibitor))
+            planned = 0 if existing else resolve_voucher_defaults(exhibitor, event_settings=event_settings)["count"]
+            if not existing and not planned:
                 no_vouchers.append(exhibitor)
-            else:
-                sendable.append(exhibitor)
+                continue
+            exhibitor.voucher_total = existing or planned
+            exhibitor.voucher_new = planned
+            sendable.append(exhibitor)
         return sendable, no_email, no_vouchers
 
     def post(self, request, *args, **kwargs):
@@ -2251,7 +2262,7 @@ class ExhibitorVoucherBulkSendView(EventPermissionRequiredMixin, View):
             messages.info(request, _("There is nobody to send vouchers to in this list."))
             return redirect(self.list_url())
 
-        queued, skipped = mail_helpers.queue_voucher_emails(request.event, sendable, requestor=request.user)
+        queued, skipped = self.queue_all(sendable, requestor=request.user)
         messages.success(
             request,
             ngettext(
@@ -2268,6 +2279,10 @@ class ExhibitorVoucherBulkSendView(EventPermissionRequiredMixin, View):
         if missing_vouchers:
             messages.warning(request, self.skipped_no_vouchers_message(missing_vouchers))
         return redirect(self.list_url())
+
+    @transaction.atomic
+    def queue_all(self, sendable, *, requestor):
+        return mail_helpers.queue_voucher_emails(self.request.event, sendable, requestor=requestor, issue_missing=True)
 
     def skipped_no_email_message(self, count):
         if self.partner_type == "sponsor":
@@ -2287,14 +2302,14 @@ class ExhibitorVoucherBulkSendView(EventPermissionRequiredMixin, View):
     def skipped_no_vouchers_message(self, count):
         if self.partner_type == "sponsor":
             text = ngettext(
-                "%(count)d sponsor was skipped because it has no vouchers yet.",
-                "%(count)d sponsors were skipped because they have no vouchers yet.",
+                "%(count)d sponsor was skipped because their default number of vouchers is 0.",
+                "%(count)d sponsors were skipped because their default number of vouchers is 0.",
                 count,
             )
         else:
             text = ngettext(
-                "%(count)d exhibitor was skipped because it has no vouchers yet.",
-                "%(count)d exhibitors were skipped because they have no vouchers yet.",
+                "%(count)d exhibitor was skipped because their default number of vouchers is 0.",
+                "%(count)d exhibitors were skipped because their default number of vouchers is 0.",
                 count,
             )
         return text % {"count": count}

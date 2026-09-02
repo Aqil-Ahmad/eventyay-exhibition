@@ -486,15 +486,40 @@ VOUCHER_SKIP_NO_EMAIL = "no_email"
 VOUCHER_SKIP_NO_VOUCHERS = "no_vouchers"
 
 
-def queue_voucher_emails(event, exhibitors, *, requestor=None):
-    """Queue one voucher email per exhibitor, reporting who was skipped and why."""
+def issue_default_vouchers(exhibitor, *, event_settings=None):
+    """Create a batch from this exhibitor's resolved defaults; empty when the default count is 0."""
+    from .utils import generate_exhibitor_vouchers, resolve_voucher_defaults
+
+    defaults = resolve_voucher_defaults(exhibitor, event_settings=event_settings)
+    if not defaults["count"]:
+        return []
+    return generate_exhibitor_vouchers(
+        exhibitor,
+        product=defaults["product"],
+        count=defaults["count"],
+        price_mode=defaults["price_mode"],
+        value=defaults["value"],
+    )
+
+
+def queue_voucher_emails(event, exhibitors, *, requestor=None, issue_missing=False):
+    """Queue one voucher email per exhibitor, reporting who was skipped and why.
+
+    With ``issue_missing``, an exhibitor holding no vouchers gets a batch created from their
+    defaults first, so a bulk send does not skip everyone who was never issued vouchers by hand.
+    """
+    from .utils import event_voucher_settings
+
     queued = []
     skipped = {VOUCHER_SKIP_NO_EMAIL: [], VOUCHER_SKIP_NO_VOUCHERS: []}
+    event_settings = event_voucher_settings(event) if issue_missing else None
     for exhibitor in exhibitors:
         if not (exhibitor.email or "").strip():
             skipped[VOUCHER_SKIP_NO_EMAIL].append(exhibitor)
             continue
         vouchers = exhibitor_vouchers(exhibitor)
+        if not vouchers and issue_missing and issue_default_vouchers(exhibitor, event_settings=event_settings):
+            vouchers = exhibitor_vouchers(exhibitor)
         if not vouchers:
             skipped[VOUCHER_SKIP_NO_VOUCHERS].append(exhibitor)
             continue
