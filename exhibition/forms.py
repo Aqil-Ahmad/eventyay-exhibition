@@ -1,3 +1,5 @@
+from html import unescape
+
 import dateutil.parser
 from django import forms
 from django.conf import settings as django_settings
@@ -8,6 +10,7 @@ from django.db import transaction
 from django.db.models import Max
 from django.forms import inlineformset_factory
 from django.utils import timezone
+from django.utils.html import strip_tags
 from django.utils.translation import gettext_lazy as _
 from django_countries.fields import CountryField
 from eventyay.base.forms import I18nFormSet, I18nModelForm, SettingsForm
@@ -30,6 +33,7 @@ from eventyay.control.forms import ExtFileField, SplitDateTimeField
 from eventyay.helpers.countries import CachedCountries
 from eventyay.helpers.i18n import get_format_without_seconds, is_rtl
 from i18nfield.forms import I18nFormField, I18nTextInput
+from i18nfield.strings import LazyI18nString
 from phonenumber_field.formfields import PhoneNumberField
 from phonenumber_field.widgets import PhoneNumberPrefixWidget
 
@@ -1815,6 +1819,18 @@ def social_link_prefixes() -> dict[str, str]:
     return {key: spec.prefix for key, spec in SOCIAL_LINK_SPECS.items()}
 
 
+def _is_html_empty(html: str) -> bool:
+    """Check whether an HTML snippet contains no substantive text or media."""
+    if not html:
+        return True
+    text = unescape(strip_tags(html)).replace("\xa0", " ").strip()
+    if text:
+        return False
+    if "<img" in html.lower():
+        return False
+    return True
+
+
 class ExhibitionEmailQueueForm(forms.ModelForm):
     """Edit a queued email's recipient / subject / body / schedule before sending."""
 
@@ -1836,6 +1852,12 @@ class ExhibitionEmailQueueForm(forms.ModelForm):
                 "Leave empty to keep this in the outbox until sent manually. Time is interpreted in the event timezone."
             ),
         }
+
+    def clean_body(self):
+        body = self.cleaned_data.get("body")
+        if not body or _is_html_empty(body):
+            raise forms.ValidationError(_("This field is required."))
+        return body
 
     def clean_scheduled_at(self):
         scheduled_at = self.cleaned_data.get("scheduled_at")
@@ -1899,6 +1921,22 @@ class ExhibitionComposeForm(forms.Form):
                 "data-event-timezone": self.event.timezone,
             }
         )
+
+    def clean_body(self):
+        body = self.cleaned_data.get("body")
+        if not body:
+            raise forms.ValidationError(_("This field is required."))
+        if isinstance(body, LazyI18nString):
+            data = body.data
+            if isinstance(data, dict):
+                has_content = any(not _is_html_empty(v) for v in data.values() if v)
+                if not has_content:
+                    raise forms.ValidationError(_("This field is required."))
+            elif isinstance(data, str) and _is_html_empty(data):
+                raise forms.ValidationError(_("This field is required."))
+        elif isinstance(body, str) and _is_html_empty(body):
+            raise forms.ValidationError(_("This field is required."))
+        return body
 
     def clean_scheduled_at(self):
         scheduled_at = self.cleaned_data.get("scheduled_at")
