@@ -14,11 +14,19 @@
 
         {% if sendable %}
             <p>
-                {% blocktrans trimmed count counter=sendable|length %}
-                    A voucher email will be placed in the outbox for {{ counter }} partner.
-                {% plural %}
-                    A voucher email will be placed in the outbox for {{ counter }} partners.
-                {% endblocktrans %}
+                {% if partner_type == "sponsor" %}
+                    {% blocktrans trimmed count counter=sendable|length %}
+                        A voucher email will be placed in the outbox for {{ counter }} sponsor.
+                    {% plural %}
+                        A voucher email will be placed in the outbox for {{ counter }} sponsors.
+                    {% endblocktrans %}
+                {% else %}
+                    {% blocktrans trimmed count counter=sendable|length %}
+                        A voucher email will be placed in the outbox for {{ counter }} exhibitor.
+                    {% plural %}
+                        A voucher email will be placed in the outbox for {{ counter }} exhibitors.
+                    {% endblocktrans %}
+                {% endif %}
             </p>
             <ul>
                 {% for exhibitor in sendable %}
@@ -27,7 +35,11 @@
             </ul>
         {% else %}
             <div class="alert alert-warning" role="alert">
-                {% trans "None of the partners in this list can be emailed yet." %}
+                {% if partner_type == "sponsor" %}
+                    {% trans "None of the sponsors in this list can be emailed yet." %}
+                {% else %}
+                    {% trans "None of the exhibitors in this list can be emailed yet." %}
+                {% endif %}
             </div>
         {% endif %}
 

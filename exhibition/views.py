@@ -2164,19 +2164,19 @@ class ExhibitorVoucherManageView(EventPermissionRequiredMixin, DetailView):
 
     @transaction.atomic
     def send_vouchers(self, request):
-        """Create any requested vouchers, then outbox an email with the partner's complete list of codes."""
+        """Create any requested vouchers, then outbox an email with the complete list of codes."""
         form = ExhibitorVoucherBatchForm(request.POST)
         if not form.is_valid():
             return self.render_to_response(self.get_context_data(form=form))
         if not (self.object.email or "").strip():
-            messages.error(request, _("This partner has no email address on file, so vouchers cannot be emailed."))
+            messages.error(request, _("No email address is on file, so vouchers cannot be emailed."))
             return redirect(self.get_success_url())
         count = form.cleaned_data["count"]
         if count:
             self.issue_vouchers(count)
         vouchers = [link.voucher for link in self.voucher_links()]
         if not vouchers:
-            form.add_error("count", _("This partner has no vouchers yet, so there is nothing to email."))
+            form.add_error("count", _("There are no vouchers yet, so there is nothing to email."))
             return self.render_to_response(self.get_context_data(form=form))
         mail_helpers.queue_voucher_email(request.event, self.object, vouchers, requestor=request.user)
         messages.success(
@@ -2192,7 +2192,7 @@ class ExhibitorVoucherManageView(EventPermissionRequiredMixin, DetailView):
 
 
 class ExhibitorVoucherBulkSendView(EventPermissionRequiredMixin, View):
-    """Queue voucher emails for every partner in the current list, after confirmation."""
+    """Queue voucher emails for everyone in the current list, after confirmation."""
 
     permission = ("can_change_event_settings",)
     partner_type = None
@@ -2264,26 +2264,40 @@ class ExhibitorVoucherBulkSendView(EventPermissionRequiredMixin, View):
         missing_email = len(no_email) + len(skipped[mail_helpers.VOUCHER_SKIP_NO_EMAIL])
         missing_vouchers = len(no_vouchers) + len(skipped[mail_helpers.VOUCHER_SKIP_NO_VOUCHERS])
         if missing_email:
-            messages.warning(
-                request,
-                ngettext(
-                    "%(count)d partner was skipped because it has no email address.",
-                    "%(count)d partners were skipped because they have no email address.",
-                    missing_email,
-                )
-                % {"count": missing_email},
-            )
+            messages.warning(request, self.skipped_no_email_message(missing_email))
         if missing_vouchers:
-            messages.warning(
-                request,
-                ngettext(
-                    "%(count)d partner was skipped because it has no vouchers yet.",
-                    "%(count)d partners were skipped because they have no vouchers yet.",
-                    missing_vouchers,
-                )
-                % {"count": missing_vouchers},
-            )
+            messages.warning(request, self.skipped_no_vouchers_message(missing_vouchers))
         return redirect(self.list_url())
+
+    def skipped_no_email_message(self, count):
+        if self.partner_type == "sponsor":
+            text = ngettext(
+                "%(count)d sponsor was skipped because it has no email address.",
+                "%(count)d sponsors were skipped because they have no email address.",
+                count,
+            )
+        else:
+            text = ngettext(
+                "%(count)d exhibitor was skipped because it has no email address.",
+                "%(count)d exhibitors were skipped because they have no email address.",
+                count,
+            )
+        return text % {"count": count}
+
+    def skipped_no_vouchers_message(self, count):
+        if self.partner_type == "sponsor":
+            text = ngettext(
+                "%(count)d sponsor was skipped because it has no vouchers yet.",
+                "%(count)d sponsors were skipped because they have no vouchers yet.",
+                count,
+            )
+        else:
+            text = ngettext(
+                "%(count)d exhibitor was skipped because it has no vouchers yet.",
+                "%(count)d exhibitors were skipped because they have no vouchers yet.",
+                count,
+            )
+        return text % {"count": count}
 
 
 class ExhibitorDeviceManageView(EventPermissionRequiredMixin, DetailView):
