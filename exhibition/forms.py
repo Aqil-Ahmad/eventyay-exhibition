@@ -17,6 +17,7 @@ from eventyay.base.forms.widgets import (
     TimePickerWidget,
 )
 from eventyay.base.models import PriceModeChoices, Product
+from eventyay.base.templatetags.rich_text import compile_email_body
 from eventyay.common.forms.fields import I18nEmailBodyFormField
 from eventyay.common.forms.mixins import (
     EventLocalizedModelChoiceField,
@@ -1815,6 +1816,28 @@ def social_link_prefixes() -> dict[str, str]:
     return {key: spec.prefix for key, spec in SOCIAL_LINK_SPECS.items()}
 
 
+class _EmailBodyEditorWidget(I18nEmailEditorWidget):
+    """Seed each locale editor with rendered HTML so stored plain text keeps its line breaks."""
+
+    def decompress(self, value):
+        return [compile_email_body(item) if item else item for item in super().decompress(value)]
+
+
+class _EmailBodyEditorTextarea(EmailEditorWidget):
+    """Non-i18n counterpart of :class:`_EmailBodyEditorWidget`."""
+
+    def format_value(self, value):
+        return compile_email_body(value) if value else value
+
+
+class ExhibitionEmailBodyFormField(I18nEmailBodyFormField):
+    """Email body field whose editor is seeded with rendered HTML."""
+
+    def __init__(self, *args, **kwargs):
+        kwargs.setdefault("widget", _EmailBodyEditorWidget)
+        super().__init__(*args, **kwargs)
+
+
 class ExhibitionEmailQueueForm(forms.ModelForm):
     """Edit a queued email's recipient / subject / body / schedule before sending."""
 
@@ -1828,7 +1851,7 @@ class ExhibitionEmailQueueForm(forms.ModelForm):
         model = ExhibitionEmailQueue
         fields = ("to_email", "subject", "body", "scheduled_at")
         widgets = {
-            "body": EmailEditorWidget(attrs={"rows": 12}),
+            "body": _EmailBodyEditorTextarea(attrs={"rows": 12}),
             "scheduled_at": HtmlDateTimeInput,
         }
         help_texts = {
@@ -1884,7 +1907,7 @@ class ExhibitionComposeForm(forms.Form):
         self.event = kwargs.pop("event")
         super().__init__(*args, **kwargs)
         self.fields["sponsor_group"].queryset = SponsorGroup.objects.filter(event=self.event).order_by("level", "pk")
-        self.fields["body"] = I18nEmailBodyFormField(
+        self.fields["body"] = ExhibitionEmailBodyFormField(
             label=_("Body"),
             placeholders=mail_helpers.placeholder_names(self.event, mail_helpers.PROPOSAL_PLACEHOLDER_CONTEXT),
         )
@@ -1930,7 +1953,7 @@ class ExhibitionMailTemplatesForm(SettingsForm):
                 initial=default_subject,
                 locales=self.locales,
             )
-            self.fields[mail_helpers.body_settings_key(role)] = I18nEmailBodyFormField(
+            self.fields[mail_helpers.body_settings_key(role)] = ExhibitionEmailBodyFormField(
                 label=_("%(role)s — body") % {"role": label},
                 required=False,
                 placeholders=mail_helpers.role_placeholder_names(self.obj, role),
@@ -1953,7 +1976,7 @@ class ExhibitionCustomEmailTemplateForm(I18nModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         placeholder_names = mail_helpers.placeholder_names(self.event, mail_helpers.PROPOSAL_PLACEHOLDER_CONTEXT)
-        self.fields["body"] = I18nEmailBodyFormField(
+        self.fields["body"] = ExhibitionEmailBodyFormField(
             label=self.fields["body"].label,
             required=False,
             placeholders=placeholder_names,
