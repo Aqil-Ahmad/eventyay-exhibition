@@ -223,11 +223,7 @@ def pool_tag_choices(event):
     from eventyay.base.models import Voucher
 
     return list(
-        Voucher.objects.filter(event=event)
-        .exclude(tag="")
-        .values_list("tag", flat=True)
-        .distinct()
-        .order_by("tag")
+        Voucher.objects.filter(event=event).exclude(tag="").values_list("tag", flat=True).distinct().order_by("tag")
     )
 
 

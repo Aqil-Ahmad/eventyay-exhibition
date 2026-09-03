@@ -72,9 +72,18 @@
         {% endif %}
 
         {% if no_vouchers %}
-            <h4>{% trans "Skipped: default number of vouchers is 0" %}</h4>
+            <h4>{% trans "Skipped: voucher count is set to 0" %}</h4>
             <ul>
                 {% for exhibitor in no_vouchers %}
+                    <li>{{ exhibitor.name }}</li>
+                {% endfor %}
+            </ul>
+        {% endif %}
+
+        {% if pool_short %}
+            <h4>{% trans "Skipped: not enough vouchers left in the pool" %}</h4>
+            <ul>
+                {% for exhibitor in pool_short %}
                     <li>{{ exhibitor.name }}</li>
                 {% endfor %}
             </ul>
