@@ -228,12 +228,20 @@ def pool_tag_choices(event):
 
 
 def unassigned_pool_vouchers(event, pool_tag):
-    """Vouchers in the pool that no exhibitor holds yet."""
+    """Vouchers in the pool that no exhibitor holds yet.
+
+    Excluded by subquery rather than ``exhibitor_link__isnull``: that builds an outer join, and
+    Postgres refuses ``SELECT ... FOR UPDATE`` on the nullable side of one.
+    """
     from eventyay.base.models import Voucher
+
+    from .models import ExhibitorVoucher
 
     if not pool_tag:
         return Voucher.objects.none()
-    return Voucher.objects.filter(event=event, tag=pool_tag, exhibitor_link__isnull=True)
+    return Voucher.objects.filter(event=event, tag=pool_tag).exclude(
+        pk__in=ExhibitorVoucher.objects.values("voucher_id")
+    )
 
 
 def pool_remaining(event, pool_tag):
