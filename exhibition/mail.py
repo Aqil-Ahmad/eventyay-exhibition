@@ -475,7 +475,7 @@ def queue_voucher_email(event, exhibitor, vouchers, *, send_now=False, requestor
     from .models import ExhibitionEmailQueue, ExhibitorSettings
     from .utils import store_voucher_csv
 
-    to_email = (exhibitor.email or "").strip()
+    to_email = exhibitor.recipient_email
     if not to_email:
         return None
 
@@ -529,7 +529,7 @@ def queue_voucher_emails(event, exhibitors, *, requestor=None, issue_missing=Fal
     skipped = {VOUCHER_SKIP_NO_EMAIL: [], VOUCHER_SKIP_NO_VOUCHERS: [], VOUCHER_SKIP_POOL_EMPTY: []}
     event_settings = event_voucher_settings(event) if issue_missing else None
     for exhibitor in exhibitors:
-        if not (exhibitor.email or "").strip():
+        if not exhibitor.recipient_email:
             skipped[VOUCHER_SKIP_NO_EMAIL].append(exhibitor)
             continue
         vouchers = exhibitor_vouchers(exhibitor)

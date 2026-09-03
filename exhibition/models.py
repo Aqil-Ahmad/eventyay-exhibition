@@ -400,6 +400,22 @@ class ExhibitorInfo(LoggedModel):
         super().save(*args, **kwargs)
 
     @property
+    def recipient_email(self):
+        """Where mail for this partner goes.
+
+        Their own address when one was stored, otherwise the account that applied for them —
+        the same fallback the lifecycle emails use, since the address is no longer editable on
+        the profile form and manually created partners never get one.
+        """
+        stored = (self.email or "").strip()
+        if stored:
+            return stored
+        proposal = self.source_proposals.select_related("user").order_by("-pk").first()
+        if proposal is None:
+            return ""
+        return (proposal.email or "").strip() or (proposal.user.email if proposal.user_id else "")
+
+    @property
     def localized_booth_name(self):
         booth_name = self.booth_name
         if isinstance(booth_name, LazyI18nString):

@@ -2097,7 +2097,7 @@ class ExhibitorVoucherManageView(EventPermissionRequiredMixin, DetailView):
         form = ExhibitorVoucherBatchForm(request.POST)
         if not form.is_valid():
             return self.render_to_response(self.get_context_data(form=form))
-        if not (self.object.email or "").strip():
+        if not self.object.recipient_email:
             messages.error(request, _("No email address is on file, so vouchers cannot be emailed."))
             return redirect(self.get_success_url())
         count = form.cleaned_data["count"]
@@ -2157,7 +2157,7 @@ class ExhibitorVoucherBulkSendView(EventPermissionRequiredMixin, View):
         remaining = {}
         sendable, no_email, no_vouchers, pool_short = [], [], [], []
         for exhibitor in exhibitors:
-            if not (exhibitor.email or "").strip():
+            if not exhibitor.recipient_email:
                 no_email.append(exhibitor)
                 continue
             existing = len(mail_helpers.exhibitor_vouchers(exhibitor))

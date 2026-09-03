@@ -6,12 +6,15 @@ from django.contrib.messages.storage.fallback import FallbackStorage
 from django.test import RequestFactory
 from django_scopes import scopes_disabled
 from eventyay.base.models import Product, Voucher
+from eventyay.base.models.auth import User
 
 from exhibition import mail as mail_helpers
 from exhibition.api import VoucherRedemptionRetrieveView, get_allowed_attendee_data
 from exhibition.forms import ExhibitorVoucherBatchForm, ExhibitorVoucherDefaultsForm
 from exhibition.models import (
     ExhibitionEmailQueue,
+    ExhibitionProposal,
+    ExhibitionProposalState,
     ExhibitorInfo,
     ExhibitorSettings,
     ExhibitorVoucher,
@@ -766,3 +769,75 @@ def test_bulk_send_leaves_the_pool_alone_for_whoever_it_skips(voucher_event):
 
         assert ExhibitionEmailQueue.objects.filter(event=voucher_event).count() == 1
         assert pool_remaining(voucher_event, POOL) == 2
+
+
+def _applied_via(exhibitor, *, login, contact=""):
+    """Approve a proposal onto this exhibitor, as the call-for-exhibitors flow does."""
+    user = User.objects.create_user(email=login, password="pw")
+    return ExhibitionProposal.objects.create(
+        event=exhibitor.event,
+        user=user,
+        name="Acme Corp",
+        email=contact,
+        state=ExhibitionProposalState.ACCEPTED,
+        approved_exhibitor=exhibitor,
+    )
+
+
+@pytest.mark.django_db
+def test_recipient_email_prefers_the_stored_address(voucher_event):
+    with scopes_disabled():
+        exhibitor = _exhibitor(voucher_event, email="stored@example.com")
+        _applied_via(exhibitor, login="login@example.com")
+
+        assert exhibitor.recipient_email == "stored@example.com"
+
+
+@pytest.mark.django_db
+def test_recipient_email_falls_back_to_the_login_address(voucher_event):
+    with scopes_disabled():
+        exhibitor = _exhibitor(voucher_event, email="")
+        _applied_via(exhibitor, login="login@example.com")
+
+        assert exhibitor.recipient_email == "login@example.com"
+
+
+@pytest.mark.django_db
+def test_recipient_email_prefers_the_proposal_contact_over_the_login(voucher_event):
+    with scopes_disabled():
+        exhibitor = _exhibitor(voucher_event, email="")
+        _applied_via(exhibitor, login="login@example.com", contact="contact@example.com")
+
+        assert exhibitor.recipient_email == "contact@example.com"
+
+
+@pytest.mark.django_db
+def test_recipient_email_is_blank_for_a_manually_added_partner(voucher_event):
+    with scopes_disabled():
+        assert _exhibitor(voucher_event, email="").recipient_email == ""
+
+
+@pytest.mark.django_db
+def test_voucher_email_goes_to_the_login_address_when_none_is_stored(voucher_event):
+    with scopes_disabled():
+        exhibitor = _exhibitor(voucher_event, email="")
+        _applied_via(exhibitor, login="login@example.com")
+        queued = mail_helpers.queue_voucher_email(voucher_event, exhibitor, _issue(exhibitor))
+
+    assert queued is not None
+    assert queued.to_email == "login@example.com"
+
+
+@pytest.mark.django_db
+def test_bulk_send_reaches_partners_with_only_a_login_address(voucher_event):
+    with scopes_disabled():
+        ExhibitorSettings.objects.create(event=voucher_event, voucher_default_count=2, voucher_pool_tag=POOL)
+        _pool(voucher_event, 2)
+        exhibitor = _exhibitor(voucher_event, email="")
+        _applied_via(exhibitor, login="login@example.com")
+        view, request = _bulk_view(voucher_event, data={"confirmed": "1"})
+
+        view.post(request)
+
+        outbox = ExhibitionEmailQueue.objects.filter(event=voucher_event, role=mail_helpers.VOUCHERS)
+        assert [row.to_email for row in outbox] == ["login@example.com"]
