@@ -546,10 +546,10 @@ def test_bulk_preview_counts_existing_vouchers(voucher_event):
         exhibitor = _mailed_exhibitor(voucher_event)
         _issue(exhibitor, count=3)
         view, _request = _bulk_view(voucher_event)
-        sendable, no_email, no_vouchers = view.preview([exhibitor])
+        sendable, no_email, no_vouchers, pool_short = view.preview([exhibitor])
 
     assert sendable == [exhibitor]
-    assert (no_email, no_vouchers) == ([], [])
+    assert (no_email, no_vouchers, pool_short) == ([], [], [])
     assert exhibitor.voucher_total == 3
     assert exhibitor.voucher_new == 0
 
