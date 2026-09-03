@@ -531,7 +531,7 @@ class ExhibitorListView(EventPermissionRequiredMixin, FilteredListMixin, ListVie
         return super().get(request, *args, **kwargs)
 
     def download_keys_csv(self):
-        queryset = self.get_queryset()
+        queryset = self.get_queryset().prefetch_related("source_proposals__user")
         selected_pks = self.request.GET.getlist("pk")
         if selected_pks:
             queryset = queryset.filter(pk__in=selected_pks)
@@ -545,7 +545,7 @@ class ExhibitorListView(EventPermissionRequiredMixin, FilteredListMixin, ListVie
                     localize_event_text(exhibitor.name) or str(exhibitor.name),
                     exhibitor.booth_id or "",
                     exhibitor.localized_booth_name,
-                    exhibitor.email or "",
+                    exhibitor.recipient_email,
                     exhibitor.key,
                 ]
             )
@@ -2128,7 +2128,7 @@ class ExhibitorVoucherBulkSendView(EventPermissionRequiredMixin, View):
     partner_type = None
 
     def target_queryset(self):
-        queryset = ExhibitorInfo.objects.filter(event=self.request.event)
+        queryset = ExhibitorInfo.objects.filter(event=self.request.event).prefetch_related("source_proposals__user")
         if self.partner_type == "sponsor":
             queryset = queryset.filter(is_sponsor=True).order_by("sponsor_position", "name", "pk")
         elif self.partner_type == "exhibitor":

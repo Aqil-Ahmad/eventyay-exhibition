@@ -443,7 +443,7 @@ def queue_exhibitor_access_email(event, exhibitor, *, requestor=None):
     """Queue the access-credentials email; ``None`` if the exhibitor has no email address."""
     from .models import ExhibitionEmailQueue
 
-    to_email = (exhibitor.email or "").strip()
+    to_email = exhibitor.recipient_email
     if not to_email:
         return None
 

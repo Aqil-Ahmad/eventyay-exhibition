@@ -410,10 +410,11 @@ class ExhibitorInfo(LoggedModel):
         stored = (self.email or "").strip()
         if stored:
             return stored
-        proposal = self.source_proposals.select_related("user").order_by("-pk").first()
-        if proposal is None:
+        proposals = sorted(self.source_proposals.all(), key=lambda proposal: proposal.pk, reverse=True)
+        if not proposals:
             return ""
-        return (proposal.email or "").strip() or (proposal.user.email if proposal.user_id else "")
+        latest = proposals[0]
+        return (latest.email or "").strip() or (latest.user.email if latest.user_id else "")
 
     @property
     def localized_booth_name(self):

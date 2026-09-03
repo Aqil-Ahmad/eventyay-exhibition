@@ -3,6 +3,7 @@ from unittest.mock import patch
 
 import pytest
 from django.contrib.messages.storage.fallback import FallbackStorage
+from django.db import IntegrityError, transaction
 from django.test import RequestFactory
 from django_scopes import scopes_disabled
 from eventyay.base.models import Product, Voucher
@@ -841,3 +842,33 @@ def test_bulk_send_reaches_partners_with_only_a_login_address(voucher_event):
 
         outbox = ExhibitionEmailQueue.objects.filter(event=voucher_event, role=mail_helpers.VOUCHERS)
         assert [row.to_email for row in outbox] == ["login@example.com"]
+
+
+@pytest.mark.django_db
+def test_a_voucher_cannot_be_linked_to_two_exhibitors(voucher_event):
+    """The pool's real guarantee: the link table refuses a code that is already handed out."""
+    with scopes_disabled():
+        ExhibitorSettings.objects.create(event=voucher_event, voucher_pool_tag=POOL)
+        voucher = _pool(voucher_event, 1)[0]
+        first = _exhibitor(voucher_event, name="First")
+        second = _exhibitor(voucher_event, name="Second")
+
+        ExhibitorVoucher.objects.create(exhibitor=first, voucher=voucher)
+        with pytest.raises(IntegrityError), transaction.atomic():
+            ExhibitorVoucher.objects.create(exhibitor=second, voucher=voucher)
+
+
+@pytest.mark.django_db
+def test_a_claimed_code_leaves_the_pool_for_everyone_else(voucher_event):
+    with scopes_disabled():
+        ExhibitorSettings.objects.create(event=voucher_event, voucher_pool_tag=POOL)
+        _pool(voucher_event, 3)
+        first = _exhibitor(voucher_event, name="First")
+        second = _exhibitor(voucher_event, name="Second")
+
+        taken = {link.voucher_id for link in claim_pool_vouchers(first, 2, pool_tag=POOL)}
+        left = {link.voucher_id for link in claim_pool_vouchers(second, 1, pool_tag=POOL)}
+
+    assert len(taken) == 2
+    assert len(left) == 1
+    assert not taken & left
