@@ -5,8 +5,9 @@ import pytest
 from django.contrib.messages.storage.fallback import FallbackStorage
 from django.db import IntegrityError, transaction
 from django.test import RequestFactory
+from django.utils.timezone import now
 from django_scopes import scopes_disabled
-from eventyay.base.models import Product, Voucher
+from eventyay.base.models import Event, Organizer, Product, Voucher
 from eventyay.base.models.auth import User
 
 from exhibition import mail as mail_helpers
@@ -31,7 +32,7 @@ from exhibition.utils import (
     store_voucher_csv,
     voucher_redeem_url,
 )
-from exhibition.views import ExhibitorVoucherBulkSendView
+from exhibition.views import ExhibitorVoucherBulkSendView, ExhibitorVoucherManageView
 
 
 def _exhibitor(event, **kwargs):
@@ -872,3 +873,79 @@ def test_a_claimed_code_leaves_the_pool_for_everyone_else(voucher_event):
     assert len(taken) == 2
     assert len(left) == 1
     assert not taken & left
+
+
+def _voucher_view(exhibitor, data):
+    request = RequestFactory().post("/vouchers", data=data)
+    request.event = exhibitor.event
+    request.user = None
+    request.session = {}
+    request._messages = FallbackStorage(request)
+    view = ExhibitorVoucherManageView()
+    view.request = request
+    view.object = exhibitor
+    view.kwargs = {"pk": exhibitor.pk}
+    return view, request
+
+
+@pytest.mark.django_db
+def test_an_unemailed_code_goes_back_to_the_pool(voucher_event):
+    with scopes_disabled():
+        ExhibitorSettings.objects.create(event=voucher_event, voucher_pool_tag=POOL)
+        exhibitor = _mailed_exhibitor(voucher_event)
+        _issue(exhibitor, count=2)
+        link = ExhibitorVoucher.objects.filter(exhibitor=exhibitor).first()
+        view, request = _voucher_view(exhibitor, {"action": "delete", "voucher": link.pk})
+
+        view.remove_voucher(request)
+
+        assert not ExhibitorVoucher.objects.filter(pk=link.pk).exists()
+        assert pool_remaining(voucher_event, POOL) == 1
+
+
+@pytest.mark.django_db
+def test_an_emailed_code_cannot_go_back_to_the_pool(voucher_event):
+    """Returning it would hand the code to someone else while the first partner still holds it."""
+    with scopes_disabled():
+        ExhibitorSettings.objects.create(event=voucher_event, voucher_pool_tag=POOL)
+        exhibitor = _mailed_exhibitor(voucher_event)
+        vouchers = _issue(exhibitor, count=2)
+        mail_helpers.queue_voucher_email(voucher_event, exhibitor, vouchers)
+        link = ExhibitorVoucher.objects.filter(exhibitor=exhibitor).first()
+        view, request = _voucher_view(exhibitor, {"action": "delete", "voucher": link.pk})
+
+        view.remove_voucher(request)
+
+        assert ExhibitorVoucher.objects.filter(pk=link.pk).exists()
+        assert pool_remaining(voucher_event, POOL) == 0
+
+
+@pytest.mark.django_db
+def test_a_code_assigned_after_the_last_email_still_goes_back(voucher_event):
+    with scopes_disabled():
+        ExhibitorSettings.objects.create(event=voucher_event, voucher_pool_tag=POOL)
+        exhibitor = _mailed_exhibitor(voucher_event)
+        mail_helpers.queue_voucher_email(voucher_event, exhibitor, _issue(exhibitor, count=1))
+        _pool(voucher_event, 1)
+        later = claim_pool_vouchers(exhibitor, 1, pool_tag=POOL)[0]
+        view, request = _voucher_view(exhibitor, {"action": "delete", "voucher": later.pk})
+
+        view.remove_voucher(request)
+
+        assert not ExhibitorVoucher.objects.filter(pk=later.pk).exists()
+
+
+@pytest.mark.django_db
+def test_pool_lookup_ignores_links_from_other_events(voucher_event):
+    with scopes_disabled():
+        other = Organizer.objects.create(name="Other", slug="other-org")
+        other_event = Event.objects.create(
+            organizer=other, name="Other Event", slug="other-event", live=True, date_from=now()
+        )
+        _pool(other_event, 2)
+        other_exhibitor = _exhibitor(other_event, name="Elsewhere")
+        claim_pool_vouchers(other_exhibitor, 2, pool_tag=POOL)
+
+        _pool(voucher_event, 3)
+
+        assert pool_remaining(voucher_event, POOL) == 3

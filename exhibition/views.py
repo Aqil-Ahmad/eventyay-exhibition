@@ -2050,9 +2050,30 @@ class ExhibitorVoucherManageView(EventPermissionRequiredMixin, DetailView):
         if link.voucher.redeemed:
             messages.error(request, _("This voucher has already been redeemed and cannot be returned."))
             return redirect(self.get_success_url())
+        if self.was_already_emailed(link):
+            messages.error(
+                request,
+                _(
+                    "This code was already included in a voucher email to this partner, so it cannot be "
+                    "returned to the pool. Delete it under Tickets → Vouchers instead."
+                ),
+            )
+            return redirect(self.get_success_url())
         link.delete()
         messages.success(request, _("Voucher returned to the pool."))
         return redirect(self.get_success_url())
+
+    def was_already_emailed(self, link):
+        """Whether a voucher email went out after this code was assigned, and so lists it.
+
+        Returning such a code would hand it to somebody else while the first recipient still
+        holds it in their inbox.
+        """
+        return ExhibitionEmailQueue.objects.filter(
+            exhibitor=self.object,
+            role=mail_helpers.VOUCHERS,
+            created__gte=link.created,
+        ).exists()
 
     @transaction.atomic
     def create_vouchers(self, request):
@@ -2224,8 +2245,8 @@ class ExhibitorVoucherBulkSendView(EventPermissionRequiredMixin, View):
             messages.warning(
                 request,
                 ngettext(
-                    "%(count)d was skipped because the voucher pool does not have enough codes left.",
-                    "%(count)d were skipped because the voucher pool does not have enough codes left.",
+                    "%(count)d was skipped because no unassigned codes were available from their pool.",
+                    "%(count)d were skipped because no unassigned codes were available from their pool.",
                     short,
                 )
                 % {"count": short},

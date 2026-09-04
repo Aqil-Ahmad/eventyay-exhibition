@@ -571,7 +571,7 @@ class ExhibitorDeviceProvisionForm(forms.Form):
 
 
 class ExhibitorVoucherBatchForm(forms.Form):
-    """How many pool vouchers this partner should hold in total."""
+    """How many more pool vouchers to hand this partner now."""
 
     count = forms.IntegerField(
         min_value=0,

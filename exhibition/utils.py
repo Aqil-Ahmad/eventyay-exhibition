@@ -239,9 +239,8 @@ def unassigned_pool_vouchers(event, pool_tag):
 
     if not pool_tag:
         return Voucher.objects.none()
-    return Voucher.objects.filter(event=event, tag=pool_tag).exclude(
-        pk__in=ExhibitorVoucher.objects.values("voucher_id")
-    )
+    linked_ids = ExhibitorVoucher.objects.filter(exhibitor__event=event).values("voucher_id")
+    return Voucher.objects.filter(event=event, tag=pool_tag).exclude(pk__in=linked_ids)
 
 
 def pool_remaining(event, pool_tag):
