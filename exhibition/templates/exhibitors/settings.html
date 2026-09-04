@@ -141,12 +141,24 @@
                 {% bootstrap_form_errors voucher_defaults_form %}
                 <fieldset>
                     <legend>{% trans "Voucher pools" %}</legend>
-                    <p>
-                        {% blocktrans trimmed %}
-                            Create the voucher codes under Tickets → Vouchers and give them a tag, then pick
-                            that tag here. Exhibitors and sponsors are handed codes from the pool you choose.
-                        {% endblocktrans %}
-                    </p>
+                    <div class="row">
+                        <div class="col-md-9">
+                            <p>
+                                {% blocktrans trimmed %}
+                                    Create the voucher codes under Tickets → Vouchers and give them a tag, then
+                                    pick that tag here. Exhibitors and sponsors are handed codes from the pool
+                                    you choose. Reload this page to pick up a tag you just created.
+                                {% endblocktrans %}
+                            </p>
+                        </div>
+                        <div class="col-md-3 text-right flip">
+                            <a class="btn btn-default"
+                               href="{% url 'control:event.vouchers.bulk' organizer=request.event.organizer.slug event=request.event.slug %}"
+                               target="_blank" rel="noopener">
+                                <i class="fa fa-plus"></i> {% trans "Create vouchers" %}
+                            </a>
+                        </div>
+                    </div>
                     {% bootstrap_field voucher_defaults_form.voucher_pool_tag layout="control" %}
                     {% if exhibitor_pool_tag %}
                         <div class="form-group">
