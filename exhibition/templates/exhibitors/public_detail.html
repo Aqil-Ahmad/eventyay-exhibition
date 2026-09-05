@@ -83,36 +83,13 @@
                 {% if related_sessions %}
                     <section class="exhibition-detail-sessions" aria-labelledby="exhibition-detail-sessions-heading">
                         <h2 id="exhibition-detail-sessions-heading">{% trans "Related sessions" %}</h2>
-                        <ul class="exhibition-session-list">
+                        <div class="exhibition-session-list">
                             {% for slot in related_sessions %}
-                                <li class="exhibition-session">
-                                    <a class="exhibition-session-link" href="{{ slot.submission.urls.public }}">
-                                        <span class="exhibition-session-time">
-                                            {% if slot.start %}
-                                                <span class="exhibition-session-date">{{ slot.start|date:'SHORT_DATE_FORMAT' }}</span>
-                                                <span class="exhibition-session-start">{{ slot.start|date:'TIME_FORMAT' }}</span>
-                                            {% else %}
-                                                <span class="exhibition-session-date">{% trans "Not scheduled" %}</span>
-                                            {% endif %}
-                                        </span>
-                                        <span class="exhibition-session-info">
-                                            <span class="exhibition-session-title">{{ slot.submission.title|event_localize }}</span>
-                                            {% if slot.submission.display_speaker_names %}
-                                                <span class="exhibition-session-speakers">{{ slot.submission.display_speaker_names }}</span>
-                                            {% endif %}
-                                            <span class="exhibition-session-meta">
-                                                {% if slot.submission.track %}
-                                                    <span class="exhibition-session-track">{{ slot.submission.track.name|event_localize }}</span>
-                                                {% endif %}
-                                                {% if slot.room %}
-                                                    <span class="exhibition-session-room">{{ slot.room.name|event_localize }}</span>
-                                                {% endif %}
-                                            </span>
-                                        </span>
-                                    </a>
-                                </li>
+                                <a class="exhibition-session-link" href="{{ slot.submission.urls.public }}">
+                                    {% include "agenda/session_block.html" with session=slot show_date=True %}
+                                </a>
                             {% endfor %}
-                        </ul>
+                        </div>
                     </section>
                 {% endif %}
             </div>
