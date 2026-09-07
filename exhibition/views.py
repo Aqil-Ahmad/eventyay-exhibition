@@ -2044,9 +2044,14 @@ class ExhibitorVoucherManageView(EventPermissionRequiredMixin, DetailView):
             return self.send_vouchers(request)
         return self.create_vouchers(request)
 
+    @transaction.atomic
     def remove_voucher(self, request):
         """Return a voucher to the pool by unlinking it; the code itself stays in Tickets."""
-        link = get_object_or_404(ExhibitorVoucher, pk=request.POST.get("voucher"), exhibitor=self.object)
+        link = get_object_or_404(
+            ExhibitorVoucher.objects.select_for_update(),
+            pk=request.POST.get("voucher"),
+            exhibitor=self.object,
+        )
         if link.voucher.redeemed:
             messages.error(request, _("This voucher has already been redeemed and cannot be returned."))
             return redirect(self.get_success_url())
@@ -2062,6 +2067,15 @@ class ExhibitorVoucherManageView(EventPermissionRequiredMixin, DetailView):
         link.delete()
         messages.success(request, _("Voucher returned to the pool."))
         return redirect(self.get_success_url())
+
+    def lock_voucher_links(self):
+        """Hold this partner's links so a concurrent return cannot drop a code we are about to email."""
+        return list(
+            ExhibitorVoucher.objects.filter(exhibitor=self.object)
+            .select_for_update()
+            .order_by("pk")
+            .values_list("pk", flat=True)
+        )
 
     def was_already_emailed(self, link):
         """Whether a voucher email went out after this code was assigned, and so lists it.
@@ -2125,6 +2139,7 @@ class ExhibitorVoucherManageView(EventPermissionRequiredMixin, DetailView):
         if count and not self.claim_vouchers(count):
             form.add_error("count", self.pool_short_message(count))
             return self.render_to_response(self.get_context_data(form=form))
+        self.lock_voucher_links()
         vouchers = [link.voucher for link in self.voucher_links()]
         if not vouchers:
             form.add_error("count", _("This partner holds no vouchers yet, so there is nothing to email."))
