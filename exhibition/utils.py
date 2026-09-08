@@ -2,6 +2,7 @@ from datetime import timedelta
 from typing import TYPE_CHECKING
 from urllib.parse import parse_qs, quote_plus, urlparse
 
+from django.db import transaction
 from django.db.models import Q, QuerySet
 from django.utils import timezone
 from eventyay.common.urls import get_url_origin, normalize_url_scheme
@@ -319,24 +320,24 @@ def pool_remaining(event, pool_tag):
 
 
 def claim_pool_vouchers(exhibitor, count, *, pool_tag=None):
-    """Hand ``count`` unclaimed pool vouchers to this exhibitor, or none at all if the pool is short.
-
-    Rows are locked for the duration so two concurrent sends cannot hand out the same code.
-    """
+    """Hand ``count`` unclaimed pool vouchers to this exhibitor, or none at all if the pool is short."""
     from .models import ExhibitorVoucher
 
     if not count:
         return []
     if pool_tag is None:
         pool_tag = resolve_voucher_pool_tag(exhibitor)
-    available = list(
-        unassigned_pool_vouchers(exhibitor.event, pool_tag).select_for_update(skip_locked=True).order_by("pk")[:count]
-    )
-    if len(available) < count:
-        return []
-    return ExhibitorVoucher.objects.bulk_create(
-        ExhibitorVoucher(exhibitor=exhibitor, voucher=voucher) for voucher in available
-    )
+    with transaction.atomic():
+        available = list(
+            unassigned_pool_vouchers(exhibitor.event, pool_tag)
+            .select_for_update(skip_locked=True)
+            .order_by("pk")[:count]
+        )
+        if len(available) < count:
+            return []
+        return ExhibitorVoucher.objects.bulk_create(
+            ExhibitorVoucher(exhibitor=exhibitor, voucher=voucher) for voucher in available
+        )
 
 
 PROPOSAL_LOCALIZED_PROFILE_FIELDS = ("name", "description")
