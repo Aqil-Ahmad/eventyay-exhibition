@@ -15,7 +15,7 @@ class Migration(migrations.Migration):
             model_name="exhibitorsettings",
             name="proposal_field_settings",
             field=models.JSONField(
-                default=exhibition.models.default_proposal_field_settings
+                default=exhibition.models.default_request_field_settings
             ),
         ),
     ]

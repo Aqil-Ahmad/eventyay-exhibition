@@ -133,7 +133,7 @@ class Migration(migrations.Migration):
                 (
                     "code",
                     models.CharField(
-                        default=exhibition.models.generate_proposal_code,
+                        default=exhibition.models.generate_request_code,
                         max_length=12,
                         unique=True,
                     ),
@@ -185,7 +185,7 @@ class Migration(migrations.Migration):
                     models.FileField(
                         blank=True,
                         null=True,
-                        upload_to=exhibition.models.proposal_slides_path,
+                        upload_to=exhibition.models.request_slides_path,
                         verbose_name="Slides",
                     ),
                 ),
@@ -198,7 +198,7 @@ class Migration(migrations.Migration):
                     models.ImageField(
                         blank=True,
                         null=True,
-                        upload_to=exhibition.models.proposal_logo_path,
+                        upload_to=exhibition.models.request_logo_path,
                     ),
                 ),
                 (
@@ -210,7 +210,7 @@ class Migration(migrations.Migration):
                     models.ImageField(
                         blank=True,
                         null=True,
-                        upload_to=exhibition.models.proposal_header_image_path,
+                        upload_to=exhibition.models.request_banner_path,
                     ),
                 ),
                 (

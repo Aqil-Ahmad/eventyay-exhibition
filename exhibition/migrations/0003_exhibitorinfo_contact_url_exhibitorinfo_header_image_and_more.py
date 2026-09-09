@@ -23,7 +23,7 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='exhibitorinfo',
             name='header_image',
-            field=models.ImageField(blank=True, null=True, upload_to=exhibition.models.exhibitor_header_image_path),
+            field=models.ImageField(blank=True, null=True, upload_to=exhibition.models.exhibitor_banner_path),
         ),
         migrations.AddField(
             model_name='exhibitorinfo',

@@ -1340,7 +1340,7 @@ msgstr ""
 #: exhibition/templates/exhibitors/add.html:178
 #: exhibition/templates/exhibitors/public_proposal_form.html:158
 #: exhibition/templates/exhibitors/public_proposal_form.html:161
-msgid "Header image preview"
+msgid "Exhibition banner preview"
 msgstr ""
 
 #: exhibition/templates/exhibitors/add.html:196
