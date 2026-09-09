@@ -1,0 +1,51 @@
+{% load i18n %}
+<div class="language-grid-widget exhibition-session-select" id="{{ widget.attrs.id }}-session-widget">
+  <div class="language-grid-summary"
+       data-language-grid-summary
+       role="button"
+       tabindex="0"
+       aria-expanded="false"
+       aria-controls="{{ widget.attrs.id }}-session-panel">
+    <div class="language-grid-badges" data-language-grid-badges></div>
+    <span class="language-grid-summary-label"
+          data-language-grid-count
+          data-empty-text="{% translate 'No sessions selected' %}">
+      {% translate 'No sessions selected' %}
+    </span>
+    <span class="language-grid-toggle-icon fa fa-chevron-down" aria-hidden="true"></span>
+  </div>
+
+  <div class="language-grid-panel"
+       id="{{ widget.attrs.id }}-session-panel"
+       data-language-grid-panel>
+    <div class="language-grid-search-wrap">
+      <input type="text"
+             class="language-grid-search"
+             data-language-grid-search
+             placeholder="{% translate 'Search sessions…' %}"
+             autocomplete="off"
+             aria-label="{% translate 'Search sessions' %}">
+    </div>
+
+    <div class="language-grid-toolbar">
+      <button type="button" data-language-grid-deselect-all>
+        {% translate 'Deselect all' %}
+      </button>
+    </div>
+
+    <div class="language-grid-grid" data-language-grid-grid>
+      {% for group, options, index in widget.optgroups %}
+        {% for option in options %}
+          <div class="language-grid-cell{% if option.attrs.checked %} is-checked{% endif %}"
+               data-language-grid-cell
+               data-language-name="{{ option.label }}">
+            {% include option.template_name with widget=option %}
+          </div>
+        {% endfor %}
+      {% endfor %}
+      <div class="language-grid-no-results" data-language-grid-no-results>
+        {% translate 'No sessions match your search.' %}
+      </div>
+    </div>
+  </div>
+</div>

@@ -1,0 +1,53 @@
+.exhibition-session-select .language-grid-grid {
+    display: block;
+    max-height: 320px;
+    overflow-y: auto;
+}
+
+.exhibition-session-select .language-grid-cell {
+    display: block;
+    padding: 8px 10px;
+}
+
+.exhibition-session-select .language-grid-cell input[type="checkbox"] {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+    width: 0;
+    height: 0;
+    margin: 0;
+}
+
+.exhibition-session-select .exhibition-session-option-label {
+    display: block;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    line-height: 1.4;
+}
+
+.exhibition-session-select .language-grid-cell.is-checked .exhibition-session-option-label {
+    font-weight: 600;
+}
+
+.exhibition-session-select .language-grid-badge {
+    cursor: pointer;
+    white-space: normal;
+    max-width: 100%;
+}
+
+.exhibition-session-select .language-grid-badge::after {
+    content: "×";
+    margin-left: 6px;
+    font-size: 14px;
+    line-height: 1;
+    opacity: 0.7;
+}
+
+.exhibition-session-select .language-grid-badge:hover,
+.exhibition-session-select .language-grid-badge:focus {
+    background: #d3e9f7;
+}
+
+.exhibition-session-select .language-grid-badge:hover::after {
+    opacity: 1;
+}

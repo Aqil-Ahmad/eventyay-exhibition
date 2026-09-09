@@ -207,7 +207,14 @@ class ExhibitionQuestionFieldsMixin:
                 answer.options.clear()
 
 
+class SessionSelectWidget(forms.CheckboxSelectMultiple):
+    template_name = "exhibitors/session_select.html"
+    option_template_name = "exhibitors/session_select_option.html"
+
+
 class SessionChoiceField(forms.ModelMultipleChoiceField):
+    widget = SessionSelectWidget
+
     def label_from_instance(self, obj: Submission) -> str:
         speakers = obj.display_speaker_names
         if speakers:
@@ -279,7 +286,6 @@ class ExhibitorInfoForm(ExhibitionQuestionFieldsMixin, I18nModelForm):
         help_text=_(
             "Sessions to show on this partner's public page. Only sessions on the published schedule are shown there."
         ),
-        widget=forms.SelectMultiple(attrs={"size": 8}),
     )
 
     file_url_fields = {
