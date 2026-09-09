@@ -40,19 +40,19 @@ from phonenumber_field.widgets import PhoneNumberPrefixWidget
 
 from . import mail as mail_helpers
 from .models import (
-    PROPOSAL_DEFAULT_FIELD_KEYS,
-    PROPOSAL_FORMSET_FIELD_KEYS,
     QUESTION_OPTION_VARIANTS,
+    REQUEST_DEFAULT_FIELD_KEYS,
+    REQUEST_FORMSET_FIELD_KEYS,
     ExhibitionAnswer,
     ExhibitionCustomEmailTemplate,
     ExhibitionEmailQueue,
-    ExhibitionProposal,
-    ExhibitionProposalExtraLink,
-    ExhibitionProposalSocialLink,
-    ExhibitionProposalState,
     ExhibitionQuestion,
     ExhibitionQuestionOption,
     ExhibitionQuestionVariant,
+    ExhibitionRequest,
+    ExhibitionRequestExtraLink,
+    ExhibitionRequestSocialLink,
+    ExhibitionRequestState,
     ExhibitorExtraLink,
     ExhibitorInfo,
     ExhibitorSettings,
@@ -74,10 +74,10 @@ def get_tz_help(event):
 
 
 class ExhibitionQuestionFieldsMixin:
-    def inject_exhibition_questions(self, *, event, proposal=None, readonly=False):
+    def inject_exhibition_questions(self, *, event, exhibition_request=None, readonly=False):
         answers_by_question = {}
-        if proposal and proposal.pk:
-            for answer in proposal.answers.prefetch_related("options"):
+        if exhibition_request and exhibition_request.pk:
+            for answer in exhibition_request.answers.prefetch_related("options"):
                 answers_by_question[answer.question_id] = answer
 
         questions = (
@@ -168,7 +168,7 @@ class ExhibitionQuestionFieldsMixin:
             required=question.required,
         )
 
-    def save_exhibition_questions(self, proposal):
+    def save_exhibition_questions(self, exhibition_request):
         for key, value in self.cleaned_data.items():
             if not key.startswith("question_"):
                 continue
@@ -185,7 +185,7 @@ class ExhibitionQuestionFieldsMixin:
                 continue
 
             if not answer:
-                answer = ExhibitionAnswer(proposal=proposal, question=question)
+                answer = ExhibitionAnswer(exhibition_request=exhibition_request, question=question)
 
             if isinstance(field, forms.ModelMultipleChoiceField):
                 selected_options = list(value)
@@ -264,11 +264,8 @@ class ExhibitorInfoForm(ExhibitionQuestionFieldsMixin, I18nModelForm):
         label=_("Booth ID"),
     )
 
-    file_url_fields = {
-        "slides": "slides_url",
-        "logo": "logo_url",
-        "header_image": "header_image_url",
-    }
+    file_fields = ("slides", "logo", "banner")
+    file_url_fields = {"slides": "slides_url"}
 
     class Meta:
         model = ExhibitorInfo
@@ -282,7 +279,7 @@ class ExhibitorInfoForm(ExhibitionQuestionFieldsMixin, I18nModelForm):
             "video_url",
             "slides",
             "logo",
-            "header_image",
+            "banner",
             "is_exhibitor",
             "is_sponsor",
             "sponsor_group",
@@ -301,10 +298,10 @@ class ExhibitorInfoForm(ExhibitionQuestionFieldsMixin, I18nModelForm):
             "video_url": _("Promotional video URL"),
             "slides": _("Promotional slides"),
             "logo": _("Logo"),
-            "header_image": _("Header image"),
+            "banner": _("Exhibition banner"),
             "url": _("Organization website"),
-            "is_exhibitor": _("Mark this partner as an exhibitor"),
-            "is_sponsor": _("Mark this partner as an event sponsor"),
+            "is_exhibitor": _("Mark this organization as an exhibitor"),
+            "is_sponsor": _("Mark this organization as an event sponsor"),
             "booth_name": _("Preferred booth name"),
             "lead_scanning_enabled": _("Can scan attendee badges"),
         }
@@ -324,11 +321,11 @@ class ExhibitorInfoForm(ExhibitionQuestionFieldsMixin, I18nModelForm):
         "video_url": ("video_url",),
         "slides": ("slides",),
         "logo": ("logo",),
-        "header_image": ("header_image",),
+        "banner": ("banner",),
         "booth_name": ("booth_name",),
     }
     PROFILE_FORMSET_KEYS = ("social_links", "extra_links")
-    PROFILE_COMPOSITE_KEYS = ("slides", "logo", "header_image")
+    PROFILE_COMPOSITE_KEYS = ("slides", "logo", "banner")
 
     SPONSOR_ONLY_FIELDS = ("sponsor_group",)
     EXHIBITOR_ONLY_FIELDS = (
@@ -340,19 +337,19 @@ class ExhibitorInfoForm(ExhibitionQuestionFieldsMixin, I18nModelForm):
     )
 
     def __init__(self, *args, **kwargs):
-        self.partner_type = kwargs.pop("partner_type", None)
+        self.organization_type = kwargs.pop("organization_type", None)
         event = kwargs.get("event")
         instance = kwargs.get("instance")
         super().__init__(*args, **kwargs)
         self.event = event or getattr(instance, "event", None)
-        if self.partner_type == "sponsor":
+        if self.organization_type == "sponsor":
             self._drop_fields(self.EXHIBITOR_ONLY_FIELDS + ("is_sponsor",))
-        elif self.partner_type == "exhibitor":
+        elif self.organization_type == "exhibitor":
             self._drop_fields(self.SPONSOR_ONLY_FIELDS + ("is_exhibitor",))
         if "sponsor_group" in self.fields:
             self.fields["sponsor_group"].queryset = SponsorGroup.objects.filter(event=self.event).order_by("pk")
             self.fields["sponsor_group"].empty_label = _("No sponsor group")
-        for field_name in ("logo", "header_image"):
+        for field_name in ("logo", "banner"):
             self.fields[field_name].widget.attrs.setdefault("accept", "image/*")
         self.fields["slides"].widget.attrs.setdefault("accept", ".pdf,application/pdf")
         if self.instance and self.instance.pk:
@@ -369,22 +366,22 @@ class ExhibitorInfoForm(ExhibitionQuestionFieldsMixin, I18nModelForm):
         self.ordered_profile_keys = []
         if self.event:
             settings = ExhibitorSettings.objects.get_or_create(event=self.event)[0]
-            self.profile_field_settings = settings.normalized_proposal_field_settings
+            self.profile_field_settings = settings.normalized_request_field_settings
             self._apply_profile_field_settings()
             self.ordered_profile_keys = [
-                key for key in settings.ordered_proposal_field_keys if self.profile_key_is_active(key)
+                key for key in settings.ordered_request_field_keys if self.profile_key_is_active(key)
             ]
             self._apply_profile_field_order()
         self._set_voucher_access_help_text()
-        self.linked_proposal = self._resolve_linked_proposal()
-        if self.event and self.linked_proposal:
-            self.inject_exhibition_questions(event=self.event, proposal=self.linked_proposal)
+        self.linked_request = self._resolve_linked_request()
+        if self.event and self.linked_request:
+            self.inject_exhibition_questions(event=self.event, exhibition_request=self.linked_request)
 
-    def _resolve_linked_proposal(self):
+    def _resolve_linked_request(self):
         """The approved request this profile was created from, if any."""
         if not (self.instance and self.instance.pk):
             return None
-        return self.instance.source_proposals.order_by("pk").first()
+        return self.instance.source_requests.order_by("pk").first()
 
     VOUCHER_ACCESS_HELP_TEXTS = {
         "exhibitor": _(
@@ -406,8 +403,8 @@ class ExhibitorInfoForm(ExhibitionQuestionFieldsMixin, I18nModelForm):
     }
 
     def _voucher_access_audience(self):
-        if self.partner_type in ("exhibitor", "sponsor"):
-            return self.partner_type
+        if self.organization_type in ("exhibitor", "sponsor"):
+            return self.organization_type
         if self.instance and self.instance.pk:
             if self.instance.is_exhibitor and self.instance.is_sponsor:
                 return "both"
@@ -523,7 +520,7 @@ class ExhibitorInfoForm(ExhibitionQuestionFieldsMixin, I18nModelForm):
 
         self._validate_required_file("slides", has_new_slides_upload)
 
-        for image_field in self.file_url_fields:
+        for image_field in self.file_fields:
             if image_field == "slides" or image_field not in self.fields:
                 continue
             submitted_image = self.fields[image_field].widget.value_from_datadict(
@@ -533,17 +530,17 @@ class ExhibitorInfoForm(ExhibitionQuestionFieldsMixin, I18nModelForm):
             )
             self._validate_required_file(image_field, isinstance(submitted_image, UploadedFile))
 
-        if self.partner_type == "sponsor":
+        if self.organization_type == "sponsor":
             is_sponsor = True
             is_exhibitor = bool(cleaned_data.get("is_exhibitor"))
-        elif self.partner_type == "exhibitor":
+        elif self.organization_type == "exhibitor":
             is_sponsor = bool(cleaned_data.get("is_sponsor"))
             is_exhibitor = True
         else:
             is_sponsor = bool(cleaned_data.get("is_sponsor"))
             is_exhibitor = bool(cleaned_data.get("is_exhibitor"))
             if not is_sponsor and not is_exhibitor:
-                self.add_error(None, _("A partner must be marked as an exhibitor, a sponsor, or both."))
+                self.add_error(None, _("An organization must be marked as an exhibitor, a sponsor, or both."))
         self._resolved_is_sponsor = is_sponsor
         cleaned_data["is_exhibitor"] = is_exhibitor
 
@@ -580,7 +577,8 @@ class ExhibitorInfoForm(ExhibitionQuestionFieldsMixin, I18nModelForm):
         instance.is_sponsor = getattr(self, "_resolved_is_sponsor", instance.is_sponsor)
         files_to_delete: set[str] = set()
 
-        for image_field, url_field in self.file_url_fields.items():
+        for image_field in self.file_fields:
+            url_field = self.file_url_fields.get(image_field)
             previous_file = getattr(old_instance, image_field, None) if old_instance else None
             uploaded_file = self.files.get(self.add_prefix(image_field))
             clear_selected = bool(self.data.get(self.add_prefix(f"{image_field}-clear")))
@@ -588,20 +586,22 @@ class ExhibitorInfoForm(ExhibitionQuestionFieldsMixin, I18nModelForm):
             if uploaded_file:
                 if previous_file and previous_file.name:
                     files_to_delete.add(previous_file.name)
-                setattr(instance, url_field, "")
+                if url_field:
+                    setattr(instance, url_field, "")
                 continue
 
             if clear_selected:
                 if previous_file and previous_file.name:
                     files_to_delete.add(previous_file.name)
                 setattr(instance, image_field, None)
-                setattr(instance, url_field, "")
+                if url_field:
+                    setattr(instance, url_field, "")
 
         if commit:
             instance.save()
             self.save_m2m()
-            if self.linked_proposal:
-                self.save_exhibition_questions(self.linked_proposal)
+            if self.linked_request:
+                self.save_exhibition_questions(self.linked_request)
             if files_to_delete:
 
                 def delete_replaced_files():
@@ -634,7 +634,7 @@ class ExhibitorVoucherBatchForm(forms.Form):
         max_value=1000,
         initial=1,
         label=_("New vouchers to create"),
-        help_text=_("Set to 0 to email the codes this partner already has without creating new ones."),
+        help_text=_("Set to 0 to email the codes this organization already has without creating new ones."),
     )
 
 
@@ -826,10 +826,10 @@ def parse_answer_time(value):
 
 
 class ExhibitionQuestionFieldsMixin:
-    def inject_exhibition_questions(self, *, event, proposal=None, readonly=False):
+    def inject_exhibition_questions(self, *, event, exhibition_request=None, readonly=False):
         answers_by_question = {}
-        if proposal and proposal.pk:
-            for answer in proposal.answers.prefetch_related("options"):
+        if exhibition_request and exhibition_request.pk:
+            for answer in exhibition_request.answers.prefetch_related("options"):
                 answers_by_question[answer.question_id] = answer
 
         questions = (
@@ -995,7 +995,7 @@ class ExhibitionQuestionFieldsMixin:
             required=question.required,
         )
 
-    def save_exhibition_questions(self, proposal):
+    def save_exhibition_questions(self, exhibition_request):
         for key, value in self.cleaned_data.items():
             if not key.startswith("question_"):
                 continue
@@ -1016,7 +1016,7 @@ class ExhibitionQuestionFieldsMixin:
                 continue
 
             if not answer:
-                answer = ExhibitionAnswer(proposal=proposal, question=question)
+                answer = ExhibitionAnswer(exhibition_request=exhibition_request, question=question)
 
             if isinstance(field, ExtFileField):
                 if value is False:
@@ -1047,7 +1047,7 @@ class ExhibitionQuestionFieldsMixin:
                 answer.options.clear()
 
 
-class ExhibitionProposalForm(ExhibitionQuestionFieldsMixin, I18nModelForm):
+class ExhibitionRequestForm(ExhibitionQuestionFieldsMixin, I18nModelForm):
     content_locale = forms.ChoiceField(
         label=_("Language"),
         help_text=_("The language you are filling in this form with."),
@@ -1064,11 +1064,8 @@ class ExhibitionProposalForm(ExhibitionQuestionFieldsMixin, I18nModelForm):
         label=_("Preferred booth name"),
     )
 
-    file_url_fields = {
-        "slides": "slides_url",
-        "logo": "logo_url",
-        "header_image": "header_image_url",
-    }
+    file_fields = ("slides", "logo", "banner")
+    file_url_fields = {"slides": "slides_url"}
     setting_field_map = {
         "name": ("name",),
         "description": ("description",),
@@ -1078,14 +1075,14 @@ class ExhibitionProposalForm(ExhibitionQuestionFieldsMixin, I18nModelForm):
         "video_url": ("video_url",),
         "slides": ("slides",),
         "logo": ("logo",),
-        "header_image": ("header_image",),
+        "banner": ("banner",),
         "booth_name": ("booth_name",),
         "notes": ("notes",),
     }
     DRAFT_REQUIRED_KEYS = ("name",)
 
     class Meta:
-        model = ExhibitionProposal
+        model = ExhibitionRequest
         localized_fields = "__all__"
         fields = [
             "name",
@@ -1095,7 +1092,7 @@ class ExhibitionProposalForm(ExhibitionQuestionFieldsMixin, I18nModelForm):
             "video_url",
             "slides",
             "logo",
-            "header_image",
+            "banner",
             "url",
             "booth_name",
             "notes",
@@ -1108,7 +1105,7 @@ class ExhibitionProposalForm(ExhibitionQuestionFieldsMixin, I18nModelForm):
             "video_url": _("Promotional video URL"),
             "slides": _("Promotional slides"),
             "logo": _("Logo"),
-            "header_image": _("Header image"),
+            "banner": _("Exhibition banner"),
             "url": _("Organization website"),
             "booth_name": _("Preferred booth name"),
             "notes": _("Message to the organizers"),
@@ -1134,17 +1131,17 @@ class ExhibitionProposalForm(ExhibitionQuestionFieldsMixin, I18nModelForm):
         }
         self._set_content_locale_choices()
         self.exhibition_settings = None
-        self.proposal_field_settings = {}
-        self.active_proposal_fields = {}
-        self.required_proposal_fields = {}
+        self.request_field_settings = {}
+        self.active_request_fields = {}
+        self.required_request_fields = {}
         if self.event:
             self.exhibition_settings = ExhibitorSettings.objects.get_or_create(event=self.event)[0]
-            self.proposal_field_settings = self.exhibition_settings.normalized_proposal_field_settings
-            self.active_proposal_fields = {key: value["active"] for key, value in self.proposal_field_settings.items()}
-            self.required_proposal_fields = {
-                key: value["required"] for key, value in self.proposal_field_settings.items()
+            self.request_field_settings = self.exhibition_settings.normalized_request_field_settings
+            self.active_request_fields = {key: value["active"] for key, value in self.request_field_settings.items()}
+            self.required_request_fields = {
+                key: value["required"] for key, value in self.request_field_settings.items()
             }
-        for field_name in ("logo", "header_image"):
+        for field_name in ("logo", "banner"):
             if field_name in self.fields:
                 self.fields[field_name].widget.attrs.setdefault("accept", "image/*")
         if "slides" in self.fields:
@@ -1158,18 +1155,18 @@ class ExhibitionProposalForm(ExhibitionQuestionFieldsMixin, I18nModelForm):
             else:
                 widget.attrs.setdefault("rows", 4)
         if self.event:
-            self.apply_proposal_field_settings()
+            self.apply_request_field_settings()
             self.inject_exhibition_questions(
                 event=self.event,
-                proposal=instance,
+                exhibition_request=instance,
                 readonly=self.read_only,
             )
-            self.apply_proposal_field_order()
+            self.apply_request_field_order()
         self._apply_content_text_direction()
         if self.read_only:
             for field in self.fields.values():
                 field.disabled = True
-        elif instance and instance.pk and instance.state == ExhibitionProposalState.ACCEPTED:
+        elif instance and instance.pk and instance.state == ExhibitionRequestState.ACCEPTED:
             name_field = self.fields.get("name")
             if name_field is not None:
                 name_field.disabled = True
@@ -1239,17 +1236,17 @@ class ExhibitionProposalForm(ExhibitionQuestionFieldsMixin, I18nModelForm):
             widget.attrs["dir"] = direction
             widget.attrs["data-content-text"] = "1"
 
-    def apply_proposal_field_settings(self):
-        file_field_keys = set(self.file_url_fields)
+    def apply_request_field_settings(self):
+        file_field_keys = set(self.file_fields)
         for key, form_fields in self.setting_field_map.items():
-            is_active = self.active_proposal_fields.get(key, True)
-            is_required = self.required_proposal_fields.get(key, False)
+            is_active = self.active_request_fields.get(key, True)
+            is_required = self.required_request_fields.get(key, False)
             if not is_active:
                 for field_name in form_fields:
                     self.fields.pop(field_name, None)
                 continue
 
-            setting = self.proposal_field_settings.get(key, {})
+            setting = self.request_field_settings.get(key, {})
             for index, field_name in enumerate(form_fields):
                 field = self.fields.get(field_name)
                 if field is None:
@@ -1267,12 +1264,12 @@ class ExhibitionProposalForm(ExhibitionQuestionFieldsMixin, I18nModelForm):
                 else:
                     field.required = is_required
 
-    def _ordered_proposal_entries(self):
+    def _ordered_request_entries(self):
         if not self.exhibition_settings:
             return []
         entries = []
-        for key in PROPOSAL_DEFAULT_FIELD_KEYS:
-            entries.append((self.proposal_field_settings[key]["position"], 0, key, self.setting_field_map.get(key, ())))
+        for key in REQUEST_DEFAULT_FIELD_KEYS:
+            entries.append((self.request_field_settings[key]["position"], 0, key, self.setting_field_map.get(key, ())))
         for field_name, field in self.fields.items():
             question = getattr(field, "question", None)
             if question is not None:
@@ -1280,25 +1277,25 @@ class ExhibitionProposalForm(ExhibitionQuestionFieldsMixin, I18nModelForm):
         entries.sort(key=lambda entry: (entry[0], entry[1]))
         return entries
 
-    def apply_proposal_field_order(self):
+    def apply_request_field_order(self):
         if not self.exhibition_settings:
             return
         ordered_field_names = [
             field_name
-            for _position, _kind, _key, field_names in self._ordered_proposal_entries()
+            for _position, _kind, _key, field_names in self._ordered_request_entries()
             for field_name in field_names
             if field_name in self.fields
         ]
         self.order_fields(ordered_field_names)
 
     @property
-    def proposal_items(self):
+    def request_items(self):
         if not self.exhibition_settings:
             return [{"kind": "field", "key": field_name, "field": self[field_name]} for field_name in self.fields]
-        formset_keys = set(PROPOSAL_FORMSET_FIELD_KEYS)
-        composite_keys = {"slides", "logo", "header_image"}
+        formset_keys = set(REQUEST_FORMSET_FIELD_KEYS)
+        composite_keys = {"slides", "logo", "banner"}
         items = []
-        for _position, _kind, key, field_names in self._ordered_proposal_entries():
+        for _position, _kind, key, field_names in self._ordered_request_entries():
             if key in formset_keys:
                 if self.field_setting_is_active(key):
                     items.append({"kind": key, "key": key})
@@ -1313,10 +1310,10 @@ class ExhibitionProposalForm(ExhibitionQuestionFieldsMixin, I18nModelForm):
         return items
 
     def field_setting_is_active(self, key):
-        return self.active_proposal_fields.get(key, True)
+        return self.active_request_fields.get(key, True)
 
     def field_setting_is_required(self, key):
-        return self.required_proposal_fields.get(key, False)
+        return self.required_request_fields.get(key, False)
 
     def full_clean(self):
         if not self.draft_save:
@@ -1368,7 +1365,7 @@ class ExhibitionProposalForm(ExhibitionQuestionFieldsMixin, I18nModelForm):
             )
         has_new_slides_upload = isinstance(submitted_slides, UploadedFile)
         self.validate_required_file("slides", has_new_slides_upload)
-        for image_field in ("logo", "header_image"):
+        for image_field in ("logo", "banner"):
             if image_field not in self.fields:
                 continue
             submitted_image = self.fields[image_field].widget.value_from_datadict(
@@ -1431,7 +1428,7 @@ class ExhibitionProposalForm(ExhibitionQuestionFieldsMixin, I18nModelForm):
         return instance
 
 
-class ExhibitionProposalReviewForm(I18nModelForm):
+class ExhibitionRequestReviewForm(I18nModelForm):
     sponsor_group = forms.ModelChoiceField(
         queryset=SponsorGroup.objects.none(),
         required=False,
@@ -1439,7 +1436,7 @@ class ExhibitionProposalReviewForm(I18nModelForm):
     )
 
     class Meta:
-        model = ExhibitionProposal
+        model = ExhibitionRequest
         localized_fields = "__all__"
         fields = [
             "is_exhibitor",
@@ -1478,9 +1475,9 @@ class ExhibitionProposalReviewForm(I18nModelForm):
         return cleaned_data
 
 
-class ExhibitionProposalReviewNotesForm(I18nModelForm):
+class ExhibitionRequestReviewNotesForm(I18nModelForm):
     class Meta:
-        model = ExhibitionProposal
+        model = ExhibitionRequest
         localized_fields = "__all__"
         fields = ["review_notes"]
         labels = {
@@ -1599,7 +1596,7 @@ class ExhibitionQuestionForm(I18nModelForm):
             max_position = ExhibitionQuestion.objects.filter(event=self.event).aggregate(Max("position"))[
                 "position__max"
             ]
-            instance.position = max((max_position or -1) + 1, len(PROPOSAL_DEFAULT_FIELD_KEYS))
+            instance.position = max((max_position or -1) + 1, len(REQUEST_DEFAULT_FIELD_KEYS))
         if commit:
             instance.save()
         return instance
@@ -1694,7 +1691,7 @@ class ExhibitorExtraLinkForm(forms.ModelForm):
         return normalize_url_scheme(url)
 
 
-class ExhibitionProposalSocialLinkForm(forms.ModelForm):
+class ExhibitionRequestSocialLinkForm(forms.ModelForm):
     network = forms.ChoiceField(
         choices=(("", _("Choose social platform")),) + SOCIAL_LINK_CHOICES,
         required=False,
@@ -1706,7 +1703,7 @@ class ExhibitionProposalSocialLinkForm(forms.ModelForm):
     )
 
     class Meta:
-        model = ExhibitionProposalSocialLink
+        model = ExhibitionRequestSocialLink
         fields = ["network", "url"]
 
     def __init__(self, *args, **kwargs):
@@ -1758,9 +1755,9 @@ class ExhibitionProposalSocialLinkForm(forms.ModelForm):
         return super().save(commit=commit)
 
 
-class ExhibitionProposalExtraLinkForm(forms.ModelForm):
+class ExhibitionRequestExtraLinkForm(forms.ModelForm):
     class Meta:
-        model = ExhibitionProposalExtraLink
+        model = ExhibitionRequestExtraLink
         fields = ["label", "url"]
 
     def __init__(self, *args, **kwargs):
@@ -1799,18 +1796,18 @@ ExhibitorExtraLinkFormSet = inlineformset_factory(
     extra=0,
 )
 
-ExhibitionProposalSocialLinkFormSet = inlineformset_factory(
-    ExhibitionProposal,
-    ExhibitionProposalSocialLink,
-    form=ExhibitionProposalSocialLinkForm,
+ExhibitionRequestSocialLinkFormSet = inlineformset_factory(
+    ExhibitionRequest,
+    ExhibitionRequestSocialLink,
+    form=ExhibitionRequestSocialLinkForm,
     can_delete=True,
     extra=0,
 )
 
-ExhibitionProposalExtraLinkFormSet = inlineformset_factory(
-    ExhibitionProposal,
-    ExhibitionProposalExtraLink,
-    form=ExhibitionProposalExtraLinkForm,
+ExhibitionRequestExtraLinkFormSet = inlineformset_factory(
+    ExhibitionRequest,
+    ExhibitionRequestExtraLink,
+    form=ExhibitionRequestExtraLinkForm,
     can_delete=True,
     extra=0,
 )
@@ -1892,7 +1889,7 @@ class ExhibitionEmailQueueForm(forms.ModelForm):
 class ExhibitionComposeForm(forms.Form):
     """Compose a broadcast email to a filtered group of applicants."""
 
-    PARTNER_TYPE_CHOICES = (
+    ORGANIZATION_TYPE_CHOICES = (
         ("", _("Exhibitors and sponsors")),
         ("exhibitor", _("Exhibitors only")),
         ("sponsor", _("Sponsors only")),
@@ -1901,14 +1898,14 @@ class ExhibitionComposeForm(forms.Form):
     states = forms.MultipleChoiceField(
         label=_("Application state"),
         choices=[
-            (state.value, state.label) for state in ExhibitionProposalState if state != ExhibitionProposalState.DRAFT
+            (state.value, state.label) for state in ExhibitionRequestState if state != ExhibitionRequestState.DRAFT
         ],
-        initial=[ExhibitionProposalState.ACCEPTED],
+        initial=[ExhibitionRequestState.ACCEPTED],
         widget=forms.CheckboxSelectMultiple,
     )
-    partner_type = forms.ChoiceField(
-        label=_("Partner type"),
-        choices=PARTNER_TYPE_CHOICES,
+    organization_type = forms.ChoiceField(
+        label=_("Organization type"),
+        choices=ORGANIZATION_TYPE_CHOICES,
         required=False,
     )
     sponsor_group = forms.ModelChoiceField(
@@ -1931,9 +1928,9 @@ class ExhibitionComposeForm(forms.Form):
         self.fields["sponsor_group"].queryset = SponsorGroup.objects.filter(event=self.event).order_by("level", "pk")
         self.fields["body"] = ExhibitionEmailBodyFormField(
             label=_("Body"),
-            placeholders=mail_helpers.placeholder_names(self.event, mail_helpers.PROPOSAL_PLACEHOLDER_CONTEXT),
+            placeholders=mail_helpers.placeholder_names(self.event, mail_helpers.REQUEST_PLACEHOLDER_CONTEXT),
         )
-        self.order_fields(["states", "partner_type", "sponsor_group", "subject", "body", "scheduled_at"])
+        self.order_fields(["states", "organization_type", "sponsor_group", "subject", "body", "scheduled_at"])
         locales = self.event.settings.get("locales")
         self.fields["subject"].widget.enabled_locales = locales
         self.fields["body"].widget.enabled_locales = locales
@@ -2005,7 +2002,7 @@ class ExhibitionCustomEmailTemplateForm(I18nModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        placeholder_names = mail_helpers.placeholder_names(self.event, mail_helpers.PROPOSAL_PLACEHOLDER_CONTEXT)
+        placeholder_names = mail_helpers.placeholder_names(self.event, mail_helpers.REQUEST_PLACEHOLDER_CONTEXT)
         self.fields["body"] = ExhibitionEmailBodyFormField(
             label=self.fields["body"].label,
             required=False,
