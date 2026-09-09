@@ -11,8 +11,8 @@
 {% block exhibitors_content %}
     <p>
         {% blocktrans trimmed %}
-            Issue ticket vouchers for this partner to hand out. Whoever redeems one on the ticket shop
-            becomes a lead this partner can retrieve, as long as voucher data access is enabled for them.
+            Issue ticket vouchers for this organization to hand out. Whoever redeems one on the ticket shop
+            becomes a lead this organization can retrieve, as long as voucher data access is enabled for them.
         {% endblocktrans %}
     </p>
 
@@ -71,7 +71,7 @@
                 </table>
             </div>
         {% else %}
-            <p class="text-muted">{% trans "No vouchers have been issued for this partner yet." %}</p>
+            <p class="text-muted">{% trans "No vouchers have been issued for this organization yet." %}</p>
         {% endif %}
     </fieldset>
 
@@ -83,7 +83,7 @@
             <p class="help-block">
                 {% blocktrans trimmed %}
                     Creates voucher codes using the ticket product and price configured under Settings.
-                    The email always carries the partner's complete list of codes, so you can create some
+                    The email always carries the organization's complete list of codes, so you can create some
                     now and send them together with more later. It is placed in the outbox for you to
                     review before it goes out.
                 {% endblocktrans %}
@@ -91,7 +91,7 @@
             {% if voucher_pending %}
                 <p class="text-warning">
                     <i class="fa fa-clock-o"></i>
-                    {% trans "A voucher email for this partner is waiting in the outbox." %}
+                    {% trans "A voucher email for this organization is waiting in the outbox." %}
                     <a href="{% url 'plugins:exhibition:email.outbox' organizer=request.event.organizer.slug event=request.event.slug %}">
                         {% trans "Go to outbox" %}
                     </a>
@@ -100,12 +100,12 @@
                 <p class="text-success">
                     <i class="fa fa-check"></i>
                     {% blocktrans trimmed with sent=voucher_sent_at|date:"SHORT_DATETIME_FORMAT" %}
-                        Vouchers were last emailed to this partner on {{ sent }}.
+                        Vouchers were last emailed to this organization on {{ sent }}.
                     {% endblocktrans %}
                 </p>
             {% endif %}
             {% if not exhibitor.email %}
-                <p class="text-danger">{% trans "This partner has no email address on file, so vouchers cannot be emailed." %}</p>
+                <p class="text-danger">{% trans "This organization has no email address on file, so vouchers cannot be emailed." %}</p>
             {% endif %}
             {% bootstrap_field form.count layout="control" %}
         </fieldset>
