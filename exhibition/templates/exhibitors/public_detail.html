@@ -105,13 +105,8 @@
                             </div>
                         {% endif %}
 
-                        {% if exhibitor.email or exhibitor.url or social_links or extra_links %}
+                        {% if exhibitor.url or social_links or extra_links %}
                             <div class="exhibition-detail-description-actions">
-                                {% if exhibitor.email %}
-                                    <a class="exhibition-detail-icon-link" href="mailto:{{ exhibitor.email }}" aria-label="{% trans 'Send email' %}" title="{% trans 'Send email' %}">
-                                        <i class="fa fa-envelope-o" aria-hidden="true"></i>
-                                    </a>
-                                {% endif %}
                                 {% for social_link in social_links %}
                                     <a class="exhibition-detail-icon-link exhibition-detail-icon-link--{{ social_link.key }}" href="{{ social_link.url }}" target="_blank" rel="noopener noreferrer" aria-label="{{ social_link.label }}" title="{{ social_link.label }}">
                                         {% if social_link.icon_class %}
