@@ -17,17 +17,7 @@
 .exhibition-detail-nav .btn {
     min-width: 124px;
     border-radius: 10px;
-    background: transparent;
-    border: 1px solid #ef3b2d;
-    color: #ef3b2d;
     box-shadow: none;
-}
-
-.exhibition-detail-nav .btn:hover,
-.exhibition-detail-nav .btn:focus {
-    background: rgba(239, 59, 45, 0.08);
-    border-color: #ef3b2d;
-    color: #ef3b2d;
 }
 
 .exhibition-detail-card {
