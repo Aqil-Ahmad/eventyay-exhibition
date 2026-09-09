@@ -422,7 +422,7 @@ def test_queue_voucher_emails_reports_the_addressless_separately(voucher_event):
     assert not ExhibitorVoucher.objects.filter(exhibitor=no_address).exists()
 
 
-def _bulk_view(event, partner_type="exhibitor", *, data=None):
+def _bulk_view(event, organization_type="exhibitor", *, data=None):
     request = RequestFactory().post("/vouchers/send", data=data or {})
     request.event = event
     request.user = None
@@ -430,7 +430,7 @@ def _bulk_view(event, partner_type="exhibitor", *, data=None):
     request._messages = FallbackStorage(request)
     view = ExhibitorVoucherBulkSendView()
     view.request = request
-    view.partner_type = partner_type
+    view.organization_type = organization_type
     return view, request
 
 
@@ -506,12 +506,12 @@ def test_bulk_send_issues_defaults_and_queues_one_email_each(voucher_event):
 
 
 @pytest.mark.django_db
-def test_bulk_send_only_targets_its_own_partner_type(voucher_event):
+def test_bulk_send_only_targets_its_own_organization_type(voucher_event):
     with scopes_disabled():
         ExhibitorSettings.objects.create(event=voucher_event, voucher_default_count=1)
         _exhibitor(voucher_event, name="Booth", email="booth@example.com", is_exhibitor=True, is_sponsor=False)
         _exhibitor(voucher_event, name="Gold", email="gold@example.com", is_exhibitor=False, is_sponsor=True)
-        view, request = _bulk_view(voucher_event, partner_type="sponsor", data={"confirmed": "1"})
+        view, request = _bulk_view(voucher_event, organization_type="sponsor", data={"confirmed": "1"})
 
         view.post(request)
 
