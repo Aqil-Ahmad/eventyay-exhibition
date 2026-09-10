@@ -321,7 +321,7 @@ def provision_exhibitor_devices(exhibitor, count, *, user=None):
             organizer=exhibitor.event.organizer,
             name=f"{partner_name} #{existing + index + 1}",
             all_events=False,
-            security_profile="eventyay_checkin",
+            security_profile="full",
         )
         device.save()
         device.limit_events.add(exhibitor.event)
