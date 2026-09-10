@@ -439,12 +439,21 @@ def queue_compose_emails(event, proposals, subject, body, *, scheduled_at=None, 
     return created
 
 
+def exhibitor_has_devices(exhibitor):
+    """Whether any lead-scanning device is linked, and so the access email has tokens to carry."""
+    from .models import ExhibitorDevice
+
+    return ExhibitorDevice.objects.filter(exhibitor=exhibitor).exists()
+
+
 def queue_exhibitor_access_email(event, exhibitor, *, requestor=None):
-    """Queue the access-credentials email; ``None`` if the exhibitor has no email address."""
+    """Queue the access-credentials email; ``None`` without a recipient or any device to set up."""
     from .models import ExhibitionEmailQueue
 
     to_email = (exhibitor.email or "").strip()
     if not to_email:
+        return None
+    if not exhibitor_has_devices(exhibitor):
         return None
 
     subject_tpl, body_tpl = get_email_template(event, EXHIBITOR_ACCESS)

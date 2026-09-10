@@ -138,9 +138,21 @@ def send_proposal_confirmation(event, proposal, requestor):
     )
 
 
-def queue_exhibitor_access_mail(event, exhibitor, requestor):
-    """Queue the access-credentials email for organiser review in the outbox."""
-    return mail_helpers.queue_exhibitor_access_email(event, exhibitor, requestor=requestor)
+def queue_exhibitor_access_mail(request, exhibitor):
+    """Queue the access-credentials email for review, saying so when there is nothing to send."""
+    if not mail_helpers.exhibitor_has_devices(exhibitor):
+        messages.warning(
+            request,
+            _(
+                "No lead scanning email was queued because this partner has no devices yet. "
+                "It will be queued as soon as you add their first device."
+            ),
+        )
+        return None
+    queued = mail_helpers.queue_exhibitor_access_email(request.event, exhibitor, requestor=request.user)
+    if queued:
+        messages.info(request, _("An access-credentials email was placed in the outbox."))
+    return queued
 
 
 def access_newly_granted(exhibitor, previous=None):
@@ -1960,10 +1972,8 @@ class ExhibitorCreateView(ExhibitorLinkFormsetMixin, EventPermissionRequiredMixi
             data={"name": localize_event_text(self.object.name), "booth_id": self.object.booth_id},
             user=self.request.user,
         )
-        if access_newly_granted(form.instance) and queue_exhibitor_access_mail(
-            self.request.event, self.object, self.request.user
-        ):
-            messages.info(self.request, _("An access-credentials email was placed in the outbox."))
+        if access_newly_granted(form.instance):
+            queue_exhibitor_access_mail(self.request, self.object)
         return response
 
     def get_context_data(self, **kwargs):
@@ -2031,10 +2041,8 @@ class ExhibitorEditView(ExhibitorLinkFormsetMixin, EventPermissionRequiredMixin,
                 data={"changed_questions": question_changes},
                 user=self.request.user,
             )
-        if access_newly_granted(form.instance, previous) and queue_exhibitor_access_mail(
-            self.request.event, self.object, self.request.user
-        ):
-            messages.info(self.request, _("An access-credentials email was placed in the outbox."))
+        if access_newly_granted(form.instance, previous):
+            queue_exhibitor_access_mail(self.request, self.object)
         return response
 
     def get_context_data(self, **kwargs):
@@ -2378,11 +2386,14 @@ class ExhibitorDeviceManageView(EventPermissionRequiredMixin, DetailView):
         if not form.is_valid():
             return self.render_to_response(self.get_context_data(form=form))
         count = form.cleaned_data["count"]
+        first_devices = not mail_helpers.exhibitor_has_devices(self.object)
         provision_exhibitor_devices(self.object, count, user=request.user)
         messages.success(
             request,
             ngettext("%(count)d device added.", "%(count)d devices added.", count) % {"count": count},
         )
+        if first_devices and self.object.lead_scanning_enabled:
+            queue_exhibitor_access_mail(request, self.object)
         return redirect(self.get_success_url())
 
     @transaction.atomic
