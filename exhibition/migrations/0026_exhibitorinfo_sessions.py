@@ -4,7 +4,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
     dependencies = [
         ("base", "0001_initial"),
-        ("exhibition", "0024_voucher_email_attachment"),
+        ("exhibition", "0025_voucher_pools"),
     ]
 
     operations = [
