@@ -20,7 +20,7 @@ from eventyay.base.forms.widgets import (
     SplitDateTimePickerWidget,
     TimePickerWidget,
 )
-from eventyay.base.models import PriceModeChoices, Product, Submission, SubmissionStates
+from eventyay.base.models import Submission, SubmissionStates
 from eventyay.base.templatetags.rich_text import compile_email_body
 from eventyay.common.forms.fields import I18nEmailBodyFormField
 from eventyay.common.forms.mixins import (
