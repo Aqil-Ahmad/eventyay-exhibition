@@ -26,6 +26,11 @@ function initSessionSelect(widget) {
         return option.querySelector('input[type="checkbox"]')
     }
 
+    function chipKeyOf(option) {
+        var box = checkboxOf(option)
+        return box ? box.value : ''
+    }
+
     function addChip(option) {
         var chip = document.createElement('span')
         chip.className = 'exhibition-session-chip'
@@ -44,14 +49,14 @@ function initSessionSelect(widget) {
         })
         chip.appendChild(text)
         chip.appendChild(remove)
-        chip.dataset.sessionChipFor = optionLabel(option)
+        chip.dataset.sessionChipFor = chipKeyOf(option)
         chips.appendChild(chip)
     }
 
     function removeChip(option) {
-        var label = optionLabel(option)
+        var key = chipKeyOf(option)
         Array.prototype.slice.call(chips.children).forEach(function (chip) {
-            if (chip.dataset.sessionChipFor === label) {
+            if (chip.dataset.sessionChipFor === key) {
                 chip.remove()
             }
         })
