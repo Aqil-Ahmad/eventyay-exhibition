@@ -6,7 +6,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
     dependencies = [
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
-        ("exhibition", "0024_voucher_email_attachment"),
+        ("exhibition", "0025_voucher_pools"),
     ]
 
     operations = [
