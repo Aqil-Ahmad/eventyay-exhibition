@@ -361,6 +361,33 @@ def test_organiser_is_told_when_the_send_is_skipped(mail_event):
 
 
 @pytest.mark.django_db
+def test_a_missing_address_is_reported_before_the_device_check(mail_event):
+    """Otherwise the skip message promises an email that adding a device would not produce."""
+    exhibitor = _deviceless(mail_event, email="")
+    request = _organiser_request(mail_event)
+
+    with scopes_disabled():
+        assert queue_exhibitor_access_mail(request, exhibitor) is None
+
+    texts = _message_texts(request)
+    assert len(texts) == 1
+    assert "no email address on file" in texts[0]
+
+
+@pytest.mark.django_db
+def test_a_missing_address_is_reported_even_with_devices(mail_event):
+    exhibitor = _deviceless(mail_event, email="")
+    request = _organiser_request(mail_event)
+
+    with scopes_disabled():
+        provision_exhibitor_devices(exhibitor, 1)
+
+        assert queue_exhibitor_access_mail(request, exhibitor) is None
+
+    assert "no email address on file" in _message_texts(request)[0]
+
+
+@pytest.mark.django_db
 def test_organiser_is_told_when_the_mail_is_queued(mail_event, exhibitor):
     request = _organiser_request(mail_event)
 

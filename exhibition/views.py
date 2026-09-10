@@ -140,6 +140,12 @@ def send_proposal_confirmation(event, proposal, requestor):
 
 def queue_exhibitor_access_mail(request, exhibitor):
     """Queue the access-credentials email for review, saying so when there is nothing to send."""
+    if not (exhibitor.email or "").strip():
+        messages.warning(
+            request,
+            _("No lead scanning email was queued because this partner has no email address on file."),
+        )
+        return None
     if not mail_helpers.exhibitor_has_devices(exhibitor):
         messages.warning(
             request,
@@ -2386,14 +2392,15 @@ class ExhibitorDeviceManageView(EventPermissionRequiredMixin, DetailView):
         if not form.is_valid():
             return self.render_to_response(self.get_context_data(form=form))
         count = form.cleaned_data["count"]
-        first_devices = not mail_helpers.exhibitor_has_devices(self.object)
-        provision_exhibitor_devices(self.object, count, user=request.user)
+        exhibitor = self.get_queryset().select_for_update().get(pk=self.object.pk)
+        first_devices = not mail_helpers.exhibitor_has_devices(exhibitor)
+        provision_exhibitor_devices(exhibitor, count, user=request.user)
         messages.success(
             request,
             ngettext("%(count)d device added.", "%(count)d devices added.", count) % {"count": count},
         )
-        if first_devices and self.object.lead_scanning_enabled:
-            queue_exhibitor_access_mail(request, self.object)
+        if first_devices and exhibitor.lead_scanning_enabled:
+            queue_exhibitor_access_mail(request, exhibitor)
         return redirect(self.get_success_url())
 
     @transaction.atomic
