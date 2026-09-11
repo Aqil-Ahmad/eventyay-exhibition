@@ -3,7 +3,7 @@ from django.db import migrations, models
 
 class Migration(migrations.Migration):
     dependencies = [
-        ("exhibition", "0025_voucher_email_attachment"),
+        ("exhibition", "0025_voucher_pools"),
     ]
 
     operations = [
