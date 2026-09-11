@@ -20,10 +20,10 @@ from exhibition.forms import (
 )
 from exhibition.models import (
     ExhibitionEmailQueue,
-    ExhibitorSettings,
     ExhibitionProposal,
     ExhibitionProposalState,
     ExhibitorInfo,
+    ExhibitorSettings,
     SponsorGroup,
 )
 from exhibition.utils import provision_exhibitor_devices
@@ -918,7 +918,6 @@ def test_email_body_widget_keeps_markdown_emphasis():
 
     assert "<strong>" in seeded
     assert "**" not in seeded
-
 
 
 def _access_emails(event):
