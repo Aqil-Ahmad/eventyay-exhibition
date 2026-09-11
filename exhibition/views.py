@@ -51,6 +51,7 @@ from .forms import (
     ExhibitorInfoForm,
     ExhibitorSocialLinkFormSet,
     ExhibitorVoucherBatchForm,
+    ExhibitorDeviceDefaultsForm,
     ExhibitorVoucherDefaultsForm,
     SponsorGroupForm,
     social_link_prefixes,
@@ -94,7 +95,7 @@ from .utils import (
     allow_blob_image_previews,
     build_exhibitor_video_embed,
     build_voucher_csv,
-    event_voucher_settings,
+    event_exhibitor_settings,
     generate_exhibitor_vouchers,
     provision_exhibitor_devices,
     public_exhibitors_queryset,
@@ -159,6 +160,24 @@ def queue_exhibitor_access_mail(request, exhibitor):
     if queued:
         messages.info(request, _("An access-credentials email was placed in the outbox."))
     return queued
+
+
+def grant_lead_scanning_access(request, exhibitor):
+    """Give a partner the event's default devices if they have none, then queue the access email."""
+    if exhibitor.lead_scanning_enabled and not mail_helpers.exhibitor_has_devices(exhibitor):
+        count = event_exhibitor_settings(request.event).device_default_count
+        if count:
+            provision_exhibitor_devices(exhibitor, count, user=request.user)
+            messages.info(
+                request,
+                ngettext(
+                    "%(count)d lead-scanning device was created for this partner.",
+                    "%(count)d lead-scanning devices were created for this partner.",
+                    count,
+                )
+                % {"count": count},
+            )
+    return queue_exhibitor_access_mail(request, exhibitor)
 
 
 def access_newly_granted(exhibitor, previous=None):
@@ -318,6 +337,9 @@ class SettingsView(EventPermissionRequiredMixin, ListView):
         settings = ExhibitorSettings.objects.get_or_create(event=self.request.event)[0]
         ctx["settings"] = settings
         ctx["data_access_fields"] = self.get_data_access_fields(settings)
+        ctx["device_defaults_form"] = kwargs.get("device_defaults_form") or ExhibitorDeviceDefaultsForm(
+            instance=settings
+        )
         ctx["active_tab"] = self.get_active_tab()
 
         edit_group_forms = kwargs.get("edit_group_forms", {})
@@ -398,11 +420,14 @@ class SettingsView(EventPermissionRequiredMixin, ListView):
         active_tab = self.get_active_tab()
 
         if action == "save_exhibitor_settings":
+            device_defaults_form = ExhibitorDeviceDefaultsForm(request.POST, instance=settings)
+            if not device_defaults_form.is_valid():
+                return self.render_to_response(self.get_context_data(device_defaults_form=device_defaults_form))
             settings.allowed_fields = request.POST.getlist("exhibitors_access_voucher")
-            settings.save(update_fields=["allowed_fields"])
+            device_defaults_form.save()
             settings.log_action(
                 LOG_SETTINGS_CHANGED,
-                data={"allowed_fields": settings.allowed_fields},
+                data={"allowed_fields": settings.allowed_fields, "changed": device_defaults_form.changed_data},
                 user=request.user,
             )
             messages.success(self.request, _("Settings have been saved."))
@@ -1979,7 +2004,7 @@ class ExhibitorCreateView(ExhibitorLinkFormsetMixin, EventPermissionRequiredMixi
             user=self.request.user,
         )
         if access_newly_granted(form.instance):
-            queue_exhibitor_access_mail(self.request, self.object)
+            grant_lead_scanning_access(self.request, self.object)
         return response
 
     def get_context_data(self, **kwargs):
@@ -2048,7 +2073,7 @@ class ExhibitorEditView(ExhibitorLinkFormsetMixin, EventPermissionRequiredMixin,
                 user=self.request.user,
             )
         if access_newly_granted(form.instance, previous):
-            queue_exhibitor_access_mail(self.request, self.object)
+            grant_lead_scanning_access(self.request, self.object)
         return response
 
     def get_context_data(self, **kwargs):
@@ -2257,7 +2282,7 @@ class ExhibitorVoucherBulkSendView(EventPermissionRequiredMixin, View):
         Anyone holding no vouchers is still sendable when their defaults would issue some; the
         counts annotated here are what the confirmation page reports.
         """
-        event_settings = event_voucher_settings(self.request.event)
+        event_settings = event_exhibitor_settings(self.request.event)
         sendable, no_email, no_vouchers = [], [], []
         for exhibitor in exhibitors:
             if not (exhibitor.email or "").strip():

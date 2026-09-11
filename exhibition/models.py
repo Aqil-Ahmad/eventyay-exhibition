@@ -246,6 +246,14 @@ class ExhibitorSettings(VoucherDefaultsMixin, LoggedModel):
         verbose_name=_("Attach voucher list as CSV"),
         help_text=_("Adds a spreadsheet of the recipient's own voucher codes to the voucher email."),
     )
+    device_default_count = models.PositiveIntegerField(
+        default=1,
+        verbose_name=_("Devices per partner"),
+        help_text=_(
+            "Created automatically when lead scanning is enabled for an exhibitor or sponsor that has no "
+            "devices yet, and the access email is queued right away. Set to 0 to add devices by hand."
+        ),
+    )
     allowed_fields = models.JSONField(default=default_allowed_fields)
     call_enabled = models.BooleanField(default=False)
     call_headline = I18nCharField(

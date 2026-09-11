@@ -260,8 +260,8 @@ def create_exhibitor_from_proposal(proposal, requestor=None):
     return exhibitor
 
 
-def event_voucher_settings(event):
-    """Event-wide voucher defaults, without creating a settings row on a read path."""
+def event_exhibitor_settings(event):
+    """The event's exhibitor settings, without creating a row on a read path."""
     from .models import ExhibitorSettings
 
     return ExhibitorSettings.objects.filter(event=event).first() or ExhibitorSettings(event=event)
@@ -275,7 +275,7 @@ def resolve_voucher_defaults(exhibitor, *, event_settings=None):
     source = (
         exhibitor.sponsor_group
         if exhibitor.sponsor_group_id
-        else (event_settings or event_voucher_settings(exhibitor.event))
+        else (event_settings or event_exhibitor_settings(exhibitor.event))
     )
     return {
         "product": source.voucher_default_product,

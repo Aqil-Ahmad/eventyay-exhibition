@@ -539,11 +539,11 @@ def queue_voucher_emails(event, exhibitors, *, requestor=None, issue_missing=Fal
     With ``issue_missing``, an exhibitor holding no vouchers gets a batch created from their
     defaults first, so a bulk send does not skip everyone who was never issued vouchers by hand.
     """
-    from .utils import event_voucher_settings
+    from .utils import event_exhibitor_settings
 
     queued = []
     skipped = {VOUCHER_SKIP_NO_EMAIL: [], VOUCHER_SKIP_NO_VOUCHERS: []}
-    event_settings = event_voucher_settings(event) if issue_missing else None
+    event_settings = event_exhibitor_settings(event) if issue_missing else None
     for exhibitor in exhibitors:
         if not (exhibitor.email or "").strip():
             skipped[VOUCHER_SKIP_NO_EMAIL].append(exhibitor)

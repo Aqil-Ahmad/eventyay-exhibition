@@ -11,7 +11,12 @@ from eventyay.base.models import Question
 from rest_framework import serializers
 
 from exhibition.api import ExhibitorInfoSerializer, LeadCreateView
-from exhibition.forms import ExhibitionProposalForm, ExhibitorInfoForm, SponsorGroupForm
+from exhibition.forms import (
+    ExhibitionProposalForm,
+    ExhibitorDeviceDefaultsForm,
+    ExhibitorInfoForm,
+    SponsorGroupForm,
+)
 from exhibition.models import (
     PROPOSAL_DEFAULT_FIELD_KEYS,
     ExhibitorInfo,
@@ -509,3 +514,52 @@ def test_lead_data_only_includes_allowed_fields(event):
     assert "email" not in data
     assert "job_title" not in data
     assert "address" not in data
+
+
+@pytest.mark.django_db
+def test_device_defaults_form_saves_the_count(event):
+    settings = make_exhibitor_settings(event)
+    form = ExhibitorDeviceDefaultsForm(data={"device_default_count": 3}, instance=settings)
+
+    assert form.is_valid(), form.errors
+    form.save()
+    settings.refresh_from_db()
+    assert settings.device_default_count == 3
+
+
+@pytest.mark.django_db
+def test_device_defaults_form_rejects_a_negative_count(event):
+    settings = make_exhibitor_settings(event)
+    form = ExhibitorDeviceDefaultsForm(data={"device_default_count": -1}, instance=settings)
+
+    assert not form.is_valid()
+    assert "device_default_count" in form.errors
+
+
+@pytest.mark.django_db
+def test_saving_exhibitor_settings_keeps_data_access_and_device_count_together(event):
+    """Both live on the same tab, so one save must persist both."""
+    settings = make_exhibitor_settings(event)
+    request = RequestFactory().post(
+        "/",
+        data={
+            "action": "save_exhibitor_settings",
+            "exhibitors_access_voucher": ["attendee_name"],
+            "device_default_count": "4",
+        },
+    )
+    request.event = event
+    request.user = None
+    request.session = {}
+    request._messages = FallbackStorage(request)
+    view = SettingsView()
+    view.request = request
+    view.kwargs = {}
+
+    with scopes_disabled():
+        response = view.post(request)
+        settings.refresh_from_db()
+
+    assert response.status_code == 302
+    assert settings.allowed_fields == ["attendee_name"]
+    assert settings.device_default_count == 4

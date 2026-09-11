@@ -712,6 +712,14 @@ class SponsorGroupForm(VoucherDefaultsFormMixin, I18nModelForm):
         return self.clean_voucher_defaults(super().clean())
 
 
+class ExhibitorDeviceDefaultsForm(forms.ModelForm):
+    """How many lead-scanning devices a partner gets automatically when scanning is enabled."""
+
+    class Meta:
+        model = ExhibitorSettings
+        fields = ["device_default_count"]
+
+
 class ExhibitorVoucherDefaultsForm(VoucherDefaultsFormMixin, forms.ModelForm):
     """Event-wide voucher defaults, used for any exhibitor with no sponsor group of their own."""
 

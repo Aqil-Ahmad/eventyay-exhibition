@@ -20,6 +20,7 @@ from exhibition.forms import (
 )
 from exhibition.models import (
     ExhibitionEmailQueue,
+    ExhibitorSettings,
     ExhibitionProposal,
     ExhibitionProposalState,
     ExhibitorInfo,
@@ -32,6 +33,7 @@ from exhibition.views import (
     EmailSendView,
     EmailTemplatePreviewView,
     ExhibitorDeviceManageView,
+    grant_lead_scanning_access,
     group_email_entries,
     queue_exhibitor_access_mail,
 )
@@ -916,3 +918,78 @@ def test_email_body_widget_keeps_markdown_emphasis():
 
     assert "<strong>" in seeded
     assert "**" not in seeded
+
+
+
+def _access_emails(event):
+    return ExhibitionEmailQueue.objects.filter(event=event, role=mail_helpers.EXHIBITOR_ACCESS)
+
+
+@pytest.mark.django_db
+def test_granting_access_creates_the_default_devices_and_queues_the_email(mail_event):
+    exhibitor = _deviceless(mail_event)
+    request = _organiser_request(mail_event)
+
+    with scopes_disabled():
+        ExhibitorSettings.objects.create(event=mail_event, device_default_count=2)
+
+        grant_lead_scanning_access(request, exhibitor)
+
+        assert exhibitor.devices.count() == 2
+        assert _access_emails(mail_event).count() == 1
+
+
+@pytest.mark.django_db
+def test_granting_access_uses_one_device_when_nothing_is_configured(mail_event):
+    """The out-of-the-box default is one device, so enabling scanning just works."""
+    exhibitor = _deviceless(mail_event)
+    request = _organiser_request(mail_event)
+
+    with scopes_disabled():
+        grant_lead_scanning_access(request, exhibitor)
+
+        assert exhibitor.devices.count() == 1
+        assert _access_emails(mail_event).count() == 1
+
+
+@pytest.mark.django_db
+def test_granting_access_leaves_hand_provisioned_devices_alone(mail_event):
+    """Devices added on the partner's own page take priority over the event default."""
+    exhibitor = _deviceless(mail_event)
+    request = _organiser_request(mail_event)
+
+    with scopes_disabled():
+        ExhibitorSettings.objects.create(event=mail_event, device_default_count=5)
+        provision_exhibitor_devices(exhibitor, 3)
+
+        grant_lead_scanning_access(request, exhibitor)
+
+        assert exhibitor.devices.count() == 3
+        assert _access_emails(mail_event).count() == 1
+
+
+@pytest.mark.django_db
+def test_a_zero_default_means_devices_are_added_by_hand(mail_event):
+    exhibitor = _deviceless(mail_event)
+    request = _organiser_request(mail_event)
+
+    with scopes_disabled():
+        ExhibitorSettings.objects.create(event=mail_event, device_default_count=0)
+
+        grant_lead_scanning_access(request, exhibitor)
+
+        assert exhibitor.devices.count() == 0
+        assert not _access_emails(mail_event).exists()
+
+    assert "no devices yet" in _message_texts(request)[0]
+
+
+@pytest.mark.django_db
+def test_voucher_access_alone_does_not_create_devices(mail_event):
+    exhibitor = _deviceless(mail_event, lead_scanning_enabled=False, allow_voucher_access=True)
+    request = _organiser_request(mail_event)
+
+    with scopes_disabled():
+        grant_lead_scanning_access(request, exhibitor)
+
+        assert exhibitor.devices.count() == 0
