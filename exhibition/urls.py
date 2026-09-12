@@ -1,4 +1,5 @@
 from django.urls import path
+from django.views.generic import RedirectView
 from eventyay.api.urls import event_router
 from eventyay.common.urls import OrganizerSlugConverter  # noqa: F401
 
@@ -98,6 +99,25 @@ urlpatterns = [
         "<str:organizer>/<str:event>/exhibition/call/requests/<str:code>/reinstate/",
         UserRequestReinstateView.as_view(),
         name="request.user_reinstate",
+    ),
+    path(
+        "<str:organizer>/<str:event>/exhibition/call/proposals/<str:code>/",
+        RedirectView.as_view(pattern_name="plugins:exhibition:request.user_edit", permanent=True, query_string=True),
+        name="request.user_edit.legacy",
+    ),
+    path(
+        "<str:organizer>/<str:event>/exhibition/call/proposals/<str:code>/withdraw/",
+        RedirectView.as_view(
+            pattern_name="plugins:exhibition:request.user_withdraw", permanent=True, query_string=True
+        ),
+        name="request.user_withdraw.legacy",
+    ),
+    path(
+        "<str:organizer>/<str:event>/exhibition/call/proposals/<str:code>/reinstate/",
+        RedirectView.as_view(
+            pattern_name="plugins:exhibition:request.user_reinstate", permanent=True, query_string=True
+        ),
+        name="request.user_reinstate.legacy",
     ),
     path(
         "<str:organizer>/<str:event>/exhibition/<int:pk>/",
