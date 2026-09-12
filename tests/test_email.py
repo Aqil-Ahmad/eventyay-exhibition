@@ -1067,3 +1067,18 @@ def test_voucher_access_alone_does_not_create_devices(mail_event):
         grant_lead_scanning_access(request, exhibitor)
 
         assert exhibitor.devices.count() == 0
+
+
+@pytest.mark.django_db
+def test_no_credentials_go_out_while_lead_scanning_is_off(mail_event):
+    """A pending device and an address are not enough: the tokens would be for an app that rejects them."""
+    exhibitor = _deviceless(mail_event, lead_scanning_enabled=False, allow_voucher_access=True)
+    request = _organiser_request(mail_event)
+
+    with scopes_disabled():
+        provision_exhibitor_devices(exhibitor, 1)
+
+        assert grant_lead_scanning_access(request, exhibitor) is None
+        assert not _access_emails(mail_event).exists()
+
+    assert _message_texts(request) == []

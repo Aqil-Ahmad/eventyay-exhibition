@@ -528,6 +528,16 @@ def test_device_defaults_form_saves_the_count(event):
 
 
 @pytest.mark.django_db
+def test_device_defaults_form_caps_the_count_like_manual_provisioning(event):
+    settings = make_exhibitor_settings(event)
+    form = ExhibitorDeviceDefaultsForm(data={"device_default_count": 51}, instance=settings)
+
+    assert not form.is_valid()
+    assert "device_default_count" in form.errors
+    assert ExhibitorDeviceDefaultsForm(data={"device_default_count": 50}, instance=settings).is_valid()
+
+
+@pytest.mark.django_db
 def test_device_defaults_form_rejects_a_negative_count(event):
     settings = make_exhibitor_settings(event)
     form = ExhibitorDeviceDefaultsForm(data={"device_default_count": -1}, instance=settings)
