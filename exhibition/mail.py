@@ -263,14 +263,21 @@ def _render_device_block(name, setup_url, token):
     )
 
 
-def render_device_tokens(exhibitor):
-    """One setup URL, token and QR code per lead-scanning device linked to the exhibitor."""
+def devices_awaiting_setup(exhibitor):
+    """Linked devices whose setup token has not been used yet."""
     from .models import ExhibitorDevice
 
+    return ExhibitorDevice.objects.filter(exhibitor=exhibitor, device__initialized__isnull=True).select_related(
+        "device"
+    )
+
+
+def render_device_tokens(exhibitor):
+    """One setup URL, token and QR code per device that still needs setting up."""
     setup_url = device_setup_url()
     blocks = [
         _render_device_block(link.device.name, setup_url, link.device.initialization_token)
-        for link in ExhibitorDevice.objects.filter(exhibitor=exhibitor).select_related("device")
+        for link in devices_awaiting_setup(exhibitor)
     ]
     return "".join(blocks)
 
@@ -453,7 +460,7 @@ def queue_exhibitor_access_email(event, exhibitor, *, requestor=None):
     to_email = exhibitor.recipient_email
     if not to_email:
         return None
-    if not exhibitor_has_devices(exhibitor):
+    if not devices_awaiting_setup(exhibitor).exists():
         return None
 
     subject_tpl, body_tpl = get_email_template(event, EXHIBITOR_ACCESS)

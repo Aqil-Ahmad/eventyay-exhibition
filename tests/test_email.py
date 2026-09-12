@@ -421,14 +421,89 @@ def test_adding_the_first_device_queues_the_access_email(mail_event):
 
 
 @pytest.mark.django_db
-def test_adding_more_devices_does_not_queue_a_second_email(mail_event):
+def test_adding_more_devices_queues_an_email_with_the_new_tokens(mail_event):
+    """Each batch gets its own email, listing only the devices that still need setting up."""
     exhibitor = _deviceless(mail_event)
 
     with scopes_disabled():
         _provision(exhibitor, 1)
+        first = exhibitor.devices.select_related("device").get().device
+        first.initialized = timezone.now()
+        first.save(update_fields=["initialized"])
+
         _provision(exhibitor, 2)
 
-        assert ExhibitionEmailQueue.objects.filter(event=mail_event, role=mail_helpers.EXHIBITOR_ACCESS).count() == 1
+        emails = ExhibitionEmailQueue.objects.filter(event=mail_event, role=mail_helpers.EXHIBITOR_ACCESS)
+        assert emails.count() == 2
+        latest = emails.order_by("-created").first()
+        pending = [
+            link.device.initialization_token
+            for link in exhibitor.devices.select_related("device")
+            if link.device.initialized is None
+        ]
+
+    assert len(pending) == 2
+    assert all(token in latest.body for token in pending)
+    assert first.initialization_token not in latest.body
+
+
+@pytest.mark.django_db
+def test_regenerating_tokens_queues_an_email_with_the_fresh_tokens(mail_event):
+    exhibitor = _deviceless(mail_event)
+
+    with scopes_disabled():
+        provision_exhibitor_devices(exhibitor, 2)
+        for link in exhibitor.devices.select_related("device"):
+            link.device.initialized = timezone.now()
+            link.device.save(update_fields=["initialized"])
+        old_tokens = {link.device.initialization_token for link in exhibitor.devices.select_related("device")}
+
+        request = _organiser_request(mail_event, data={"action": "reset"})
+        view = ExhibitorDeviceManageView()
+        view.request = request
+        view.object = exhibitor
+        view.kwargs = {"pk": exhibitor.pk}
+        view.reset_tokens(request)
+
+        queued = ExhibitionEmailQueue.objects.get(event=mail_event, role=mail_helpers.EXHIBITOR_ACCESS)
+        new_tokens = {link.device.initialization_token for link in exhibitor.devices.select_related("device")}
+
+    assert new_tokens.isdisjoint(old_tokens)
+    assert all(token in queued.body for token in new_tokens)
+
+
+@pytest.mark.django_db
+def test_no_email_when_every_device_is_already_set_up(mail_event):
+    exhibitor = _deviceless(mail_event)
+    request = _organiser_request(mail_event)
+
+    with scopes_disabled():
+        provision_exhibitor_devices(exhibitor, 1)
+        device = exhibitor.devices.select_related("device").get().device
+        device.initialized = timezone.now()
+        device.save(update_fields=["initialized"])
+
+        assert queue_exhibitor_access_mail(request, exhibitor) is None
+        assert not ExhibitionEmailQueue.objects.filter(event=mail_event).exists()
+
+    assert "already set up" in _message_texts(request)[0]
+
+
+@pytest.mark.django_db
+def test_the_email_lists_only_devices_awaiting_setup(mail_event):
+    exhibitor = _deviceless(mail_event)
+
+    with scopes_disabled():
+        provision_exhibitor_devices(exhibitor, 3)
+        links = list(exhibitor.devices.select_related("device"))
+        links[0].device.initialized = timezone.now()
+        links[0].device.save(update_fields=["initialized"])
+
+        queued = mail_helpers.queue_exhibitor_access_email(mail_event, exhibitor)
+
+    assert links[0].device.initialization_token not in queued.body
+    assert links[1].device.initialization_token in queued.body
+    assert links[2].device.initialization_token in queued.body
 
 
 @pytest.mark.django_db

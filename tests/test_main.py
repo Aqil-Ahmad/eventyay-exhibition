@@ -536,18 +536,8 @@ def test_device_defaults_form_rejects_a_negative_count(event):
     assert "device_default_count" in form.errors
 
 
-@pytest.mark.django_db
-def test_saving_exhibitor_settings_keeps_data_access_and_device_count_together(event):
-    """Both live on the same tab, so one save must persist both."""
-    settings = make_exhibitor_settings(event)
-    request = RequestFactory().post(
-        "/",
-        data={
-            "action": "save_exhibitor_settings",
-            "exhibitors_access_voucher": ["attendee_name"],
-            "device_default_count": "4",
-        },
-    )
+def _settings_post(event, data):
+    request = RequestFactory().post("/", data=data)
     request.event = event
     request.user = None
     request.session = {}
@@ -555,11 +545,52 @@ def test_saving_exhibitor_settings_keeps_data_access_and_device_count_together(e
     view = SettingsView()
     view.request = request
     view.kwargs = {}
+    return view.post(request)
+
+
+@pytest.mark.django_db
+def test_lead_settings_save_on_their_own_tab(event):
+    settings = make_exhibitor_settings(event)
 
     with scopes_disabled():
-        response = view.post(request)
+        response = _settings_post(event, {"action": "save_lead_settings", "device_default_count": "4"})
         settings.refresh_from_db()
 
     assert response.status_code == 302
-    assert settings.allowed_fields == ["attendee_name"]
+    assert response.url.endswith("/settings/leads")
     assert settings.device_default_count == 4
+
+
+@pytest.mark.django_db
+def test_saving_exhibitor_settings_does_not_touch_the_device_count(event):
+    settings = make_exhibitor_settings(event)
+    settings.device_default_count = 7
+    settings.save()
+
+    with scopes_disabled():
+        _settings_post(
+            event,
+            {"action": "save_exhibitor_settings", "exhibitors_access_voucher": ["attendee_name"]},
+        )
+        settings.refresh_from_db()
+
+    assert settings.allowed_fields == ["attendee_name"]
+    assert settings.device_default_count == 7
+
+
+@pytest.mark.django_db
+def test_sponsor_only_partners_cannot_open_the_devices_page(event):
+    from django.http import Http404
+
+    from exhibition.views import ExhibitorDeviceManageView
+
+    with scopes_disabled():
+        sponsor = ExhibitorInfo.objects.create(event=event, name="Gold", is_exhibitor=False, is_sponsor=True)
+        request = RequestFactory().get("/")
+        request.event = event
+        view = ExhibitorDeviceManageView()
+        view.request = request
+        view.kwargs = {"pk": sponsor.pk}
+
+        with pytest.raises(Http404):
+            view.get_object()
