@@ -2816,15 +2816,3 @@ msgstr ""
 #: exhibition/views.py:2683
 msgid "Custom template has been deleted."
 msgstr ""
-
-#: exhibition/views.py:146
-msgid ""
-"No lead scanning email was queued because this partner has no email address "
-"on file."
-msgstr ""
-
-#: exhibition/views.py:153
-msgid ""
-"No lead scanning email was queued because this partner has no devices yet. "
-"It will be queued as soon as you add their first device."
-msgstr ""

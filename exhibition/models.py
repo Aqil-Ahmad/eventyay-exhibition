@@ -241,7 +241,7 @@ class ExhibitorSettings(VoucherDefaultsMixin, LoggedModel):
     )
     device_default_count = models.PositiveIntegerField(
         default=1,
-        verbose_name=_("Devices per partner"),
+        verbose_name=_("Devices per profile"),
         help_text=_(
             "Created automatically when lead scanning is enabled for an exhibitor or sponsor that has no "
             "devices yet, and the access email is queued right away. Set to 0 to add devices by hand."

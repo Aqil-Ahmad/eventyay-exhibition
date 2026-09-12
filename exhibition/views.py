@@ -145,14 +145,14 @@ def queue_exhibitor_access_mail(request, exhibitor):
     if not (exhibitor.email or "").strip():
         messages.warning(
             request,
-            _("No lead scanning email was queued because this partner has no email address on file."),
+            _("No lead scanning email was queued because this profile has no email address on file."),
         )
         return None
     if not mail_helpers.exhibitor_has_devices(exhibitor):
         messages.warning(
             request,
             _(
-                "No lead scanning email was queued because this partner has no devices yet. "
+                "No lead scanning email was queued because this profile has no devices yet. "
                 "It will be queued as soon as you add their first device."
             ),
         )
@@ -160,7 +160,7 @@ def queue_exhibitor_access_mail(request, exhibitor):
     if not mail_helpers.devices_awaiting_setup(exhibitor).exists():
         messages.info(
             request,
-            _("No lead scanning email was queued because all of this partner's devices are already set up."),
+            _("No lead scanning email was queued because all of this profile's devices are already set up."),
         )
         return None
     queued = mail_helpers.queue_exhibitor_access_email(request.event, exhibitor, requestor=request.user)
@@ -170,7 +170,7 @@ def queue_exhibitor_access_mail(request, exhibitor):
 
 
 def grant_lead_scanning_access(request, exhibitor):
-    """Give a partner the event's default devices if they have none, then queue the access email."""
+    """Give a profile the event's default devices if they have none, then queue the access email."""
     if exhibitor.lead_scanning_enabled and not mail_helpers.exhibitor_has_devices(exhibitor):
         count = event_exhibitor_settings(request.event).device_default_count
         if count:
@@ -178,8 +178,8 @@ def grant_lead_scanning_access(request, exhibitor):
             messages.info(
                 request,
                 ngettext(
-                    "%(count)d lead-scanning device was created for this partner.",
-                    "%(count)d lead-scanning devices were created for this partner.",
+                    "%(count)d lead-scanning device was created for this profile.",
+                    "%(count)d lead-scanning devices were created for this profile.",
                     count,
                 )
                 % {"count": count},

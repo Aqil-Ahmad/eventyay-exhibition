@@ -672,7 +672,7 @@ class SponsorGroupForm(VoucherDefaultsFormMixin, I18nModelForm):
 
 
 class ExhibitorDeviceDefaultsForm(forms.ModelForm):
-    """How many lead-scanning devices a partner gets automatically when scanning is enabled."""
+    """How many lead-scanning devices a profile gets automatically when scanning is enabled."""
 
     class Meta:
         model = ExhibitorSettings

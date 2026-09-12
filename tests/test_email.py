@@ -81,7 +81,7 @@ def proposal(mail_event, applicant):
 
 @pytest.fixture
 def exhibitor(mail_event):
-    """A partner with one provisioned device, so the access email has a token to carry."""
+    """A profile with one provisioned device, so the access email has a token to carry."""
     with scopes_disabled():
         partner = ExhibitorInfo.objects.create(
             event=mail_event,
@@ -1028,7 +1028,7 @@ def test_granting_access_uses_one_device_when_nothing_is_configured(mail_event):
 
 @pytest.mark.django_db
 def test_granting_access_leaves_hand_provisioned_devices_alone(mail_event):
-    """Devices added on the partner's own page take priority over the event default."""
+    """Devices added on the profile's own page take priority over the event default."""
     exhibitor = _deviceless(mail_event)
     request = _organiser_request(mail_event)
 
