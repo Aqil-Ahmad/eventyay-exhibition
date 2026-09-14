@@ -173,6 +173,7 @@ def grant_lead_scanning_access(request, exhibitor):
     """Give a profile the event's default devices if they have none, then queue the access email."""
     if not exhibitor.lead_scanning_enabled:
         return None
+    exhibitor = ExhibitorInfo.objects.select_for_update().get(pk=exhibitor.pk)
     if not mail_helpers.exhibitor_has_devices(exhibitor):
         count = event_exhibitor_settings(request.event).device_default_count
         if count:
