@@ -19,3 +19,9 @@ def locale_dir(locale):
     if code in settings.LANGUAGES_RTL or code.split("-")[0] in settings.LANGUAGES_RTL:
         return "rtl"
     return "ltr"
+
+
+@register.filter
+def locale_name(locale):
+    """Human-readable language name, matching the titles the i18n widgets put on their inputs."""
+    return dict(settings.LANGUAGES).get(locale, locale)
