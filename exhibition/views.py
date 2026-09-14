@@ -448,6 +448,7 @@ class SettingsView(EventPermissionRequiredMixin, ListView):
         if action == "save_lead_settings":
             device_defaults_form = ExhibitorDeviceDefaultsForm(request.POST, instance=settings)
             if not device_defaults_form.is_valid():
+                self.object_list = self.get_queryset()
                 return self.render_to_response(self.get_context_data(device_defaults_form=device_defaults_form))
             device_defaults_form.save()
             settings.log_action(

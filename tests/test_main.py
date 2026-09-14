@@ -572,6 +572,17 @@ def test_lead_settings_save_on_their_own_tab(event):
 
 
 @pytest.mark.django_db
+def test_invalid_lead_settings_render_the_form_instead_of_crashing(event):
+    make_exhibitor_settings(event)
+
+    with scopes_disabled():
+        response = _settings_post(event, {"action": "save_lead_settings", "device_default_count": "-1"})
+
+    assert response.status_code == 200
+    assert "device_default_count" in response.context_data["device_defaults_form"].errors
+
+
+@pytest.mark.django_db
 def test_saving_exhibitor_settings_does_not_touch_the_device_count(event):
     settings = make_exhibitor_settings(event)
     settings.device_default_count = 7
