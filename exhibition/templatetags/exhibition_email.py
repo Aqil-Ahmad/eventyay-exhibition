@@ -14,5 +14,8 @@ def pending_email_count(event):
 
 @register.filter
 def locale_dir(locale):
-    """``rtl`` for bidirectional locales, matching the i18n editor widgets."""
-    return "rtl" if str(locale).split("-")[0] in settings.LANGUAGES_BIDI else "ltr"
+    """Writing direction of a locale, ``rtl`` for the languages core marks as right-to-left."""
+    code = str(locale)
+    if code in settings.LANGUAGES_RTL or code.split("-")[0] in settings.LANGUAGES_RTL:
+        return "rtl"
+    return "ltr"
