@@ -14,7 +14,7 @@
   <li>
     <a href="{% url 'plugins:exhibition:dashboard' organizer=request.event.organizer.slug event=request.event.slug %}" {% if url_name == 'dashboard' %}class="active"{% endif %}>
       <span class="fa fa-fw fa-dashboard"></span>
-      <span class="sidebar-text">{% trans "Overview" %}</span>
+      <span class="sidebar-text">{% trans "Exhibition overview" %}</span>
     </a>
   </li>
   {% if 'can_change_event_settings' in request.eventpermset %}
