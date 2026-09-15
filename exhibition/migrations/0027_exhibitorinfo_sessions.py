@@ -4,7 +4,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
     dependencies = [
         ("base", "0001_initial"),
-        ("exhibition", "0025_voucher_pools"),
+        ("exhibition", "0026_device_default_count"),
     ]
 
     operations = [
