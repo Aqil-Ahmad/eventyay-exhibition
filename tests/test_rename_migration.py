@@ -12,15 +12,15 @@ migration = importlib.import_module("exhibition.migrations.0027_organization_ban
 
 @pytest.mark.django_db
 def test_forwards_moves_customized_lifecycle_mail_settings_to_the_new_role_keys(event):
-    event.settings.set("exhibition_mail_request_accepted_subject", "You are in")
-    event.settings.set("exhibition_mail_request_accepted_body", "Welcome {request_name}")
+    event.settings.set("exhibition_mail_proposal_accepted_subject", "You are in")
+    event.settings.set("exhibition_mail_proposal_accepted_body", "Welcome {request_name}")
 
     migration.migrate_stored_names_forwards(apps, None)
     event.settings.flush()
 
     assert event.settings.get("exhibition_mail_request_accepted_subject") == "You are in"
     assert event.settings.get("exhibition_mail_request_accepted_body") == "Welcome {request_name}"
-    assert event.settings.get("exhibition_mail_request_accepted_subject") is None
+    assert event.settings.get("exhibition_mail_proposal_accepted_subject") is None
 
 
 @pytest.mark.django_db
@@ -63,5 +63,5 @@ def test_backwards_restores_the_old_names(event):
         event.settings.flush()
         settings.refresh_from_db()
 
-    assert event.settings.get("exhibition_mail_request_new_subject") == "New one"
+    assert event.settings.get("exhibition_mail_proposal_new_subject") == "New one"
     assert settings.request_field_settings == {"header_image": {"active": True}}
