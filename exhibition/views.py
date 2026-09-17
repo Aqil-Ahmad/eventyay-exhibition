@@ -19,7 +19,6 @@ from eventyay.base.services.system_questions import (
     STATE_REQUIRED,
     get_system_question_base_state,
 )
-from eventyay.base.templatetags.rich_text import rich_text
 from eventyay.common.utils.language import localize_event_text
 from eventyay.control.forms.filter import advanced_filter_count, advanced_filters_open_from_get
 from eventyay.control.permissions import EventPermissionRequiredMixin
