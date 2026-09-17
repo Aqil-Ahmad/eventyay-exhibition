@@ -1348,25 +1348,6 @@ class SponsorReorderView(OrganizationReorderMixin):
         return queryset.filter(sponsor_group_id=group_id)
 
 
-class CallTextPreviewView(EventPermissionRequiredMixin, View):
-    """Render draft Call text with the same styling as the public call page.
-
-    Consumed by core's shared ``richtextPreview.js`` (``data-email-preview-*``
-    attributes): the body text is posted as one ``body_<locale>`` field per
-    rendered locale.
-    """
-
-    permission = "can_change_settings"
-
-    def post(self, request, *args, **kwargs):
-        event_locales = request.event.settings.locales
-        previews = {}
-        for locale in event_locales:
-            text = request.POST.get(f"body_{locale}", "")
-            previews[locale] = str(rich_text(text)) if text else ""
-        return JsonResponse({"previews": previews})
-
-
 class RequestListView(EventPermissionRequiredMixin, FilteredListMixin, ListView):
     model = ExhibitionRequest
     permission = ("can_change_event_settings", "can_change_exhibition_proposals", "is_exhibition_reviewer")
