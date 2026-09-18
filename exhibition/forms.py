@@ -15,6 +15,7 @@ from django.utils.translation import gettext_lazy as _
 from django_countries.fields import CountryField
 from django_scopes import scope
 from eventyay.base.forms import I18nFormSet, I18nModelForm, SettingsForm
+from eventyay.base.forms.questions import WrappedPhoneNumberPrefixWidget
 from eventyay.base.forms.widgets import (
     DatePickerWidget,
     SplitDateTimePickerWidget,
@@ -37,7 +38,6 @@ from eventyay.helpers.i18n import get_format_without_seconds, is_rtl
 from i18nfield.forms import I18nFormField, I18nTextInput
 from i18nfield.strings import LazyI18nString
 from phonenumber_field.formfields import PhoneNumberField
-from phonenumber_field.widgets import PhoneNumberPrefixWidget
 
 from . import mail as mail_helpers
 from .models import (
@@ -923,7 +923,7 @@ class ExhibitionQuestionFieldsMixin:
                 initial=initial or None,
                 label=label,
                 required=question.required,
-                widget=PhoneNumberPrefixWidget(),
+                widget=WrappedPhoneNumberPrefixWidget(),
             )
         if question.variant == ExhibitionQuestionVariant.COUNTRY:
             return CountryField(countries=CachedCountries, blank=True, blank_label=" ").formfield(
