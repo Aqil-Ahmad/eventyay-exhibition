@@ -26,10 +26,10 @@
         <div class="request-action-feedback" data-request-feedback></div>
         <div class="table-responsive"
              data-request-actions-url="{% url 'plugins:exhibition:request.actions' organizer=request.event.organizer.slug event=request.event.slug %}"
+             data-selection-ids="{{ selectable_ids|join:' ' }}"
              data-request-list>
             {% if can_manage %}
                 <div class="request-bulk-bar"
-                     data-request-total="{{ page_obj.paginator.count }}"
                      data-request-reason-none="{% trans 'Select at least one request.' %}"
                      data-request-reason-approve="{% trans 'None of the selected requests can be approved.' %}"
                      data-request-reason-reject="{% trans 'None of the selected requests can be rejected.' %}"
