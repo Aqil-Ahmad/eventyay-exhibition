@@ -7,7 +7,7 @@
 {% block custom_header %}
     {{ block.super }}
     <link rel="stylesheet" href="{% static 'exhibition/css/history-panel.css' %}">
-    <script defer src="{% static 'exhibition/js/proposal-review.js' %}"></script>
+    <script defer src="{% static 'exhibition/js/request-review.js' %}"></script>
 {% endblock %}
 
 {% block title %}{{ request.event.name }} - {% trans "Review exhibition request" %}{% endblock %}
@@ -178,10 +178,10 @@
             {% if can_review %}
                 {% bootstrap_field form.is_exhibitor layout="control" %}
                 {% bootstrap_field form.is_sponsor layout="control" %}
-                <div data-partner-type-field="sponsor">
+                <div data-organization-type-field="sponsor">
                     {% bootstrap_field form.sponsor_group layout="control" %}
                 </div>
-                <div data-partner-type-field="exhibitor">
+                <div data-organization-type-field="exhibitor">
                     {% bootstrap_field form.booth_id layout="control" %}
                     {% bootstrap_field form.booth_name layout="control" %}
                 </div>

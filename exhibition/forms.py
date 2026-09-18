@@ -284,7 +284,8 @@ class ExhibitorInfoForm(ExhibitionQuestionFieldsMixin, I18nModelForm):
         required=False,
         label=_("Related sessions"),
         help_text=_(
-            "Sessions to show on this organization's public page. Only sessions on the published schedule are shown there."
+            "Sessions to show on this organization's public page. "
+            "Only sessions on the published schedule are shown there."
         ),
     )
 

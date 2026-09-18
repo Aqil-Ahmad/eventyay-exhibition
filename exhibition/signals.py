@@ -86,7 +86,7 @@ def exhibition_nav_event_common(sender, request=None, **kwargs):
     if not can_view_exhibitors and not can_review:
         return []
     kwargs_url = {"organizer": sender.organizer.slug, "event": sender.slug}
-    route = "plugins:exhibition:dashboard" if can_view_exhibitors else "plugins:exhibition:proposal.list"
+    route = "plugins:exhibition:dashboard" if can_view_exhibitors else "plugins:exhibition:request.list"
     match = request.resolver_match
     return [
         {

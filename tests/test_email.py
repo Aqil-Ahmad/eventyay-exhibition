@@ -974,11 +974,11 @@ def _outbox_context(event, **params):
 
 @pytest.mark.django_db
 def test_outbox_lists_every_selectable_row_not_just_the_current_page(mail_event):
-    p1 = _proposal(mail_event, "One", ExhibitionProposalState.ACCEPTED, email="one@example.com")
-    p2 = _proposal(mail_event, "Two", ExhibitionProposalState.ACCEPTED, email="two@example.com")
+    p1 = _request(mail_event, "One", ExhibitionRequestState.ACCEPTED, email="one@example.com")
+    p2 = _request(mail_event, "Two", ExhibitionRequestState.ACCEPTED, email="two@example.com")
     with scopes_disabled():
         batch = mail_helpers.queue_compose_emails(mail_event, [p1, p2], "Hi", "Body")
-        single = mail_helpers.queue_proposal_email(mail_event, p1, mail_helpers.PROPOSAL_ACCEPTED)
+        single = mail_helpers.queue_request_email(mail_event, p1, mail_helpers.REQUEST_ACCEPTED)
 
     context = _outbox_context(mail_event, page_size=1)
 
