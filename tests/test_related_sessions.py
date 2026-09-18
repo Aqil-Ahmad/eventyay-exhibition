@@ -146,7 +146,7 @@ def test_public_detail_page_lists_related_sessions(event):
     kind = session_type(event)
     talk = session(event, kind, "Opening keynote")
     release_with_slots(event, (talk, True))
-    organization = exhibitor(event, logo_url="https://example.com/logo.png", banner_url="https://example.com/hero.png")
+    organization = exhibitor(event, logo="exhibitors/logos/Acme/logo.png", banner="exhibitors/banners/Acme/hero.png")
     link(organization, talk)
 
     url = reverse(
@@ -167,7 +167,7 @@ def test_public_detail_page_hides_section_without_sessions(event):
     event.save(update_fields=["plugins"])
     publish_talks(event)
     release_with_slots(event)
-    organization = exhibitor(event, logo_url="https://example.com/logo.png", banner_url="https://example.com/hero.png")
+    organization = exhibitor(event, logo="exhibitors/logos/Acme/logo.png", banner="exhibitors/banners/Acme/hero.png")
 
     url = reverse(
         "plugins:exhibition:public_detail",
