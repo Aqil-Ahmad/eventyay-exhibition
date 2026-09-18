@@ -63,7 +63,7 @@ class Migration(migrations.Migration):
     dependencies = [
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
         ("base", "0001_initial"),
-        ("exhibition", "0026_device_default_count"),
+        ("exhibition", "0027_exhibitorinfo_sessions"),
     ]
 
     operations = [

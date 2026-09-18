@@ -7,7 +7,7 @@ from eventyay.base.models.auth import User
 
 from exhibition.models import ExhibitionRequest, ExhibitorSettings
 
-migration = importlib.import_module("exhibition.migrations.0027_organization_banner_and_request_rename")
+migration = importlib.import_module("exhibition.migrations.0028_organization_banner_and_request_rename")
 
 
 @pytest.mark.django_db
