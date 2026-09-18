@@ -1,6 +1,17 @@
+import logging
+import os
+import urllib.parse
+import urllib.request
+
 import django.db.models.deletion
 from django.conf import settings
+from django.core.files.base import ContentFile
 from django.db import migrations, models
+from django.db.models import Q
+
+logger = logging.getLogger(__name__)
+
+IMAGE_URL_FIELDS = (("logo_url", "logo"), ("header_image_url", "header_image"))
 
 MAIL_ROLE_RENAMES = (
     ("proposal_new", "request_new"),
@@ -47,6 +58,47 @@ def _migrate_stored_names(apps, mail_renames, key_renames):
     )
 
 
+def _fetch(url):
+    if urllib.parse.urlparse(url).scheme not in ("http", "https"):
+        raise ValueError("unsupported URL scheme")
+    with urllib.request.urlopen(url, timeout=10) as response:
+        return response.read()
+
+
+def _copy_url_to_file(row, url_field, file_field):
+    """Download the external image and store it in the file field, unless a file is already there."""
+    url = (getattr(row, url_field) or "").strip()
+    if not url or getattr(row, file_field):
+        return False
+    try:
+        data = _fetch(url)
+    except (OSError, ValueError) as error:
+        logger.warning("Could not copy %s of %s #%s from %s: %s", url_field, row._meta.label, row.pk, url, error)
+        return False
+    name = os.path.basename(urllib.parse.urlparse(url).path) or file_field
+    getattr(row, file_field).save(name, ContentFile(data), save=False)
+    return True
+
+
+def _rows_with_image_urls(model):
+    has_url = Q()
+    for url_field, _file_field in IMAGE_URL_FIELDS:
+        has_url |= Q(**{f"{url_field}__isnull": False}) & ~Q(**{url_field: ""})
+    return model.objects.filter(has_url)
+
+
+def copy_image_urls_to_files(apps, schema_editor):
+    for label in ("ExhibitorInfo", "ExhibitionProposal"):
+        for row in _rows_with_image_urls(apps.get_model("exhibition", label)):
+            copied = [
+                file_field
+                for url_field, file_field in IMAGE_URL_FIELDS
+                if _copy_url_to_file(row, url_field, file_field)
+            ]
+            if copied:
+                row.save(update_fields=copied)
+
+
 def migrate_stored_names_forwards(apps, schema_editor):
     _migrate_stored_names(apps, MAIL_ROLE_RENAMES, FIELD_KEY_RENAMES)
 
@@ -67,6 +119,7 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
+        migrations.RunPython(copy_image_urls_to_files, migrations.RunPython.noop),
         migrations.RemoveField(
             model_name="exhibitorinfo",
             name="logo_url",
