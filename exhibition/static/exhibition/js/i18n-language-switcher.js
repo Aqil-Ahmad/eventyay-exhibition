@@ -129,6 +129,7 @@
             })
             if (added) {
                 units = collectUnits(scope)
+                flagged = localesWithErrors(units)
                 apply(current)
             }
         }).observe(scope, { childList: true, subtree: true })
