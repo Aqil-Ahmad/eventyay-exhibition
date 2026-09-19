@@ -1,126 +1,86 @@
-.exhibition-lang-select {
-    position: relative;
-}
-
-.exhibition-lang-field {
+.exhibition-lang-chips {
     display: flex;
-    align-items: center;
     flex-wrap: wrap;
-    gap: 6px;
-    min-height: 34px;
-    height: auto;
-    padding: 5px 28px 5px 10px;
-    cursor: pointer;
+    gap: 8px;
+    padding-top: 3px;
 }
 
-.exhibition-lang-select.is-open .exhibition-lang-field {
-    border-color: #66afe9;
-}
-
-.exhibition-lang-caret {
-    position: absolute;
-    top: 11px;
-    right: 10px;
-    font-size: 11px;
-    color: #888;
-    pointer-events: none;
-}
-
-.exhibition-lang-select.is-open .exhibition-lang-caret {
-    transform: rotate(180deg);
-}
-
-.exhibition-lang-badges {
-    display: contents;
-}
-
-.exhibition-lang-badge {
+.exhibition-lang-chip {
     display: inline-flex;
     align-items: center;
-    padding: 2px 8px;
-    border: 1px solid #c9dcea;
-    border-radius: 3px;
-    background: #eaf3fa;
-    color: #31708f;
-    font-size: 12px;
-    line-height: 1.5;
-    cursor: pointer;
-}
-
-.exhibition-lang-badge:hover,
-.exhibition-lang-badge:focus {
-    background: #d9eaf6;
-}
-
-.exhibition-lang-badge.is-active {
-    background: #337ab7;
-    border-color: #2e6da4;
-    color: #fff;
-}
-
-.exhibition-lang-badge.has-error {
-    border-color: #a94442;
-    background: #f2dede;
-    color: #a94442;
-}
-
-.exhibition-lang-badge.has-error.is-active {
-    background: #a94442;
-    color: #fff;
-}
-
-.exhibition-lang-panel {
-    position: absolute;
-    z-index: 1000;
-    top: calc(100% + 2px);
-    left: 0;
-    right: 0;
-    margin: 0;
-    padding: 5px 0;
-    list-style: none;
-    background: #fff;
-    border: 1px solid #ccc;
+    gap: 6px;
+    padding: 6px 14px;
+    border: 1px solid var(--color-border, #ccc);
     border-radius: 4px;
-    box-shadow: 0 6px 12px rgba(0, 0, 0, 0.175);
-    max-height: 260px;
-    overflow-y: auto;
-}
-
-.exhibition-lang-option {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 8px;
-    padding: 6px 12px;
-    cursor: pointer;
+    background: var(--color-bg, #fff);
+    color: var(--color-text, #333);
+    font-weight: 500;
     line-height: 1.4;
+    cursor: pointer;
+    transition:
+        background-color 0.15s ease,
+        border-color 0.15s ease,
+        color 0.15s ease;
 }
 
-.exhibition-lang-option:hover,
-.exhibition-lang-option:focus {
-    background: #f5f5f5;
+.exhibition-lang-chip::before {
+    content: "\2713";
+    display: inline-block;
+    width: 0.9em;
+    font-weight: 700;
+    opacity: 0;
 }
 
-.exhibition-lang-option.is-active {
+.exhibition-lang-chip:hover,
+.exhibition-lang-chip:focus {
+    background: var(--color-primary-lighter, #e8f4fd);
+    border-color: var(--color-primary, #337ab7);
+    color: var(--color-primary-text, #1a73a7);
+    outline: none;
+}
+
+.exhibition-lang-chip:focus-visible {
+    box-shadow: 0 0 0 3px rgba(51, 122, 183, 0.35);
+}
+
+.exhibition-lang-chip.is-active {
+    background: var(--color-primary, #337ab7);
+    border-color: var(--color-primary, #337ab7);
+    color: #fff;
     font-weight: 600;
 }
 
-.exhibition-lang-option-state {
-    font-size: 11px;
-    color: #777;
-    white-space: nowrap;
+.exhibition-lang-chip.is-active::before {
+    opacity: 1;
 }
 
-.exhibition-lang-option.has-content .exhibition-lang-option-state::before {
-    content: "\f00c";
-    font-family: FontAwesome;
-    color: #3c763d;
+.exhibition-lang-chip.has-content:not(.is-active)::after {
+    content: "";
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #3c763d;
 }
 
-.exhibition-lang-option.has-error .exhibition-lang-option-state::before {
+.exhibition-lang-chip.has-error {
+    border-color: #a94442;
+    color: #a94442;
+}
+
+.exhibition-lang-chip.has-error.is-active {
+    background: #a94442;
+    border-color: #a94442;
+    color: #fff;
+}
+
+.exhibition-lang-chip.has-error::after {
     content: "\f071";
     font-family: FontAwesome;
-    color: #a94442;
+    font-size: 11px;
+    width: auto;
+    height: auto;
+    border-radius: 0;
+    background: none;
 }
 
 .exhibition-lang-hidden {

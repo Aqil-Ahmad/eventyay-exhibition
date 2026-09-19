@@ -67,25 +67,11 @@
         }
         root.dataset.i18nSwitcherInit = 'true'
 
-        var select = root.querySelector('[data-i18n-select]')
-        var field = root.querySelector('[data-i18n-field]')
-        var panel = root.querySelector('[data-i18n-panel]')
-        var badges = Array.prototype.slice.call(root.querySelectorAll('[data-i18n-badge]'))
-        var options = Array.prototype.slice.call(root.querySelectorAll('[data-i18n-option]'))
-        if (!select || !field || !panel) {
-            return
-        }
-
-        options.forEach(function (option) {
-            option.hidden = !available[option.dataset.locale]
+        var chips = Array.prototype.slice.call(root.querySelectorAll('[data-i18n-chip]')).filter(function (chip) {
+            var offered = !!available[chip.dataset.locale]
+            chip.hidden = !offered
+            return offered
         })
-        badges = badges.filter(function (badge) {
-            return available[badge.dataset.locale]
-        })
-        options = options.filter(function (option) {
-            return available[option.dataset.locale]
-        })
-
         var flagged = localesWithErrors(units)
         var current = null
 
@@ -96,20 +82,14 @@
                     content[unit.locale] = true
                 }
             })
-            badges.forEach(function (badge) {
-                var locale = badge.dataset.locale
+            chips.forEach(function (chip) {
+                var locale = chip.dataset.locale
                 var active = locale === current
-                badge.hidden = !(content[locale] || flagged[locale] || active)
-                badge.classList.toggle('is-active', active)
-                badge.classList.toggle('has-error', !!flagged[locale])
-            })
-            options.forEach(function (option) {
-                var locale = option.dataset.locale
-                var active = locale === current
-                option.classList.toggle('is-active', active)
-                option.classList.toggle('has-content', !!content[locale])
-                option.classList.toggle('has-error', !!flagged[locale])
-                option.setAttribute('aria-selected', active ? 'true' : 'false')
+                chip.classList.toggle('is-active', active)
+                chip.classList.toggle('has-content', !!content[locale])
+                chip.classList.toggle('has-error', !!flagged[locale])
+                chip.setAttribute('aria-selected', active ? 'true' : 'false')
+                chip.tabIndex = active ? 0 : -1
             })
         }
 
@@ -121,49 +101,20 @@
             refresh()
         }
 
-        function openPanel(open) {
-            panel.hidden = !open
-            field.setAttribute('aria-expanded', open ? 'true' : 'false')
-            select.classList.toggle('is-open', open)
-        }
-
-        field.addEventListener('click', function (event) {
-            if (event.target.closest('[data-i18n-badge]')) {
-                return
-            }
-            openPanel(panel.hidden)
-        })
-        field.addEventListener('keydown', function (event) {
-            if (event.key === 'Enter' || event.key === ' ') {
-                event.preventDefault()
-                openPanel(panel.hidden)
-            }
-        })
-        badges.forEach(function (badge) {
-            badge.addEventListener('click', function (event) {
-                event.preventDefault()
-                event.stopPropagation()
-                apply(badge.dataset.locale)
-                openPanel(false)
+        chips.forEach(function (chip, index) {
+            chip.addEventListener('click', function () {
+                apply(chip.dataset.locale)
             })
-        })
-        options.forEach(function (option) {
-            option.addEventListener('click', function () {
-                apply(option.dataset.locale)
-                openPanel(false)
-                field.focus()
+            chip.addEventListener('keydown', function (event) {
+                var offset = event.key === 'ArrowRight' ? 1 : event.key === 'ArrowLeft' ? -1 : 0
+                if (!offset) {
+                    return
+                }
+                event.preventDefault()
+                var next = chips[(index + offset + chips.length) % chips.length]
+                apply(next.dataset.locale)
+                next.focus()
             })
-        })
-        document.addEventListener('click', function (event) {
-            if (!root.contains(event.target)) {
-                openPanel(false)
-            }
-        })
-        root.addEventListener('keydown', function (event) {
-            if (event.key === 'Escape' && !panel.hidden) {
-                openPanel(false)
-                field.focus()
-            }
         })
         form.addEventListener('input', refresh)
 
@@ -181,8 +132,8 @@
             }
         }).observe(form, { childList: true, subtree: true })
 
-        var order = options.map(function (option) {
-            return option.dataset.locale
+        var order = chips.map(function (chip) {
+            return chip.dataset.locale
         })
         var initial =
             order.filter(function (locale) {
