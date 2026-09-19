@@ -1,8 +1,15 @@
-.exhibition-lang-chips {
+.exhibition-lang-switcher {
     display: flex;
     flex-wrap: wrap;
     gap: 8px;
-    padding-top: 3px;
+    margin-bottom: 16px;
+}
+
+@media (min-width: 992px) {
+    .form-horizontal .exhibition-lang-switcher {
+        margin-left: 25%;
+        padding-left: 15px;
+    }
 }
 
 .exhibition-lang-chip {

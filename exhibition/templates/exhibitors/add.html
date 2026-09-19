@@ -19,11 +19,11 @@
 {% block exhibitors_content %}
 <form action="" method="post" class="form-horizontal exhibition-partner-form" enctype="multipart/form-data">
     {% csrf_token %}
-    {% include 'exhibitors/_i18n_language_switcher.html' %}
     {% bootstrap_form_errors form %}
 
     <fieldset>
         <legend>{% trans "Profile" %}</legend>
+        {% include 'exhibitors/_i18n_language_switcher.html' %}
         {% for item in form.profile_items %}
             {% if item.kind == 'social_links' %}
                 <div class="form-group {% if social_media_formset.non_form_errors %}has-error{% endif %}">

@@ -1,5 +1,6 @@
 (function () {
     var INPUT_SELECTOR = 'input[lang], textarea[lang]'
+    var PREVIEW_SELECTOR = '.mail-preview[lang]'
 
     function unitElement(input) {
         return input.closest('.tiptap-wrapper') || input
@@ -12,11 +13,14 @@
                 units.push({ locale: input.lang, input: input, el: unitElement(input), group: group })
             })
         })
+        form.querySelectorAll(PREVIEW_SELECTOR).forEach(function (pane) {
+            units.push({ locale: pane.lang, input: null, el: pane, group: null })
+        })
         return units
     }
 
     function hasContent(unit) {
-        return String(unit.input.value || '').trim().length > 0
+        return !!unit.input && String(unit.input.value || '').trim().length > 0
     }
 
     function isOverLength(unit) {
@@ -28,7 +32,7 @@
         var flagged = {}
         var groups = new Map()
         units.forEach(function (unit) {
-            if (!unit.group.closest('.has-error')) {
+            if (!unit.group || !unit.group.closest('.has-error')) {
                 return
             }
             if (!groups.has(unit.group)) {
@@ -60,7 +64,9 @@
         var units = collectUnits(form)
         var available = {}
         units.forEach(function (unit) {
-            available[unit.locale] = true
+            if (unit.input) {
+                available[unit.locale] = true
+            }
         })
         if (Object.keys(available).length < 2) {
             return
@@ -110,7 +116,10 @@
             })
         })
         function containsI18nGroup(node) {
-            return node.nodeType === 1 && (node.matches('.i18n-form-group') || !!node.querySelector('.i18n-form-group'))
+            return (
+                node.nodeType === 1 &&
+                (node.matches('.i18n-form-group, .mail-preview') || !!node.querySelector('.i18n-form-group, .mail-preview'))
+            )
         }
 
         new MutationObserver(function (mutations) {
