@@ -76,17 +76,10 @@
         var current = null
 
         function refresh() {
-            var content = {}
-            units.forEach(function (unit) {
-                if (hasContent(unit)) {
-                    content[unit.locale] = true
-                }
-            })
             chips.forEach(function (chip) {
                 var locale = chip.dataset.locale
                 var active = locale === current
                 chip.classList.toggle('is-active', active)
-                chip.classList.toggle('has-content', !!content[locale])
                 chip.classList.toggle('has-error', !!flagged[locale])
                 chip.setAttribute('aria-selected', active ? 'true' : 'false')
                 chip.tabIndex = active ? 0 : -1
@@ -116,8 +109,6 @@
                 next.focus()
             })
         })
-        form.addEventListener('input', refresh)
-
         function containsI18nGroup(node) {
             return node.nodeType === 1 && (node.matches('.i18n-form-group') || !!node.querySelector('.i18n-form-group'))
         }

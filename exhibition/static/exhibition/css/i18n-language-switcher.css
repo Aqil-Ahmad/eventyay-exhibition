@@ -54,14 +54,6 @@
     opacity: 1;
 }
 
-.exhibition-lang-chip.has-content:not(.is-active)::after {
-    content: "";
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    background: #3c763d;
-}
-
 .exhibition-lang-chip.has-error {
     border-color: #a94442;
     color: #a94442;
@@ -77,10 +69,6 @@
     content: "\f071";
     font-family: FontAwesome;
     font-size: 11px;
-    width: auto;
-    height: auto;
-    border-radius: 0;
-    background: none;
 }
 
 .exhibition-lang-hidden {
