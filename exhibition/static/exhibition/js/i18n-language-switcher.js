@@ -61,7 +61,8 @@
         if (!form) {
             return
         }
-        var units = collectUnits(form)
+        var scope = root.closest('[data-i18n-scope]') || form
+        var units = collectUnits(scope)
         var available = {}
         units.forEach(function (unit) {
             if (unit.input) {
@@ -127,10 +128,10 @@
                 return Array.prototype.some.call(mutation.addedNodes, containsI18nGroup)
             })
             if (added) {
-                units = collectUnits(form)
+                units = collectUnits(scope)
                 apply(current)
             }
-        }).observe(form, { childList: true, subtree: true })
+        }).observe(scope, { childList: true, subtree: true })
 
         var order = chips.map(function (chip) {
             return chip.dataset.locale
