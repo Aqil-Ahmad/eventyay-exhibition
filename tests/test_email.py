@@ -962,11 +962,11 @@ def test_delete_view_discards_whole_batch(mail_event):
 
 @pytest.mark.django_db
 def test_bulk_action_target_rows_select_all_pages_no_batch_expansion(mail_event):
-    p1 = _proposal(mail_event, "Match 1", ExhibitionProposalState.ACCEPTED, email="match@example.com")
-    p2 = _proposal(mail_event, "Other", ExhibitionProposalState.ACCEPTED, email="other@example.com")
+    p1 = _request(mail_event, "Match 1", ExhibitionRequestState.ACCEPTED, email="match@example.com")
+    p2 = _request(mail_event, "Other", ExhibitionRequestState.ACCEPTED, email="other@example.com")
     with scopes_disabled():
         b_batch = mail_helpers.queue_compose_emails(mail_event, [p1, p2], "Batch Subject", "Body")
-        p3 = _proposal(mail_event, "Match 2", ExhibitionProposalState.ACCEPTED, email="match@example.com")
+        p3 = _request(mail_event, "Match 2", ExhibitionRequestState.ACCEPTED, email="match@example.com")
         single = mail_helpers.queue_compose_emails(mail_event, [p3], "Single Subject", "Body")
 
     request = RequestFactory().post("/bulk?query=match%40example.com", {"select_all_pages": "true"})
@@ -984,8 +984,8 @@ def test_bulk_action_target_rows_select_all_pages_no_batch_expansion(mail_event)
 
 @pytest.mark.django_db
 def test_bulk_action_send_select_all_pages_stable_op(mail_event):
-    p1 = _proposal(mail_event, "Match", ExhibitionProposalState.ACCEPTED, email="match@example.com")
-    p2 = _proposal(mail_event, "Other", ExhibitionProposalState.ACCEPTED, email="other@example.com")
+    p1 = _request(mail_event, "Match", ExhibitionRequestState.ACCEPTED, email="match@example.com")
+    p2 = _request(mail_event, "Other", ExhibitionRequestState.ACCEPTED, email="other@example.com")
     with scopes_disabled():
         mail_helpers.queue_compose_emails(mail_event, [p1], "Subj 1", "Body")
         mail_helpers.queue_compose_emails(mail_event, [p2], "Subj 2", "Body")
@@ -1010,8 +1010,8 @@ def test_bulk_action_send_select_all_pages_stable_op(mail_event):
 
 @pytest.mark.django_db
 def test_bulk_action_discard_select_all_pages_stable_op(mail_event):
-    p1 = _proposal(mail_event, "Match", ExhibitionProposalState.ACCEPTED, email="match@example.com")
-    p2 = _proposal(mail_event, "Other", ExhibitionProposalState.ACCEPTED, email="other@example.com")
+    p1 = _request(mail_event, "Match", ExhibitionRequestState.ACCEPTED, email="match@example.com")
+    p2 = _request(mail_event, "Other", ExhibitionRequestState.ACCEPTED, email="other@example.com")
     with scopes_disabled():
         mail_helpers.queue_compose_emails(mail_event, [p1], "Subj 1", "Body")
         mail_helpers.queue_compose_emails(mail_event, [p2], "Subj 2", "Body")
