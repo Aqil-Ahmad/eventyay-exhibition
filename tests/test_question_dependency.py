@@ -1,4 +1,6 @@
 import pytest
+from conftest import _PNG_BYTES, STORED_IMAGES
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.http import QueryDict
 from eventyay.base.models import User
 
@@ -49,13 +51,20 @@ def question_form_data(**overrides):
 
 def make_proposal(event, email="applicant@example.org"):
     user = User.objects.create_user(email=email, password="dependency-tests-1234")
-    return ExhibitionProposal.objects.create(event=event, user=user, name={"en": "Acme"})
+    return ExhibitionProposal.objects.create(event=event, user=user, name={"en": "Acme"}, **STORED_IMAGES)
 
 
 def proposal_form(event, data):
     payload = {"name": "Acme", "content_locale": "en"}
     payload.update(data)
-    return ExhibitionProposalForm(event=event, data=payload)
+    return ExhibitionProposalForm(
+        event=event,
+        data=payload,
+        files={
+            "logo": SimpleUploadedFile("logo.png", _PNG_BYTES, content_type="image/png"),
+            "header_image": SimpleUploadedFile("header.png", _PNG_BYTES, content_type="image/png"),
+        },
+    )
 
 
 @pytest.fixture
@@ -564,7 +573,7 @@ def test_organiser_form_drops_a_hidden_answer(call_event):
     child.dependency_question = parent
     child.dependency_values = [str(options[0].pk)]
     child.save()
-    exhibitor = ExhibitorInfo.objects.create(event=call_event, name={"en": "Acme"}, is_exhibitor=True)
+    exhibitor = ExhibitorInfo.objects.create(event=call_event, name={"en": "Acme"}, is_exhibitor=True, **STORED_IMAGES)
     proposal = make_proposal(call_event, email="organiser-side@example.org")
     proposal.approved_exhibitor = exhibitor
     proposal.save()
@@ -593,7 +602,7 @@ def test_organiser_form_keeps_an_answer_whose_parent_was_deactivated(call_event)
     child.dependency_question = parent
     child.dependency_values = [str(options[0].pk)]
     child.save()
-    exhibitor = ExhibitorInfo.objects.create(event=call_event, name={"en": "Acme"}, is_exhibitor=True)
+    exhibitor = ExhibitorInfo.objects.create(event=call_event, name={"en": "Acme"}, is_exhibitor=True, **STORED_IMAGES)
     proposal = make_proposal(call_event, email="organiser-kept@example.org")
     proposal.approved_exhibitor = exhibitor
     proposal.save()
