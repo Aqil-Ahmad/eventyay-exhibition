@@ -70,6 +70,7 @@
     font-size: 11px;
 }
 
-.exhibition-lang-hidden {
-    display: none !important;
+.i18n-form-group .exhibition-lang-hidden,
+.mail-preview.exhibition-lang-hidden {
+    display: none;
 }
