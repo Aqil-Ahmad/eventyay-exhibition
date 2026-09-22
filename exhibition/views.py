@@ -2342,9 +2342,9 @@ class ExhibitorVoucherBulkSendView(EventPermissionRequiredMixin, View):
         return self.request.POST.getlist("selected")
 
     def target_queryset(self):
-        queryset = ExhibitorInfo.objects.filter(
-            event=self.request.event, pk__in=self.selected_pks()
-        ).prefetch_related("source_proposals__user")
+        queryset = ExhibitorInfo.objects.filter(event=self.request.event, pk__in=self.selected_pks()).prefetch_related(
+            "source_proposals__user"
+        )
         if self.partner_type == "sponsor":
             queryset = queryset.filter(is_sponsor=True).order_by("sponsor_position", "name", "pk")
         elif self.partner_type == "exhibitor":
