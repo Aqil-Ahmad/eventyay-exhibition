@@ -12,6 +12,8 @@
         var selectAll = scope.querySelector('[data-partner-select-all]')
         var countLabel = scope.querySelector('[data-partner-selected-count]')
         var downloadLink = scope.querySelector('[data-partner-download-link]')
+        var sendButton = scope.querySelector('[data-partner-send-vouchers]')
+        var sendForm = sendButton ? document.getElementById(sendButton.getAttribute('form')) : null
         var selectedLabel = scope.dataset.selectedLabel || 'selected'
         var baseHref = downloadLink ? downloadLink.getAttribute('href') : null
         var store = window.ExhibitionSelection.create({ scope: scope })
@@ -45,6 +47,9 @@
             if (downloadLink) {
                 downloadLink.classList.toggle('disabled', total === 0)
                 downloadLink.setAttribute('aria-disabled', total === 0 ? 'true' : 'false')
+            }
+            if (sendButton) {
+                sendButton.disabled = total === 0
             }
         }
 
@@ -82,6 +87,26 @@
                     })
                 }
                 window.location.href = window.location.pathname + '?' + searchParams.toString()
+            })
+        }
+
+        if (sendForm) {
+            sendForm.addEventListener('submit', function (event) {
+                var selected = store.ids()
+                if (!selected.length) {
+                    event.preventDefault()
+                    return
+                }
+                sendForm.querySelectorAll('input[name="selected"]').forEach(function (input) {
+                    input.remove()
+                })
+                selected.forEach(function (value) {
+                    var hidden = document.createElement('input')
+                    hidden.type = 'hidden'
+                    hidden.name = 'selected'
+                    hidden.value = value
+                    sendForm.appendChild(hidden)
+                })
             })
         }
 
