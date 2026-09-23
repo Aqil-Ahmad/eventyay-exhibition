@@ -51,6 +51,8 @@ from .models import (
     REQUEST_LOG_ACTIONS,
     ExhibitionQuestion,
     ExhibitionQuestionOption,
+    ExhibitionRequest,
+    ExhibitionRequestState,
     ExhibitorDevice,
     ExhibitorInfo,
     ExhibitorSettings,
