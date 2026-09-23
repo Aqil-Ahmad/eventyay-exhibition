@@ -44,8 +44,6 @@ from phonenumber_field.formfields import PhoneNumberField
 from . import mail as mail_helpers
 from .models import (
     DEPENDENCY_PARENT_VARIANTS,
-    REQUEST_DEFAULT_FIELD_KEYS,
-    REQUEST_FORMSET_FIELD_KEYS,
     QUESTION_OPTION_VARIANTS,
     REQUEST_DEFAULT_FIELD_KEYS,
     REQUEST_FORMSET_FIELD_KEYS,
