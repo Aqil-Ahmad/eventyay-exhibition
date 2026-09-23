@@ -575,23 +575,31 @@ def exhibitor_voucher_redemptions(exhibitor):
     )
 
 
-def attendee_display_fields(position, settings):
-    """The attendee columns an exhibitor may see, as a list of (label, value) pairs."""
+def _attendee_address(position):
+    parts = [position.street, position.zipcode, position.city, str(position.country) if position.country else ""]
+    return ", ".join(part for part in parts if part)
+
+
+def attendee_field_specs(settings):
+    """The attendee columns this event lets exhibitors see, as (label, getter) pairs."""
     from django.utils.translation import gettext_lazy as _
 
-    fields = []
-    if settings.is_field_allowed("attendee_name"):
-        fields.append((_("Name"), position.attendee_name or ""))
-    if settings.is_field_allowed("attendee_email"):
-        fields.append((_("Email"), position.attendee_email or ""))
-    if settings.is_field_allowed("system_company"):
-        fields.append((_("Company"), position.company or ""))
-    if settings.is_field_allowed("system_job_title"):
-        fields.append((_("Job title"), position.job_title or ""))
-    if settings.is_field_allowed("system_street"):
-        parts = [position.street, position.zipcode, position.city, str(position.country) if position.country else ""]
-        fields.append((_("Address"), ", ".join(part for part in parts if part)))
-    return fields
+    specs = (
+        ("attendee_name", _("Name"), lambda position: position.attendee_name or ""),
+        ("attendee_email", _("Email"), lambda position: position.attendee_email or ""),
+        ("system_company", _("Company"), lambda position: position.company or ""),
+        ("system_job_title", _("Job title"), lambda position: position.job_title or ""),
+        ("system_street", _("Address"), _attendee_address),
+    )
+    return [(label, getter) for identifier, label, getter in specs if settings.is_field_allowed(identifier)]
+
+
+def attendee_field_labels(settings):
+    return [label for label, _getter in attendee_field_specs(settings)]
+
+
+def attendee_field_values(position, settings):
+    return [getter(position) for _label, getter in attendee_field_specs(settings)]
 
 
 def build_voucher_redemption_csv(event, positions, settings) -> str:
@@ -601,20 +609,22 @@ def build_voucher_redemption_csv(event, positions, settings) -> str:
     from defusedcsv import csv
     from django.utils.translation import gettext_lazy as _
 
-    positions = list(positions)
-    attendee_labels = (
-        [str(label) for label, _value in attendee_display_fields(positions[0], settings)] if positions else []
-    )
     output = io.StringIO()
     writer = csv.writer(output, quoting=csv.QUOTE_NONNUMERIC, delimiter=",")
     writer.writerow(
-        [str(_("Voucher code")), *attendee_labels, str(_("Order")), str(_("Order status")), str(_("Redeemed on"))]
+        [
+            str(_("Voucher code")),
+            *[str(label) for label in attendee_field_labels(settings)],
+            str(_("Order")),
+            str(_("Order status")),
+            str(_("Redeemed on")),
+        ]
     )
     for position in positions:
         writer.writerow(
             [
                 position.voucher.code if position.voucher else "",
-                *[str(value) for _label, value in attendee_display_fields(position, settings)],
+                *[str(value) for value in attendee_field_values(position, settings)],
                 position.order.code,
                 str(position.order.get_status_display()),
                 position.order.datetime.isoformat(),
