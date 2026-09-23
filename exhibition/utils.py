@@ -554,3 +554,70 @@ def store_voucher_csv(event, vouchers):
     cached.file.save(VOUCHER_CSV_FILENAME, ContentFile(build_voucher_csv(event, vouchers).encode("utf-8")))
     cached.save()
     return cached
+
+
+VOUCHER_REDEMPTION_CSV_FILENAME = "voucher-redemptions.csv"
+
+
+def exhibitor_voucher_redemptions(exhibitor):
+    """Order positions that redeemed one of this exhibitor's vouchers, newest order first."""
+    from eventyay.base.models import Order, OrderPosition
+
+    from .models import ExhibitorVoucher
+
+    voucher_ids = ExhibitorVoucher.objects.filter(exhibitor=exhibitor).values_list("voucher_id", flat=True)
+    return (
+        OrderPosition.objects.filter(voucher_id__in=voucher_ids)
+        .exclude(order__status=Order.STATUS_CANCELED)
+        .select_related("order", "voucher")
+        .prefetch_related("answers")
+        .order_by("-order__datetime")
+    )
+
+
+def attendee_display_fields(position, settings):
+    """The attendee columns an exhibitor may see, as a list of (label, value) pairs."""
+    from django.utils.translation import gettext_lazy as _
+
+    fields = []
+    if settings.is_field_allowed("attendee_name"):
+        fields.append((_("Name"), position.attendee_name or ""))
+    if settings.is_field_allowed("attendee_email"):
+        fields.append((_("Email"), position.attendee_email or ""))
+    if settings.is_field_allowed("system_company"):
+        fields.append((_("Company"), position.company or ""))
+    if settings.is_field_allowed("system_job_title"):
+        fields.append((_("Job title"), position.job_title or ""))
+    if settings.is_field_allowed("system_street"):
+        parts = [position.street, position.zipcode, position.city, str(position.country) if position.country else ""]
+        fields.append((_("Address"), ", ".join(part for part in parts if part)))
+    return fields
+
+
+def build_voucher_redemption_csv(event, positions, settings) -> str:
+    """Render an exhibitor's voucher redemptions as CSV, matching the columns shown on their page."""
+    import io
+
+    from defusedcsv import csv
+    from django.utils.translation import gettext_lazy as _
+
+    positions = list(positions)
+    attendee_labels = (
+        [str(label) for label, _value in attendee_display_fields(positions[0], settings)] if positions else []
+    )
+    output = io.StringIO()
+    writer = csv.writer(output, quoting=csv.QUOTE_NONNUMERIC, delimiter=",")
+    writer.writerow(
+        [str(_("Voucher code")), *attendee_labels, str(_("Order")), str(_("Order status")), str(_("Redeemed on"))]
+    )
+    for position in positions:
+        writer.writerow(
+            [
+                position.voucher.code if position.voucher else "",
+                *[str(value) for _label, value in attendee_display_fields(position, settings)],
+                position.order.code,
+                str(position.order.get_status_display()),
+                position.order.datetime.isoformat(),
+            ]
+        )
+    return output.getvalue()
