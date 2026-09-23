@@ -92,12 +92,17 @@ from .models import (
 from .social_links import serialize_social_link
 from .utils import (
     VOUCHER_CSV_FILENAME,
+    VOUCHER_REDEMPTION_CSV_FILENAME,
     add_external_image_csp_sources,
     allow_blob_image_previews,
+    attendee_field_labels,
+    attendee_field_values,
     build_exhibitor_video_embed,
     build_voucher_csv,
+    build_voucher_redemption_csv,
     claim_pool_vouchers,
     event_exhibitor_settings,
+    exhibitor_voucher_redemptions,
     pool_remaining,
     provision_exhibitor_devices,
     public_exhibitor_sessions,
@@ -818,10 +823,11 @@ class UserProposalListView(PublicCallEnabledMixin, PublicEventLoginRequiredMixin
         return ExhibitionProposal.objects.filter(event=self.request.event, user=user).exists()
 
     def get_queryset(self):
-        return ExhibitionProposal.objects.filter(
-            event=self.request.event,
-            user=self.request.user,
-        ).order_by("-updated", "-created")
+        return (
+            ExhibitionProposal.objects.filter(event=self.request.event, user=self.request.user)
+            .select_related("approved_exhibitor")
+            .order_by("-updated", "-created")
+        )
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -831,6 +837,87 @@ class UserProposalListView(PublicCallEnabledMixin, PublicEventLoginRequiredMixin
             proposal.submitter_can_edit = proposal.editable and (
                 not proposal.requires_open_call_to_edit or settings.call_is_open
             )
+            exhibitor = proposal.approved_exhibitor
+            proposal.submitter_can_see_vouchers = bool(
+                proposal.state == ExhibitionProposalState.ACCEPTED and exhibitor and exhibitor.allow_voucher_access
+            )
+        return context
+
+
+class UserVoucherRedemptionListView(PublicCallEnabledMixin, PublicEventLoginRequiredMixin, ListView):
+    """An accepted submitter's own voucher redemptions, when the organizer has granted voucher access."""
+
+    template_name = "exhibitors/public_proposal_vouchers.html"
+    context_object_name = "redemptions"
+    paginate_by = 50
+    enforce_private = True
+    require_call_enabled = False
+
+    def has_private_call_access(self, settings):
+        if super().has_private_call_access(settings):
+            return True
+        return self.request.user.is_authenticated
+
+    @cached_property
+    def proposal(self):
+        return get_object_or_404(
+            ExhibitionProposal.objects.select_related("approved_exhibitor"),
+            event=self.request.event,
+            user=self.request.user,
+            code=self.kwargs["code"],
+        )
+
+    @cached_property
+    def exhibitor(self):
+        exhibitor = self.proposal.approved_exhibitor
+        if (
+            self.proposal.state != ExhibitionProposalState.ACCEPTED
+            or exhibitor is None
+            or not exhibitor.allow_voucher_access
+        ):
+            raise Http404
+        return exhibitor
+
+    def get_queryset(self):
+        return exhibitor_voucher_redemptions(self.exhibitor)
+
+    def get(self, request, *args, **kwargs):
+        if request.GET.get("download") == "yes":
+            return self.download_csv()
+        return super().get(request, *args, **kwargs)
+
+    def download_csv(self):
+        body = build_voucher_redemption_csv(self.request.event, self.get_queryset(), self.exhibition_settings)
+        response = HttpResponse(body.encode("utf-8"), content_type="text/csv; charset=utf-8")
+        response["Content-Disposition"] = f'attachment; filename="{VOUCHER_REDEMPTION_CSV_FILENAME}"'
+        response["Cache-Control"] = "no-store"
+        return response
+
+    @cached_property
+    def exhibition_settings(self):
+        return self.get_exhibition_settings()
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        settings = self.exhibition_settings
+        context["proposal"] = self.proposal
+        context["exhibitor"] = self.exhibitor
+        context["attendee_labels"] = attendee_field_labels(settings)
+        context["rows"] = [
+            {
+                "voucher_code": position.voucher.code if position.voucher else "",
+                "attendee": attendee_field_values(position, settings),
+                "order": position.order,
+                "redeemed_at": position.order.datetime,
+            }
+            for position in context["redemptions"]
+        ]
+        context["issued_count"] = ExhibitorVoucher.objects.filter(exhibitor=self.exhibitor).count()
+        context["redeemed_count"] = self.get_queryset().count()
+        context["list_url"] = reverse(
+            "plugins:exhibition:proposal.user_list",
+            kwargs={"organizer": self.request.event.organizer.slug, "event": self.request.event.slug},
+        )
         return context
 
 

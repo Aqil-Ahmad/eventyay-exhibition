@@ -55,6 +55,7 @@ from .views import (
     UserProposalListView,
     UserProposalReinstateView,
     UserProposalWithdrawView,
+    UserVoucherRedemptionListView,
 )
 
 urlpatterns = [
@@ -87,6 +88,11 @@ urlpatterns = [
         "<str:organizer>/<str:event>/exhibition/call/proposals/<str:code>/",
         UserProposalEditView.as_view(),
         name="proposal.user_edit",
+    ),
+    path(
+        "<str:organizer>/<str:event>/exhibition/call/proposals/<str:code>/vouchers/",
+        UserVoucherRedemptionListView.as_view(),
+        name="proposal.user_vouchers",
     ),
     path(
         "<str:organizer>/<str:event>/exhibition/call/proposals/<str:code>/withdraw/",

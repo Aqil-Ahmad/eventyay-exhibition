@@ -1,0 +1,61 @@
+{% extends "exhibitors/call_base.html" %}
+{% load i18n %}
+
+{% block call_content %}
+    <h2 id="exhibition-call-heading">
+        {% blocktrans trimmed with name=exhibitor.name %}
+            Voucher redemptions — {{ name }}
+        {% endblocktrans %}
+    </h2>
+
+    <p class="text-muted">
+        {% blocktrans trimmed count counter=redeemed_count with redeemed=redeemed_count issued=issued_count %}
+            {{ redeemed }} of your {{ issued }} vouchers has been redeemed.
+        {% plural %}
+            {{ redeemed }} of your {{ issued }} vouchers have been redeemed.
+        {% endblocktrans %}
+    </p>
+
+    {% if rows %}
+        <p class="text-right">
+            <a class="btn btn-default btn-sm" href="?download=yes">
+                <i class="fa fa-download"></i> {% trans "Download CSV" %}
+            </a>
+        </p>
+        <div class="table-responsive">
+            <table class="table table-sm table-flip">
+                <thead>
+                <tr>
+                    <th>{% trans "Voucher code" %}</th>
+                    {% for label in attendee_labels %}
+                        <th>{{ label }}</th>
+                    {% endfor %}
+                    <th>{% trans "Order" %}</th>
+                    <th>{% trans "Order status" %}</th>
+                    <th>{% trans "Redeemed on" %}</th>
+                </tr>
+                </thead>
+                <tbody>
+                {% for row in rows %}
+                    <tr>
+                        <td><code>{{ row.voucher_code }}</code></td>
+                        {% for value in row.attendee %}
+                            <td>{{ value|default:"—" }}</td>
+                        {% endfor %}
+                        <td>{{ row.order.code }}</td>
+                        <td>{{ row.order.get_status_display }}</td>
+                        <td>{{ row.redeemed_at|date:"SHORT_DATETIME_FORMAT" }}</td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% include "pretixpresale/pagination.html" %}
+    {% else %}
+        <p class="text-center">{% trans "None of your vouchers have been redeemed yet." %}</p>
+    {% endif %}
+
+    <p>
+        <a href="{{ list_url }}">{% trans "Back to your exhibition requests" %}</a>
+    </p>
+{% endblock %}
