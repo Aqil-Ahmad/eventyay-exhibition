@@ -1,5 +1,6 @@
 import io
 import json
+from urllib.parse import quote
 
 from defusedcsv import csv
 from django.conf import settings as django_settings
@@ -117,6 +118,15 @@ def event_kwargs(event):
 
 def call_access_session_key(event):
     return f"exhibition_call_access_{event.pk}"
+
+
+def call_auth_urls(event):
+    """Log in / registration URLs that send the visitor on to the exhibition request form."""
+    next_url = reverse("plugins:exhibition:request.add", kwargs=event_kwargs(event))
+    return {
+        "call_login_url": f"{reverse('auth.login')}?next={quote(next_url)}",
+        "call_register_url": f"{reverse('account_signup')}?next={quote(next_url)}",
+    }
 
 
 def organization_list_url(event, organization_type):
@@ -774,6 +784,8 @@ class PublicCallView(PublicCallEnabledMixin, TemplateView):
                 event=self.request.event,
                 user=self.request.user,
             )
+        else:
+            context.update(call_auth_urls(self.request.event))
         return context
 
 
@@ -1898,6 +1910,12 @@ class ExhibitionQuestionDeleteView(EventPermissionRequiredMixin, DeleteView):
 
     def get_queryset(self):
         return ExhibitionQuestion.objects.filter(event=self.request.event)
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        # Deleting the field drops the condition with it, so these stop being conditional.
+        context["dependent_questions"] = list(self.object.dependent_questions.all())
+        return context
 
     def form_valid(self, form):
         self.object.log_action(
