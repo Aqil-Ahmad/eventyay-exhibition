@@ -130,9 +130,9 @@ LOCKED_FIELD_NOTICE = _(
     "This field is required for the exhibitor profile to display on the public event page and cannot be removed."
 )
 
-LOGO_HELP_TEXT = _("PNG, JPG or SVG, up to 10 MB. A square image of at least 400 × 400 pixels works best.")
+LOGO_HELP_TEXT = _("PNG or JPG, up to 10 MB. A square image of at least 400 × 400 pixels works best.")
 
-HEADER_IMAGE_HELP_TEXT = _("PNG, JPG or SVG, up to 10 MB. A wide image of at least 1200 × 400 pixels works best.")
+HEADER_IMAGE_HELP_TEXT = _("PNG or JPG, up to 10 MB. A wide image of at least 1200 × 400 pixels works best.")
 
 PROPOSAL_DEFAULT_FIELDS = (
     {
