@@ -560,19 +560,23 @@ VOUCHER_REDEMPTION_CSV_FILENAME = "voucher-redemptions.csv"
 
 
 def exhibitor_voucher_redemptions(exhibitor):
-    """Order positions that redeemed one of this exhibitor's vouchers, newest order first."""
+    """Order positions that redeemed one of this exhibitor's vouchers, newest order first.
+
+    Order positions are organizer-scoped, and the plugin's own URLs run outside the presale
+    scope, so the queryset is built inside an explicit scope for this exhibitor's organizer.
+    """
     from eventyay.base.models import Order, OrderPosition
 
     from .models import ExhibitorVoucher
 
     voucher_ids = ExhibitorVoucher.objects.filter(exhibitor=exhibitor).values_list("voucher_id", flat=True)
-    return (
-        OrderPosition.objects.filter(voucher_id__in=voucher_ids)
-        .exclude(order__status=Order.STATUS_CANCELED)
-        .select_related("order", "voucher")
-        .prefetch_related("answers")
-        .order_by("-order__datetime")
-    )
+    with scope(organizer=exhibitor.event.organizer):
+        return (
+            OrderPosition.objects.filter(voucher_id__in=voucher_ids)
+            .exclude(order__status=Order.STATUS_CANCELED)
+            .select_related("order", "voucher")
+            .order_by("-order__datetime")
+        )
 
 
 def _attendee_address(position):
