@@ -58,7 +58,7 @@ def _redeem(event, exhibitor, *, code, attendee_name="Dana Scully", status=Order
     )
     return OrderPosition.objects.create(
         order=order,
-        item=product,
+        product=product,
         price=Decimal("0"),
         voucher=voucher,
         attendee_name_parts={"_legacy": attendee_name},
