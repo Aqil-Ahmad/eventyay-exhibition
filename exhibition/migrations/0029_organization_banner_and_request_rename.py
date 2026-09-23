@@ -115,7 +115,7 @@ class Migration(migrations.Migration):
     dependencies = [
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
         ("base", "0001_initial"),
-        ("exhibition", "0027_exhibitorinfo_sessions"),
+        ("exhibition", "0028_question_dependency"),
     ]
 
     operations = [
