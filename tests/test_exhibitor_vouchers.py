@@ -16,8 +16,8 @@ from exhibition.models import (
     ExhibitorSettings,
     ExhibitorVoucher,
 )
-from exhibition.utils import build_voucher_redemption_csv, exhibitor_voucher_redemptions
-from exhibition.views import UserVoucherRedemptionListView
+from exhibition.utils import build_exhibitor_voucher_csv, exhibitor_voucher_redemptions, exhibitor_voucher_rows
+from exhibition.views import UserVoucherListView
 
 
 def _settings(event, **kwargs):
@@ -71,7 +71,7 @@ def _view(proposal, user, event, query=""):
     request.user = user
     request.event = event
     request.session = {}
-    view = UserVoucherRedemptionListView()
+    view = UserVoucherListView()
     view.request = request
     view.kwargs = {"code": proposal.code}
     return view
@@ -142,7 +142,8 @@ def test_attendee_columns_follow_the_allowed_fields(event):
         proposal, exhibitor, user = _accepted(event)
         position = _redeem(event, exhibitor, code="SHOW1234")
 
-        body = build_voucher_redemption_csv(event, [position], settings)
+        rows = [{"voucher": position.voucher, "position": position}]
+        body = build_exhibitor_voucher_csv(event, rows, settings)
 
         assert "Name" in body.splitlines()[0]
         assert "Email" not in body.splitlines()[0]
@@ -162,3 +163,38 @@ def test_csv_download_returns_a_file(event):
         assert response.status_code == 200
         assert response["Content-Disposition"].endswith('filename="voucher-redemptions.csv"')
         assert "CSV12345" in response.content.decode("utf-8")
+
+
+@pytest.mark.django_db
+def test_unredeemed_vouchers_are_listed_with_a_redeem_link(event):
+    with scopes_disabled():
+        settings = _settings(event)
+        proposal, exhibitor, user = _accepted(event)
+        _redeem(event, exhibitor, code="USED1234")
+        spare = Voucher.objects.create(event=event, code="SPARE123")
+        ExhibitorVoucher.objects.create(exhibitor=exhibitor, voucher=spare)
+
+        rows = exhibitor_voucher_rows(exhibitor)
+
+        assert {row["voucher"].code for row in rows} == {"USED1234", "SPARE123"}
+        assert [row["voucher"].code for row in rows if row["position"] is None] == ["SPARE123"]
+
+        body = build_exhibitor_voucher_csv(event, rows, settings)
+        assert "Not redeemed" in body
+        assert "?voucher=SPARE123" in body
+
+
+@pytest.mark.django_db
+def test_status_filter_narrows_the_rows(event):
+    with scopes_disabled():
+        _settings(event)
+        proposal, exhibitor, user = _accepted(event)
+        _redeem(event, exhibitor, code="USED1234")
+        spare = Voucher.objects.create(event=event, code="SPARE123")
+        ExhibitorVoucher.objects.create(exhibitor=exhibitor, voucher=spare)
+
+        pending = _view(proposal, user, event, query="?status=pending")
+        redeemed = _view(proposal, user, event, query="?status=redeemed")
+
+        assert [row["voucher"].code for row in pending.get_queryset()] == ["SPARE123"]
+        assert [row["voucher"].code for row in redeemed.get_queryset()] == ["USED1234"]
