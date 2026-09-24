@@ -91,18 +91,18 @@ from .models import (
 )
 from .social_links import serialize_social_link
 from .utils import (
+    EXHIBITOR_VOUCHER_CSV_FILENAME,
     VOUCHER_CSV_FILENAME,
-    VOUCHER_REDEMPTION_CSV_FILENAME,
     add_external_image_csp_sources,
     allow_blob_image_previews,
     attendee_field_labels,
     attendee_field_values,
     build_exhibitor_video_embed,
+    build_exhibitor_voucher_csv,
     build_voucher_csv,
-    build_voucher_redemption_csv,
     claim_pool_vouchers,
     event_exhibitor_settings,
-    exhibitor_voucher_redemptions,
+    exhibitor_voucher_rows,
     pool_remaining,
     provision_exhibitor_devices,
     public_exhibitor_sessions,
@@ -111,6 +111,7 @@ from .utils import (
     resolve_voucher_defaults,
     should_hide_applicant_emails,
     sync_exhibitor_from_proposal,
+    voucher_redeem_url,
 )
 
 
@@ -844,14 +845,15 @@ class UserProposalListView(PublicCallEnabledMixin, PublicEventLoginRequiredMixin
         return context
 
 
-class UserVoucherRedemptionListView(PublicCallEnabledMixin, PublicEventLoginRequiredMixin, ListView):
-    """An accepted submitter's own voucher redemptions, when the organizer has granted voucher access."""
+class UserVoucherListView(PublicCallEnabledMixin, PublicEventLoginRequiredMixin, ListView):
+    """An accepted submitter's own vouchers and their redemptions, when the organizer has granted access."""
 
     template_name = "exhibitors/public_proposal_vouchers.html"
-    context_object_name = "redemptions"
+    context_object_name = "voucher_rows"
     paginate_by = 50
     enforce_private = True
     require_call_enabled = False
+    STATUS_FILTERS = ("redeemed", "pending")
 
     def has_private_call_access(self, settings):
         if super().has_private_call_access(settings):
@@ -878,8 +880,26 @@ class UserVoucherRedemptionListView(PublicCallEnabledMixin, PublicEventLoginRequ
             raise Http404
         return exhibitor
 
+    @cached_property
+    def exhibition_settings(self):
+        return self.get_exhibition_settings()
+
+    @cached_property
+    def all_rows(self):
+        return exhibitor_voucher_rows(self.exhibitor)
+
+    @property
+    def status_filter(self):
+        status = self.request.GET.get("status")
+        return status if status in self.STATUS_FILTERS else ""
+
     def get_queryset(self):
-        return exhibitor_voucher_redemptions(self.exhibitor)
+        status = self.status_filter
+        if status == "redeemed":
+            return [row for row in self.all_rows if row["position"] is not None]
+        if status == "pending":
+            return [row for row in self.all_rows if row["position"] is None]
+        return self.all_rows
 
     def get(self, request, *args, **kwargs):
         if request.GET.get("download") == "yes":
@@ -887,15 +907,11 @@ class UserVoucherRedemptionListView(PublicCallEnabledMixin, PublicEventLoginRequ
         return super().get(request, *args, **kwargs)
 
     def download_csv(self):
-        body = build_voucher_redemption_csv(self.request.event, self.get_queryset(), self.exhibition_settings)
+        body = build_exhibitor_voucher_csv(self.request.event, self.get_queryset(), self.exhibition_settings)
         response = HttpResponse(body.encode("utf-8"), content_type="text/csv; charset=utf-8")
-        response["Content-Disposition"] = f'attachment; filename="{VOUCHER_REDEMPTION_CSV_FILENAME}"'
+        response["Content-Disposition"] = f'attachment; filename="{EXHIBITOR_VOUCHER_CSV_FILENAME}"'
         response["Cache-Control"] = "no-store"
         return response
-
-    @cached_property
-    def exhibition_settings(self):
-        return self.get_exhibition_settings()
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -903,21 +919,20 @@ class UserVoucherRedemptionListView(PublicCallEnabledMixin, PublicEventLoginRequ
         context["proposal"] = self.proposal
         context["exhibitor"] = self.exhibitor
         context["attendee_labels"] = attendee_field_labels(settings)
+        context["status_filter"] = self.status_filter
         context["rows"] = [
             {
-                "voucher_code": position.voucher.code if position.voucher else "",
-                "attendee": attendee_field_values(position, settings),
-                "order": position.order,
-                "redeemed_at": position.order.datetime,
+                "voucher_code": row["voucher"].code,
+                "redeemed": row["position"] is not None,
+                "attendee": attendee_field_values(row["position"], settings) if row["position"] else [],
+                "order": row["position"].order if row["position"] else None,
+                "redeemed_at": row["position"].order.datetime if row["position"] else None,
+                "redeem_url": "" if row["position"] else voucher_redeem_url(self.request.event, row["voucher"]),
             }
-            for position in context["redemptions"]
+            for row in context["voucher_rows"]
         ]
-        context["issued_count"] = ExhibitorVoucher.objects.filter(exhibitor=self.exhibitor).count()
-        context["redeemed_count"] = self.get_queryset().count()
-        context["list_url"] = reverse(
-            "plugins:exhibition:proposal.user_list",
-            kwargs={"organizer": self.request.event.organizer.slug, "event": self.request.event.slug},
-        )
+        context["issued_count"] = len(self.all_rows)
+        context["redeemed_count"] = sum(1 for row in self.all_rows if row["position"] is not None)
         return context
 
 
