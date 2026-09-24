@@ -212,3 +212,31 @@ def test_each_tab_shows_only_its_own_vouchers(event):
 
         assert [voucher.code for voucher in pending.get_queryset()] == ["SPARE123"]
         assert [position.voucher.code for position in redeemed.get_queryset()] == ["USED1234"]
+
+
+@pytest.mark.django_db
+def test_download_is_not_swallowed_by_the_filter_form(event):
+    with scopes_disabled():
+        _settings(event)
+        proposal, exhibitor, user = _accepted(event)
+        _redeem(event, exhibitor, code="USED1234")
+
+        view = _view(proposal, user, event, query="?status=&download=yes")
+        response = view.get(view.request)
+
+        assert response["Content-Disposition"].endswith('filename="voucher-redemptions.csv"')
+
+
+@pytest.mark.django_db
+def test_blank_status_shows_the_redeemed_tab(event):
+    with scopes_disabled():
+        _settings(event)
+        proposal, exhibitor, user = _accepted(event)
+        _redeem(event, exhibitor, code="USED1234")
+        spare = Voucher.objects.create(event=event, code="SPARE123")
+        ExhibitorVoucher.objects.create(exhibitor=exhibitor, voucher=spare)
+
+        view = _view(proposal, user, event, query="?status=")
+
+        assert view.showing_unredeemed is False
+        assert [position.voucher.code for position in view.get_queryset()] == ["USED1234"]
