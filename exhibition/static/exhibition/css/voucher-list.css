@@ -19,6 +19,8 @@
 .exhibition-voucher-tabs .btn {
     white-space: nowrap;
     border-radius: 0;
+    border-style: solid;
+    border-width: 1px;
 }
 
 .exhibition-voucher-tabs form:first-child .btn {
