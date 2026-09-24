@@ -1,10 +1,16 @@
 {% extends "exhibitors/call_base.html" %}
 {% load i18n %}
+{% load static %}
+
+{% block custom_header %}
+    {{ block.super }}
+    <link rel="stylesheet" href="{% static 'exhibition/css/voucher-list.css' %}">
+{% endblock %}
 
 {% block call_content %}
     <h2 id="exhibition-call-heading">
         {% blocktrans trimmed with name=exhibitor.name %}
-            Voucher redemptions — {{ name }}
+            Vouchers — {{ name }}
         {% endblocktrans %}
     </h2>
 
@@ -16,22 +22,36 @@
         {% endblocktrans %}
     </p>
 
-    {% if rows %}
-        <p class="text-right">
-            <a class="btn btn-default btn-sm" href="?download=yes">
+    {% if issued_count %}
+        <div class="exhibition-voucher-toolbar">
+            <div class="btn-group" role="group" aria-label="{% trans 'Filter vouchers' %}">
+                <a class="btn btn-default btn-sm {% if not status_filter %}active{% endif %}" href="?">
+                    {% trans "All" %}
+                </a>
+                <a class="btn btn-default btn-sm {% if status_filter == 'redeemed' %}active{% endif %}" href="?status=redeemed">
+                    {% trans "Redeemed" %}
+                </a>
+                <a class="btn btn-default btn-sm {% if status_filter == 'pending' %}active{% endif %}" href="?status=pending">
+                    {% trans "Not redeemed" %}
+                </a>
+            </div>
+            <a class="btn btn-default btn-sm" href="?{% if status_filter %}status={{ status_filter }}&amp;{% endif %}download=yes">
                 <i class="fa fa-download"></i> {% trans "Download CSV" %}
             </a>
-        </p>
+        </div>
+    {% endif %}
+
+    {% if rows %}
         <div class="table-responsive">
             <table class="table table-sm table-flip">
                 <thead>
                 <tr>
                     <th>{% trans "Voucher code" %}</th>
+                    <th>{% trans "Status" %}</th>
                     {% for label in attendee_labels %}
                         <th>{{ label }}</th>
                     {% endfor %}
                     <th>{% trans "Order" %}</th>
-                    <th>{% trans "Order status" %}</th>
                     <th>{% trans "Redeemed on" %}</th>
                 </tr>
                 </thead>
@@ -39,23 +59,32 @@
                 {% for row in rows %}
                     <tr>
                         <td><code>{{ row.voucher_code }}</code></td>
-                        {% for value in row.attendee %}
-                            <td>{{ value|default:"—" }}</td>
-                        {% endfor %}
-                        <td>{{ row.order.code }}</td>
-                        <td>{{ row.order.get_status_display }}</td>
-                        <td>{{ row.redeemed_at|date:"SHORT_DATETIME_FORMAT" }}</td>
+                        {% if row.redeemed %}
+                            <td><span class="label label-success">{% trans "Redeemed" %}</span></td>
+                            {% for value in row.attendee %}
+                                <td>{{ value|default:"—" }}</td>
+                            {% endfor %}
+                            <td>{{ row.order.code }} <span class="text-muted">{{ row.order.get_status_display }}</span></td>
+                            <td>{{ row.redeemed_at|date:"SHORT_DATETIME_FORMAT" }}</td>
+                        {% else %}
+                            <td><span class="label label-default">{% trans "Not redeemed" %}</span></td>
+                            <td colspan="{{ attendee_labels|length|add:2 }}">
+                                <a href="{{ row.redeem_url }}" target="_blank" rel="noopener noreferrer">
+                                    {% trans "Redeem link" %}
+                                </a>
+                            </td>
+                        {% endif %}
                     </tr>
                 {% endfor %}
                 </tbody>
             </table>
         </div>
         {% include "pretixpresale/pagination.html" %}
-    {% else %}
+    {% elif status_filter == 'redeemed' %}
         <p class="text-center">{% trans "None of your vouchers have been redeemed yet." %}</p>
+    {% elif status_filter == 'pending' %}
+        <p class="text-center">{% trans "All of your vouchers have been redeemed." %}</p>
+    {% else %}
+        <p class="text-center">{% trans "No vouchers have been assigned to you yet." %}</p>
     {% endif %}
-
-    <p>
-        <a href="{{ list_url }}">{% trans "Back to your exhibition requests" %}</a>
-    </p>
 {% endblock %}
