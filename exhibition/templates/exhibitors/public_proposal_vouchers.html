@@ -24,67 +24,91 @@
 
     {% if issued_count %}
         <div class="exhibition-voucher-toolbar">
-            <div class="btn-group" role="group" aria-label="{% trans 'Filter vouchers' %}">
-                <a class="btn btn-default btn-sm {% if not status_filter %}active{% endif %}" href="?">
-                    {% trans "All" %}
+            <div class="btn-group" role="group" aria-label="{% trans 'Choose which vouchers to show' %}">
+                <a class="btn btn-default btn-sm {% if not showing_unredeemed %}active{% endif %}" href="?">
+                    {% blocktrans trimmed with count=redeemed_count %}Redeemed ({{ count }}){% endblocktrans %}
                 </a>
-                <a class="btn btn-default btn-sm {% if status_filter == 'redeemed' %}active{% endif %}" href="?status=redeemed">
-                    {% trans "Redeemed" %}
-                </a>
-                <a class="btn btn-default btn-sm {% if status_filter == 'pending' %}active{% endif %}" href="?status=pending">
-                    {% trans "Not redeemed" %}
+                <a class="btn btn-default btn-sm {% if showing_unredeemed %}active{% endif %}" href="?status=pending">
+                    {% blocktrans trimmed with count=unredeemed_count %}Not redeemed ({{ count }}){% endblocktrans %}
                 </a>
             </div>
-            <a class="btn btn-default btn-sm" href="?{% if status_filter %}status={{ status_filter }}&amp;{% endif %}download=yes">
+            <a class="btn btn-default btn-sm" href="?{% if showing_unredeemed %}status=pending&amp;{% endif %}download=yes">
                 <i class="fa fa-download"></i> {% trans "Download CSV" %}
             </a>
         </div>
     {% endif %}
 
-    {% if rows %}
-        <div class="table-responsive">
-            <table class="table table-sm table-flip">
-                <thead>
-                <tr>
-                    <th>{% trans "Voucher code" %}</th>
-                    <th>{% trans "Status" %}</th>
-                    {% for label in attendee_labels %}
-                        <th>{{ label }}</th>
-                    {% endfor %}
-                    <th>{% trans "Order" %}</th>
-                    <th>{% trans "Redeemed on" %}</th>
-                </tr>
-                </thead>
-                <tbody>
-                {% for row in rows %}
+    {% if showing_unredeemed %}
+        {% if vouchers %}
+            <div class="table-responsive">
+                <table class="table table-sm table-flip">
+                    <thead>
                     <tr>
-                        <td><code>{{ row.voucher_code }}</code></td>
-                        {% if row.redeemed %}
-                            <td><span class="label label-success">{% trans "Redeemed" %}</span></td>
+                        <th>{% trans "Voucher code" %}</th>
+                        <th>{% trans "Product" %}</th>
+                        <th>{% trans "Price effect" %}</th>
+                        <th>{% trans "Value" %}</th>
+                        <th>{% trans "Valid until" %}</th>
+                        <th>{% trans "Maximum usages" %}</th>
+                        <th>{% trans "Redeem link" %}</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    {% for voucher in vouchers %}
+                        <tr>
+                            <td><code>{{ voucher.code }}</code></td>
+                            <td>{{ voucher.product|default:"—" }}</td>
+                            <td>{{ voucher.price_mode }}</td>
+                            <td>{{ voucher.value|default:"—" }}</td>
+                            <td>{{ voucher.valid_until|date:"SHORT_DATETIME_FORMAT"|default:"—" }}</td>
+                            <td>{{ voucher.max_usages }}</td>
+                            <td>
+                                <a href="{{ voucher.redeem_url }}" target="_blank" rel="noopener noreferrer">
+                                    {% trans "Open" %}
+                                </a>
+                            </td>
+                        </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% include "pretixpresale/pagination.html" %}
+        {% else %}
+            <p class="text-center">{% trans "All of your vouchers have been redeemed." %}</p>
+        {% endif %}
+    {% else %}
+        {% if rows %}
+            <div class="table-responsive">
+                <table class="table table-sm table-flip">
+                    <thead>
+                    <tr>
+                        <th>{% trans "Voucher code" %}</th>
+                        {% for label in attendee_labels %}
+                            <th>{{ label }}</th>
+                        {% endfor %}
+                        <th>{% trans "Order" %}</th>
+                        <th>{% trans "Order status" %}</th>
+                        <th>{% trans "Redeemed on" %}</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    {% for row in rows %}
+                        <tr>
+                            <td><code>{{ row.voucher_code }}</code></td>
                             {% for value in row.attendee %}
                                 <td>{{ value|default:"—" }}</td>
                             {% endfor %}
-                            <td>{{ row.order.code }} <span class="text-muted">{{ row.order.get_status_display }}</span></td>
+                            <td>{{ row.order.code }}</td>
+                            <td>{{ row.order.get_status_display }}</td>
                             <td>{{ row.redeemed_at|date:"SHORT_DATETIME_FORMAT" }}</td>
-                        {% else %}
-                            <td><span class="label label-default">{% trans "Not redeemed" %}</span></td>
-                            <td colspan="{{ attendee_labels|length|add:2 }}">
-                                <a href="{{ row.redeem_url }}" target="_blank" rel="noopener noreferrer">
-                                    {% trans "Redeem link" %}
-                                </a>
-                            </td>
-                        {% endif %}
-                    </tr>
-                {% endfor %}
-                </tbody>
-            </table>
-        </div>
-        {% include "pretixpresale/pagination.html" %}
-    {% elif status_filter == 'redeemed' %}
-        <p class="text-center">{% trans "None of your vouchers have been redeemed yet." %}</p>
-    {% elif status_filter == 'pending' %}
-        <p class="text-center">{% trans "All of your vouchers have been redeemed." %}</p>
-    {% else %}
-        <p class="text-center">{% trans "No vouchers have been assigned to you yet." %}</p>
+                        </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% include "pretixpresale/pagination.html" %}
+        {% else %}
+            <p class="text-center">{% trans "None of your vouchers have been redeemed yet." %}</p>
+        {% endif %}
     {% endif %}
 {% endblock %}
