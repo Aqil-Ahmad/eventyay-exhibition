@@ -5,6 +5,7 @@
 {% block custom_header %}
     {{ block.super }}
     <link rel="stylesheet" href="{% static 'exhibition/css/voucher-list.css' %}">
+    <script defer src="{% static 'eventyay-common/js/ajax-filter.js' %}"></script>
 {% endblock %}
 
 {% block call_content %}
@@ -22,15 +23,22 @@
         {% endblocktrans %}
     </p>
 
+    <div data-ajax-results-region>
     {% if issued_count %}
         <div class="exhibition-voucher-toolbar">
             <div class="btn-group" role="group" aria-label="{% trans 'Choose which vouchers to show' %}">
-                <a class="btn btn-default btn-sm {% if not showing_unredeemed %}active{% endif %}" href="?">
-                    {% blocktrans trimmed with count=redeemed_count %}Redeemed ({{ count }}){% endblocktrans %}
-                </a>
-                <a class="btn btn-default btn-sm {% if showing_unredeemed %}active{% endif %}" href="?status=pending">
-                    {% blocktrans trimmed with count=unredeemed_count %}Not redeemed ({{ count }}){% endblocktrans %}
-                </a>
+                <form class="filter-form" method="get" action="">
+                    <input type="hidden" name="status" value="">
+                    <button type="submit" class="btn btn-default btn-sm {% if not showing_unredeemed %}active{% endif %}">
+                        {% blocktrans trimmed with count=redeemed_count %}Redeemed ({{ count }}){% endblocktrans %}
+                    </button>
+                </form>
+                <form class="filter-form" method="get" action="">
+                    <input type="hidden" name="status" value="pending">
+                    <button type="submit" class="btn btn-default btn-sm {% if showing_unredeemed %}active{% endif %}">
+                        {% blocktrans trimmed with count=unredeemed_count %}Not redeemed ({{ count }}){% endblocktrans %}
+                    </button>
+                </form>
             </div>
             <a class="btn btn-default btn-sm" href="?{% if showing_unredeemed %}status=pending&amp;{% endif %}download=yes">
                 <i class="fa fa-download"></i> {% trans "Download CSV" %}
@@ -111,4 +119,5 @@
             <p class="text-center">{% trans "None of your vouchers have been redeemed yet." %}</p>
         {% endif %}
     {% endif %}
+    </div>
 {% endblock %}
