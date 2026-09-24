@@ -556,7 +556,7 @@ def store_voucher_csv(event, vouchers):
     return cached
 
 
-VOUCHER_REDEMPTION_CSV_FILENAME = "voucher-redemptions.csv"
+EXHIBITOR_VOUCHER_CSV_FILENAME = "exhibitor-voucher-status.csv"
 
 
 def exhibitor_voucher_redemptions(exhibitor):
@@ -606,8 +606,33 @@ def attendee_field_values(position, settings):
     return [getter(position) for _label, getter in attendee_field_specs(settings)]
 
 
-def build_voucher_redemption_csv(event, positions, settings) -> str:
-    """Render an exhibitor's voucher redemptions as CSV, matching the columns shown on their page."""
+def exhibitor_voucher_rows(exhibitor):
+    """Every voucher this exhibitor holds: one row per redemption, plus one row per unused code."""
+    from .models import ExhibitorVoucher
+
+    redemptions = {}
+    for position in exhibitor_voucher_redemptions(exhibitor):
+        redemptions.setdefault(position.voucher_id, []).append(position)
+
+    links = ExhibitorVoucher.objects.filter(exhibitor=exhibitor).select_related("voucher").order_by("-voucher__id")
+    rows = []
+    for link in links:
+        positions = redemptions.get(link.voucher_id)
+        if positions:
+            rows.extend({"voucher": link.voucher, "position": position} for position in positions)
+        else:
+            rows.append({"voucher": link.voucher, "position": None})
+    rows.sort(
+        key=lambda row: (
+            row["position"] is None,
+            -(row["position"].order.datetime.timestamp() if row["position"] else 0),
+        )
+    )
+    return rows
+
+
+def build_exhibitor_voucher_csv(event, rows, settings) -> str:
+    """Render an exhibitor's vouchers and their redemptions as CSV, matching the page's columns."""
     import io
 
     from defusedcsv import csv
@@ -618,20 +643,31 @@ def build_voucher_redemption_csv(event, positions, settings) -> str:
     writer.writerow(
         [
             str(_("Voucher code")),
+            str(_("Status")),
             *[str(label) for label in attendee_field_labels(settings)],
             str(_("Order")),
             str(_("Order status")),
             str(_("Redeemed on")),
+            str(_("Redeem link")),
         ]
     )
-    for position in positions:
+    blanks = [""] * len(attendee_field_labels(settings))
+    for row in rows:
+        voucher, position = row["voucher"], row["position"]
+        if position is None:
+            writer.writerow(
+                [voucher.code, str(_("Not redeemed")), *blanks, "", "", "", voucher_redeem_url(event, voucher)]
+            )
+            continue
         writer.writerow(
             [
-                position.voucher.code if position.voucher else "",
+                voucher.code,
+                str(_("Redeemed")),
                 *[str(value) for value in attendee_field_values(position, settings)],
                 position.order.code,
                 str(position.order.get_status_display()),
                 position.order.datetime.isoformat(),
+                "",
             ]
         )
     return output.getvalue()
