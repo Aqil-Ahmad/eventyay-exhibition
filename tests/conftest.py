@@ -9,7 +9,7 @@ _PNG_BYTES = base64.b64decode(
     b"iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="
 )
 
-STORED_IMAGES = {"logo": "exhibitors/logos/Acme/logo.png", "header_image": "exhibitors/headers/Acme/header.png"}
+STORED_IMAGES = {"logo": "exhibitors/logos/Acme/logo.png", "banner": "exhibitors/banners/Acme/banner.png"}
 
 
 @pytest.fixture
@@ -28,12 +28,12 @@ def event(db):
 
 @pytest.fixture
 def image_uploads():
-    """Logo and header image are locked-required, so any valid form post must carry both files."""
+    """Logo and banner are locked-required, so any valid form post must carry both files."""
 
     def make():
         return {
             "logo": SimpleUploadedFile("logo.png", _PNG_BYTES, content_type="image/png"),
-            "header_image": SimpleUploadedFile("header.png", _PNG_BYTES, content_type="image/png"),
+            "banner": SimpleUploadedFile("banner.png", _PNG_BYTES, content_type="image/png"),
         }
 
     return make
