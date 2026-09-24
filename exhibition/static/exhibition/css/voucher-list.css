@@ -7,22 +7,27 @@
     margin-bottom: 12px;
 }
 
-.exhibition-voucher-toolbar .btn-group {
+.exhibition-voucher-tabs {
     display: inline-flex;
 }
 
-.exhibition-voucher-toolbar .btn-group form + form .btn {
+.exhibition-voucher-tabs form {
+    margin: 0;
+    flex: 0 0 auto;
+}
+
+.exhibition-voucher-tabs .btn {
+    white-space: nowrap;
+    border-radius: 0;
+}
+
+.exhibition-voucher-tabs form:first-child .btn {
+    border-top-left-radius: 4px;
+    border-bottom-left-radius: 4px;
+}
+
+.exhibition-voucher-tabs form:last-child .btn {
     margin-left: -1px;
-    border-top-left-radius: 0;
-    border-bottom-left-radius: 0;
-}
-
-.exhibition-voucher-toolbar .btn-group form:first-child .btn {
-    border-top-right-radius: 0;
-    border-bottom-right-radius: 0;
-}
-
-.exhibition-voucher-toolbar .btn-group .btn.active {
-    background: #e6e6e6;
-    box-shadow: inset 0 3px 5px rgba(0, 0, 0, 0.125);
+    border-top-right-radius: 4px;
+    border-bottom-right-radius: 4px;
 }

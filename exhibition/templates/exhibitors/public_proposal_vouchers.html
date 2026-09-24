@@ -26,16 +26,16 @@
     <div data-ajax-results-region>
     {% if issued_count %}
         <div class="exhibition-voucher-toolbar">
-            <div class="btn-group" role="group" aria-label="{% trans 'Choose which vouchers to show' %}">
+            <div class="exhibition-voucher-tabs" role="group" aria-label="{% trans 'Choose which vouchers to show' %}">
                 <form class="filter-form" method="get" action="">
                     <input type="hidden" name="status" value="">
-                    <button type="submit" class="btn btn-default btn-sm {% if not showing_unredeemed %}active{% endif %}">
+                    <button type="submit" class="btn btn-sm {% if showing_unredeemed %}btn-default{% else %}btn-primary{% endif %}">
                         {% blocktrans trimmed with count=redeemed_count %}Redeemed ({{ count }}){% endblocktrans %}
                     </button>
                 </form>
                 <form class="filter-form" method="get" action="">
                     <input type="hidden" name="status" value="pending">
-                    <button type="submit" class="btn btn-default btn-sm {% if showing_unredeemed %}active{% endif %}">
+                    <button type="submit" class="btn btn-sm {% if showing_unredeemed %}btn-primary{% else %}btn-default{% endif %}">
                         {% blocktrans trimmed with count=unredeemed_count %}Not redeemed ({{ count }}){% endblocktrans %}
                     </button>
                 </form>
