@@ -1,10 +1,15 @@
 from django.db import migrations, models
+from django.db.models import Q
 
 
 def publish_visible_organizations(apps, schema_editor):
-    """Everything visible on the public site today stays visible after the split."""
+    """Only what the public site actually rendered today stays visible after the split."""
     ExhibitorInfo = apps.get_model("exhibition", "ExhibitorInfo")
-    ExhibitorInfo.objects.filter(active=True).update(published=True)
+    has_logo = Q(logo__isnull=False) & ~Q(logo="")
+    has_banner = Q(banner__isnull=False) & ~Q(banner="")
+    on_exhibitor_page = Q(is_exhibitor=True) & has_logo & has_banner
+    on_front_page = Q(is_sponsor=True) & has_logo
+    ExhibitorInfo.objects.filter(Q(active=True) & (on_exhibitor_page | on_front_page)).update(published=True)
 
 
 class Migration(migrations.Migration):
