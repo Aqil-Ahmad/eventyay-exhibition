@@ -96,7 +96,8 @@ def test_publish_all_without_confirmation_only_previews(event):
         response = view.post(request)
 
         waiting.refresh_from_db()
-        assert response.status_code == 200
+        assert response.template_name == "exhibitors/publish_confirm.html"
+        assert list(response.context_data["waiting"]) == [waiting]
         assert waiting.published is False
 
 
