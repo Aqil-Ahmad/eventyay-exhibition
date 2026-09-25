@@ -2440,7 +2440,11 @@ class ExhibitorPublishView(EventPermissionRequiredMixin, View):
         return redirect(self.list_url())
 
     def publish_selected(self, request, *, published):
-        changed = self.apply(list(self.selected()), published, request.user)
+        selected = self.selected()
+        if published:
+            # Publishing an inactive organization would reveal it the moment it is reactivated.
+            selected = selected.filter(active=True)
+        changed = self.apply(list(selected), published, request.user)
         if not changed:
             messages.info(request, _("Nothing changed: the selected organizations already had that status."))
         elif published:
