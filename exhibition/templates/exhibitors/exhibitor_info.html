@@ -72,30 +72,38 @@
                     </button>
                 {% endif %}
                 {% if publish_url %}
-                    <div class="btn-group organization-publish-actions">
-                        <button type="submit" form="organization-publish" name="action" value="publish_all" class="btn btn-primary" title="{% trans "Reveal every approved organization on the public website at once" %}">
-                            <i class="fa fa-globe"></i>
-                            {% blocktrans trimmed with count=unpublished_approved_count %}
-                                Publish all approved ({{ count }})
-                            {% endblocktrans %}
+                    {% blocktrans trimmed asvar label_publish_all with count=unpublished_approved_count %}
+                        Publish all approved ({{ count }})
+                    {% endblocktrans %}
+                    {% trans "Publish selected" as label_publish %}
+                    {% trans "Unpublish selected" as label_unpublish %}
+                    <span class="btn-group organization-publish-actions" data-organization-publish-group>
+                        <button type="submit" form="organization-publish" name="action" value="publish_all" class="btn btn-primary" data-organization-publish-submit>
+                            <i class="fa fa-globe" data-organization-publish-icon></i>
+                            <span data-organization-publish-label>{{ label_publish_all }}</span>
                         </button>
                         <button type="button" class="btn btn-primary dropdown-toggle" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
                             <span class="caret"></span>
-                            <span class="sr-only">{% trans "More publishing actions" %}</span>
+                            <span class="sr-only">{% trans "Choose a publishing action" %}</span>
                         </button>
                         <ul class="dropdown-menu dropdown-menu-right">
                             <li>
-                                <button type="submit" form="organization-publish" name="action" value="publish" data-organization-publish disabled>
-                                    <i class="fa fa-eye"></i> {% trans "Publish selected" %}
+                                <button type="button" data-organization-publish-mode="publish_all" data-icon="fa-globe" data-label="{{ label_publish_all }}">
+                                    <i class="fa fa-globe"></i> {{ label_publish_all }}
                                 </button>
                             </li>
                             <li>
-                                <button type="submit" form="organization-publish" name="action" value="unpublish" data-organization-publish disabled>
-                                    <i class="fa fa-eye-slash"></i> {% trans "Unpublish selected" %}
+                                <button type="button" data-organization-publish-mode="publish" data-icon="fa-eye" data-label="{{ label_publish }}" data-needs-selection="1">
+                                    <i class="fa fa-eye"></i> {{ label_publish }}
+                                </button>
+                            </li>
+                            <li>
+                                <button type="button" data-organization-publish-mode="unpublish" data-icon="fa-eye-slash" data-label="{{ label_unpublish }}" data-needs-selection="1">
+                                    <i class="fa fa-eye-slash"></i> {{ label_unpublish }}
                                 </button>
                             </li>
                         </ul>
-                    </div>
+                    </span>
                 {% endif %}
                 <span class="text-muted" data-organization-selected-count></span>
             {% endif %}

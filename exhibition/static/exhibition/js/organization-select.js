@@ -12,8 +12,12 @@
         var selectAll = scope.querySelector('[data-organization-select-all]')
         var countLabel = scope.querySelector('[data-organization-selected-count]')
         var downloadLink = scope.querySelector('[data-organization-download-link]')
-        var publishButtons = Array.prototype.slice.call(scope.querySelectorAll('[data-organization-publish]'))
         var publishForm = document.getElementById('organization-publish')
+        var publishSubmit = scope.querySelector('[data-organization-publish-submit]')
+        var publishLabel = scope.querySelector('[data-organization-publish-label]')
+        var publishIcon = scope.querySelector('[data-organization-publish-icon]')
+        var publishModes = Array.prototype.slice.call(scope.querySelectorAll('[data-organization-publish-mode]'))
+        var publishNeedsSelection = false
         var selectedLabel = scope.dataset.selectedLabel || 'selected'
         var baseHref = downloadLink ? downloadLink.getAttribute('href') : null
         var store = window.ExhibitionSelection.create({ scope: scope })
@@ -48,11 +52,28 @@
                 downloadLink.classList.toggle('disabled', total === 0)
                 downloadLink.setAttribute('aria-disabled', total === 0 ? 'true' : 'false')
             }
-            publishButtons.forEach(function (button) {
-                button.disabled = total === 0
-            })
+            if (publishSubmit) {
+                publishSubmit.disabled = publishNeedsSelection && total === 0
+            }
             syncPublishForm()
         }
+
+        publishModes.forEach(function (option) {
+            option.addEventListener('click', function () {
+                if (!publishSubmit) {
+                    return
+                }
+                publishSubmit.value = option.dataset.organizationPublishMode
+                publishNeedsSelection = option.dataset.needsSelection === '1'
+                if (publishLabel) {
+                    publishLabel.textContent = option.dataset.label
+                }
+                if (publishIcon) {
+                    publishIcon.className = 'fa ' + option.dataset.icon
+                }
+                refreshSelection()
+            })
+        })
 
         function syncPublishForm() {
             if (!publishForm) {
