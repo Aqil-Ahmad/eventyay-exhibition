@@ -400,6 +400,11 @@ class ExhibitorInfo(LoggedModel):
     )
     is_exhibitor = models.BooleanField(default=True)
     active = models.BooleanField(default=True)
+    published = models.BooleanField(
+        default=False,
+        verbose_name=_("Published"),
+        help_text=_("Only published organizations appear on the public event website."),
+    )
     booth_id = models.CharField(
         max_length=100,
         null=True,
@@ -574,6 +579,8 @@ LOG_ORGANIZATION_ADDED = f"{LOG_PREFIX}.organization.added"
 LOG_ORGANIZATION_CHANGED = f"{LOG_PREFIX}.organization.changed"
 LOG_ORGANIZATION_DELETED = f"{LOG_PREFIX}.organization.deleted"
 LOG_ORGANIZATION_SYNCED = f"{LOG_PREFIX}.organization.synced"
+LOG_ORGANIZATION_PUBLISHED = f"{LOG_PREFIX}.organization.published"
+LOG_ORGANIZATION_UNPUBLISHED = f"{LOG_PREFIX}.organization.unpublished"
 LOG_SETTINGS_CHANGED = f"{LOG_PREFIX}.settings.changed"
 LOG_CALL_SETTINGS_CHANGED = f"{LOG_PREFIX}.call.settings.changed"
 LOG_CALL_SECRET_REGENERATED = f"{LOG_PREFIX}.call.secret.regenerated"
