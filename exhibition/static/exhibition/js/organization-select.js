@@ -12,6 +12,8 @@
         var selectAll = scope.querySelector('[data-organization-select-all]')
         var countLabel = scope.querySelector('[data-organization-selected-count]')
         var downloadLink = scope.querySelector('[data-organization-download-link]')
+        var publishButtons = Array.prototype.slice.call(scope.querySelectorAll('[data-organization-publish]'))
+        var publishForm = document.getElementById('organization-publish')
         var selectedLabel = scope.dataset.selectedLabel || 'selected'
         var baseHref = downloadLink ? downloadLink.getAttribute('href') : null
         var store = window.ExhibitionSelection.create({ scope: scope })
@@ -46,6 +48,26 @@
                 downloadLink.classList.toggle('disabled', total === 0)
                 downloadLink.setAttribute('aria-disabled', total === 0 ? 'true' : 'false')
             }
+            publishButtons.forEach(function (button) {
+                button.disabled = total === 0
+            })
+            syncPublishForm()
+        }
+
+        function syncPublishForm() {
+            if (!publishForm) {
+                return
+            }
+            publishForm.querySelectorAll('input[name="selected"]').forEach(function (input) {
+                input.remove()
+            })
+            store.ids().forEach(function (value) {
+                var input = document.createElement('input')
+                input.type = 'hidden'
+                input.name = 'selected'
+                input.value = value
+                publishForm.appendChild(input)
+            })
         }
 
         if (selectAll) {

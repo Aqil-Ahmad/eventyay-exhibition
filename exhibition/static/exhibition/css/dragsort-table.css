@@ -43,3 +43,12 @@ body.dragging .dragsort-button {
     pointer-events: none;
     cursor: not-allowed;
 }
+
+.organization-row-publish {
+    display: inline-block;
+    margin: 0;
+}
+
+.organization-published-col {
+    white-space: nowrap;
+}

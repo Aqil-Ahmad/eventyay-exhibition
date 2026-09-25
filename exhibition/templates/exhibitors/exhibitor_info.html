@@ -52,6 +52,11 @@
                 {% csrf_token %}
             </form>
         {% endif %}
+        {% if publish_url %}
+            <form id="organization-publish" action="{{ publish_url }}{% if query_string %}?{{ query_string }}{% endif %}" method="post" data-organization-selection-form>
+                {% csrf_token %}
+            </form>
+        {% endif %}
         <p>
             {% if "can_change_event_settings" in request.eventpermset %}
                 <a href="{{ add_url }}" class="btn btn-default"><i class="fa fa-plus"></i>
@@ -65,6 +70,25 @@
                     <button type="submit" form="organization-send-vouchers" class="btn btn-default" title="{% trans "Queue a voucher email for everyone in this list" %}">
                         <i class="fa fa-envelope"></i> {% trans "Send vouchers to all" %}
                     </button>
+                {% endif %}
+                {% if publish_url %}
+                    <button type="submit" form="organization-publish" name="action" value="publish_all" class="btn btn-primary" title="{% trans "Reveal every approved organization on the public website at once" %}">
+                        <i class="fa fa-globe"></i>
+                        {% blocktrans trimmed with count=unpublished_approved_count %}
+                            Publish all approved ({{ count }})
+                        {% endblocktrans %}
+                    </button>
+                    <button type="submit" form="organization-publish" name="action" value="publish" class="btn btn-default" data-organization-publish disabled>
+                        <i class="fa fa-eye"></i> {% trans "Publish selected" %}
+                    </button>
+                    <button type="submit" form="organization-publish" name="action" value="unpublish" class="btn btn-default" data-organization-publish disabled>
+                        <i class="fa fa-eye-slash"></i> {% trans "Unpublish selected" %}
+                    </button>
+                {% endif %}
+                {% if public_preview_url %}
+                    <a href="{{ public_preview_url }}" class="btn btn-default" target="_blank" rel="noopener noreferrer" title="{% trans "See the public page including organizations that are not published yet" %}">
+                        <i class="fa fa-search"></i> {% trans "Preview public page" %}
+                    </a>
                 {% endif %}
                 <span class="text-muted" data-organization-selected-count></span>
             {% endif %}
@@ -93,7 +117,7 @@
                         {% endif %}
                         <th>{% include "exhibitors/_sort_header.html" with field="name" label=label_name %}</th>
                         <th>{% trans "Group" %}</th>
-                        {% if "can_change_event_settings" in request.eventpermset %}<th>{% trans "Vouchers" %}</th>{% endif %}
+                        {% if "can_change_event_settings" in request.eventpermset %}<th>{% trans "Published" %}</th><th>{% trans "Vouchers" %}</th>{% endif %}
                         <th class="action-col-2"></th>
                     </tr>
                     </thead>
@@ -101,7 +125,7 @@
                         {% if section.organizations %}
                             <tbody {% if reorder_enabled %}dragsort-url="{% url 'plugins:exhibition:sponsors.reorder' organizer=request.event.organizer.slug event=request.event.slug %}?group_id={% if section.group %}{{ section.group.pk }}{% else %}none{% endif %}"{% endif %}>
                             {% for e in section.organizations %}
-                                {% include "exhibitors/_organization_row.html" with e=e organization_type=organization_type reorder_enabled=reorder_enabled %}
+                                {% include "exhibitors/_organization_row.html" with e=e organization_type=organization_type reorder_enabled=reorder_enabled publish_url=publish_url query_string=query_string %}
                             {% endfor %}
                             </tbody>
                         {% endif %}
@@ -123,13 +147,13 @@
                         <th>{% include "exhibitors/_sort_header.html" with field="name" label=label_name %}</th>
                         {% if not organization_type %}<th>{% trans "Group" %}</th>{% endif %}
                         <th>{% include "exhibitors/_sort_header.html" with field="booth" label=label_booth %}</th>
-                        {% if "can_change_event_settings" in request.eventpermset %}<th>{% trans "Vouchers" %}</th>{% endif %}
+                        {% if "can_change_event_settings" in request.eventpermset %}<th>{% trans "Published" %}</th><th>{% trans "Vouchers" %}</th>{% endif %}
                         <th class="action-col-2"></th>
                     </tr>
                     </thead>
                     <tbody {% if organization_type == 'exhibitor' and reorder_enabled %}dragsort-url="{% url 'plugins:exhibition:exhibitors.reorder' organizer=request.event.organizer.slug event=request.event.slug %}"{% endif %}>
                     {% for e in exhibitors %}
-                        {% include "exhibitors/_organization_row.html" with e=e organization_type=organization_type reorder_enabled=reorder_enabled %}
+                        {% include "exhibitors/_organization_row.html" with e=e organization_type=organization_type reorder_enabled=reorder_enabled publish_url=publish_url query_string=query_string %}
                     {% endfor %}
                     </tbody>
                 </table>
