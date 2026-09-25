@@ -159,3 +159,43 @@ def test_inactive_organizations_cannot_be_published(event):
 
         withdrawn.refresh_from_db()
         assert withdrawn.published is False
+
+
+@pytest.mark.django_db
+def test_withdrawing_a_request_unpublishes_its_organization(event):
+    with scopes_disabled():
+        user = User.objects.create_user(email="published@example.com", password="pw")
+        exhibition_request = ExhibitionRequest.objects.create(
+            event=event, user=user, name="Acme", state=ExhibitionRequestState.SUBMITTED, **_IMAGES
+        )
+        exhibitor = create_exhibitor_from_request(exhibition_request)
+        exhibitor.published = True
+        exhibitor.save(update_fields=["published"])
+
+        exhibition_request.refresh_from_db()
+        exhibition_request.withdraw()
+
+        exhibitor.refresh_from_db()
+        assert exhibitor.active is False
+        assert exhibitor.published is False
+
+
+@pytest.mark.django_db
+def test_re_approval_does_not_republish_on_its_own(event):
+    with scopes_disabled():
+        user = User.objects.create_user(email="again@example.com", password="pw")
+        exhibition_request = ExhibitionRequest.objects.create(
+            event=event, user=user, name="Acme", state=ExhibitionRequestState.SUBMITTED, **_IMAGES
+        )
+        exhibitor = create_exhibitor_from_request(exhibition_request)
+        exhibitor.published = True
+        exhibitor.save(update_fields=["published"])
+
+        exhibition_request.refresh_from_db()
+        exhibition_request.reject()
+        exhibition_request.refresh_from_db()
+        create_exhibitor_from_request(exhibition_request)
+
+        exhibitor.refresh_from_db()
+        assert exhibitor.active is True
+        assert exhibitor.published is False
