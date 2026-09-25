@@ -8,7 +8,7 @@ def publish_visible_organizations(apps, schema_editor):
     has_logo = Q(logo__isnull=False) & ~Q(logo="")
     has_banner = Q(banner__isnull=False) & ~Q(banner="")
     on_exhibitor_page = Q(is_exhibitor=True) & has_logo & has_banner
-    on_front_page = Q(is_sponsor=True) & has_logo
+    on_front_page = Q(is_sponsor=True) & has_logo & Q(sponsor_group__show_on_front_page=True)
     ExhibitorInfo.objects.filter(Q(active=True) & (on_exhibitor_page | on_front_page)).update(published=True)
 
 
