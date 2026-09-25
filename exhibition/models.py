@@ -716,14 +716,31 @@ class ExhibitionRequest(LoggedModel):
         return [action for action in REQUEST_BULK_ACTIONS if self.can_transition_to(REQUEST_REVIEW_ACTIONS[action])]
 
     def set_organization_active(self, active, requestor=None):
-        if self.approved_exhibitor_id and self.approved_exhibitor.active != active:
-            self.approved_exhibitor.active = active
-            self.approved_exhibitor.save(update_fields=["active"])
-            self.approved_exhibitor.log_action(
-                LOG_ORGANIZATION_CHANGED,
-                data={"active": active, "reason": "request_state_change", "exhibition_request": self.code},
-                user=requestor,
-            )
+        """Follow the request's state, and never leave a hidden profile marked as published.
+
+        Re-approving later would otherwise put it straight back on the public site without
+        the organizer making a publication decision.
+        """
+        exhibitor = self.approved_exhibitor if self.approved_exhibitor_id else None
+        if exhibitor is None:
+            return
+        changed = {}
+        if exhibitor.active != active:
+            changed["active"] = active
+        if not active and exhibitor.published:
+            changed["published"] = False
+        if not changed:
+            return
+        for field, value in changed.items():
+            setattr(exhibitor, field, value)
+        exhibitor.save(update_fields=list(changed))
+        exhibitor.log_action(
+            LOG_ORGANIZATION_CHANGED,
+            data={"active": active, "reason": "request_state_change", "exhibition_request": self.code},
+            user=requestor,
+        )
+        if "published" in changed:
+            exhibitor.log_action(LOG_ORGANIZATION_UNPUBLISHED, user=requestor)
 
     def log_transition(self, action, previous, requestor=None):
         """Record who moved the request between states, and in which direction."""
