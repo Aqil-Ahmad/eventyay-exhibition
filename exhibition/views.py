@@ -2146,11 +2146,13 @@ class ExhibitorDeleteView(EventPermissionRequiredMixin, DeleteView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
+        organization_type = organization_type_of(self.object)
         context["page_title"] = {
             "sponsor": _("Delete Sponsor"),
             "exhibitor": _("Delete Exhibitor"),
             "both": _("Delete Exhibitor & Sponsor"),
-        }.get(organization_type_of(self.object), _("Delete Exhibitor or Sponsor"))
+        }.get(organization_type, _("Delete Exhibitor or Sponsor"))
+        context["cancel_url"] = organization_list_url(self.request.event, organization_type)
         return context
 
     def get_success_url(self) -> str:
