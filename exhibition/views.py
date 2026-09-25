@@ -65,6 +65,8 @@ from .models import (
     LOG_ORGANIZATION_ADDED,
     LOG_ORGANIZATION_CHANGED,
     LOG_ORGANIZATION_DELETED,
+    LOG_ORGANIZATION_PUBLISHED,
+    LOG_ORGANIZATION_UNPUBLISHED,
     LOG_QUESTION_ADDED,
     LOG_QUESTION_CHANGED,
     LOG_QUESTION_DELETED,
@@ -648,6 +650,9 @@ class ExhibitorListView(EventPermissionRequiredMixin, FilteredListMixin, ListVie
         context["organization_type"] = self.organization_type
         context["reorder_enabled"] = not self.filter_form.filtered and not context["is_paginated"]
         context["send_vouchers_url"] = self.send_vouchers_url()
+        context["publish_url"] = self.publish_url()
+        context["unpublished_approved_count"] = self.unpublished_approved_count() if context["publish_url"] else 0
+        context["public_preview_url"] = self.public_preview_url()
         context["query_string"] = self.request.GET.urlencode()
         if self.organization_type == "sponsor":
             context["sponsor_group_sections"] = self.build_sponsor_group_sections(context["exhibitors"])
@@ -667,6 +672,38 @@ class ExhibitorListView(EventPermissionRequiredMixin, FilteredListMixin, ListVie
         if route is None:
             return None
         return reverse(route, kwargs=event_kwargs(self.request.event))
+
+    def publish_url(self):
+        """URL of the publish actions, or ``None`` when the user may not use them."""
+        if not self.request.user.has_event_permission(
+            self.request.event.organizer, self.request.event, "can_change_event_settings", request=self.request
+        ):
+            return None
+        route = {
+            "sponsor": "plugins:exhibition:sponsors.publish",
+            "exhibitor": "plugins:exhibition:exhibitors.publish",
+        }.get(self.organization_type, "plugins:exhibition:organizations.publish")
+        return reverse(route, kwargs=event_kwargs(self.request.event))
+
+    def public_preview_url(self):
+        """Public exhibitor page with unpublished entries included, for organizers only."""
+        if not self.request.user.has_event_permission(
+            self.request.event.organizer, self.request.event, "can_change_event_settings", request=self.request
+        ):
+            return None
+        url = reverse(
+            "plugins:exhibition:public_list",
+            kwargs={"organizer": self.request.event.organizer.slug, "event": self.request.event.slug},
+        )
+        return f"{url}?preview=1"
+
+    def unpublished_approved_count(self):
+        queryset = ExhibitorInfo.objects.filter(event=self.request.event, active=True, published=False)
+        if self.organization_type == "sponsor":
+            queryset = queryset.filter(is_sponsor=True)
+        elif self.organization_type == "exhibitor":
+            queryset = queryset.filter(is_exhibitor=True)
+        return queryset.count()
 
     def annotate_voucher_status(self, exhibitors):
         ids = [exhibitor.pk for exhibitor in exhibitors]
@@ -706,13 +743,26 @@ class PublicExhibitorListView(ListView):
             return redirect(request.path)
         return super().get(request, *args, **kwargs)
 
+    @cached_property
+    def preview_unpublished(self):
+        """Organizers may look at the page as it will be once everything approved is published."""
+        if self.request.GET.get("preview") != "1":
+            return False
+        user = self.request.user
+        return user.is_authenticated and user.has_event_permission(
+            self.request.event.organizer, self.request.event, "can_change_event_settings", request=self.request
+        )
+
     def get_queryset(self):
-        return self.filter_form.filter_qs(public_exhibitors_queryset(self.request.event))
+        return self.filter_form.filter_qs(
+            public_exhibitors_queryset(self.request.event, include_unpublished=self.preview_unpublished)
+        )
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context["event"] = self.request.event
         context["filter_form"] = self.filter_form
+        context["preview_unpublished"] = self.preview_unpublished
         context["social_image"] = self.request.event.visible_banner_url
         add_external_image_csp_sources(
             self.request,
@@ -2333,6 +2383,100 @@ class ExhibitorVoucherManageView(EventPermissionRequiredMixin, DetailView):
             % {"count": len(vouchers)},
         )
         return redirect(self.get_success_url())
+
+
+class ExhibitorPublishView(EventPermissionRequiredMixin, View):
+    """Publish or unpublish organizations, one at a time or in bulk, from the organizer list."""
+
+    permission = ("can_change_event_settings",)
+    organization_type = None
+
+    def list_url(self):
+        query = self.request.GET.urlencode()
+        url = organization_list_url(self.request.event, self.organization_type)
+        return f"{url}?{query}" if query else url
+
+    def scoped_queryset(self):
+        queryset = ExhibitorInfo.objects.filter(event=self.request.event)
+        if self.organization_type == "sponsor":
+            return queryset.filter(is_sponsor=True)
+        if self.organization_type == "exhibitor":
+            return queryset.filter(is_exhibitor=True)
+        return queryset
+
+    def selected(self):
+        pks = self.request.POST.getlist("selected")
+        return self.scoped_queryset().filter(pk__in=pks) if pks else self.scoped_queryset().none()
+
+    def unpublished_approved(self):
+        """Approved organizations still waiting to be revealed."""
+        return self.scoped_queryset().filter(active=True, published=False)
+
+    def apply(self, queryset, published, requestor):
+        changed = [organization for organization in queryset if organization.published != published]
+        if not changed:
+            return []
+        with transaction.atomic():
+            ExhibitorInfo.objects.filter(pk__in=[o.pk for o in changed]).update(published=published)
+            action = LOG_ORGANIZATION_PUBLISHED if published else LOG_ORGANIZATION_UNPUBLISHED
+            for organization in changed:
+                organization.log_action(action, user=requestor)
+        return changed
+
+    def post(self, request, *args, **kwargs):
+        action = request.POST.get("action")
+        if action == "publish_all":
+            return self.publish_all(request)
+        if action in ("publish", "unpublish"):
+            return self.publish_selected(request, published=action == "publish")
+        messages.error(request, _("That action is not available."))
+        return redirect(self.list_url())
+
+    def publish_all(self, request):
+        waiting = list(self.unpublished_approved())
+        if not request.POST.get("confirmed"):
+            return render(
+                request,
+                "exhibitors/publish_confirm.html",
+                {
+                    "organization_type": self.organization_type,
+                    "waiting": waiting,
+                    "list_url": self.list_url(),
+                    "query_string": request.GET.urlencode(),
+                },
+            )
+        if not waiting:
+            messages.info(request, _("Every approved organization is already published."))
+            return redirect(self.list_url())
+        published = self.apply(waiting, True, request.user)
+        messages.success(request, self.published_message(len(published)))
+        return redirect(self.list_url())
+
+    def publish_selected(self, request, *, published):
+        changed = self.apply(list(self.selected()), published, request.user)
+        if not changed:
+            messages.info(request, _("Nothing changed: the selected organizations already had that status."))
+        elif published:
+            messages.success(request, self.published_message(len(changed)))
+        else:
+            messages.success(request, self.unpublished_message(len(changed)))
+        return redirect(self.list_url())
+
+    @staticmethod
+    def published_message(count):
+        return ngettext(
+            "%(count)d organization is now visible on the public website.",
+            "%(count)d organizations are now visible on the public website.",
+            count,
+        ) % {"count": count}
+
+    @staticmethod
+    def unpublished_message(count):
+        return ngettext(
+            "%(count)d organization was removed from the public website.",
+            "%(count)d organizations were removed from the public website.",
+            count,
+        ) % {"count": count}
 
 
 class ExhibitorVoucherBulkSendView(EventPermissionRequiredMixin, View):
