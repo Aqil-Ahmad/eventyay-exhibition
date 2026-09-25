@@ -750,7 +750,7 @@ class PublicExhibitorListView(ListView):
         context["event"] = self.request.event
         context["filter_form"] = self.filter_form
         context["preview_unpublished"] = self.preview_unpublished
-        context["social_image"] = self.request.event.visible_banner_url
+        context["social_image"] = self.request.event.visible_header_image_url
         add_external_image_csp_sources(
             self.request,
             [
