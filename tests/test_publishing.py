@@ -1,5 +1,6 @@
 import pytest
 from django.contrib.messages.storage.fallback import FallbackStorage
+from django.contrib.sessions.backends.db import SessionStore
 from django.test import RequestFactory
 from django_scopes import scopes_disabled
 from eventyay.base.models.auth import User
@@ -16,11 +17,15 @@ def _exhibitor(event, name="Acme", **kwargs):
     return ExhibitorInfo.objects.create(event=event, name=name, **{**_IMAGES, **kwargs})
 
 
+def _organizer(event):
+    return User.objects.create_user(email=f"organizer-{event.pk}@example.com", password="pw")
+
+
 def _publish_view(event, data, organization_type=None, user=None):
     request = RequestFactory().post("/publish", data=data)
     request.event = event
-    request.user = user or User.objects.create_user(email="organizer@example.com", password="pw")
-    request.session = {}
+    request.user = user or _organizer(event)
+    request.session = SessionStore()
     request._messages = FallbackStorage(request)
     view = ExhibitorPublishView()
     view.request = request
@@ -101,14 +106,16 @@ def test_selected_organizations_publish_and_unpublish(event):
         chosen = _exhibitor(event, name="Chosen")
         other = _exhibitor(event, name="Other")
 
-        view, request = _publish_view(event, {"action": "publish", "selected": [str(chosen.pk)]})
+        organizer = _organizer(event)
+
+        view, request = _publish_view(event, {"action": "publish", "selected": [str(chosen.pk)]}, user=organizer)
         view.post(request)
         chosen.refresh_from_db()
         other.refresh_from_db()
         assert chosen.published is True
         assert other.published is False
 
-        view, request = _publish_view(event, {"action": "unpublish", "selected": [str(chosen.pk)]})
+        view, request = _publish_view(event, {"action": "unpublish", "selected": [str(chosen.pk)]}, user=organizer)
         view.post(request)
         chosen.refresh_from_db()
         assert chosen.published is False
@@ -140,3 +147,15 @@ def test_list_can_be_filtered_by_publication_status(event):
 
         assert published in rows
         assert unpublished not in rows
+
+
+@pytest.mark.django_db
+def test_inactive_organizations_cannot_be_published(event):
+    with scopes_disabled():
+        withdrawn = _exhibitor(event, name="Withdrawn", active=False)
+
+        view, request = _publish_view(event, {"action": "publish", "selected": [str(withdrawn.pk)]})
+        view.post(request)
+
+        withdrawn.refresh_from_db()
+        assert withdrawn.published is False
