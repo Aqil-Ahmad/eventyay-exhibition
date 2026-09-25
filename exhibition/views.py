@@ -11,6 +11,7 @@ from django.db import transaction
 from django.db.models import Count, Max, Min, Q
 from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.template.response import TemplateResponse
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.functional import cached_property
@@ -2400,13 +2401,18 @@ class ExhibitorPublishView(EventPermissionRequiredMixin, View):
         return self.scoped_queryset().filter(active=True, published=False)
 
     def apply(self, queryset, published, requestor):
-        changed = [organization for organization in queryset if organization.published != published]
-        if not changed:
-            return []
+        """Write the flag against the current database state, so a concurrent withdrawal still wins."""
         with transaction.atomic():
+            rows = queryset.select_for_update().filter(published=not published)
+            if published:
+                rows = rows.filter(active=True)
+            changed = list(rows)
+            if not changed:
+                return []
             ExhibitorInfo.objects.filter(pk__in=[o.pk for o in changed]).update(published=published)
             action = LOG_ORGANIZATION_PUBLISHED if published else LOG_ORGANIZATION_UNPUBLISHED
             for organization in changed:
+                organization.published = published
                 organization.log_action(action, user=requestor)
         return changed
 
@@ -2420,31 +2426,26 @@ class ExhibitorPublishView(EventPermissionRequiredMixin, View):
         return redirect(self.list_url())
 
     def publish_all(self, request):
-        waiting = list(self.unpublished_approved())
         if not request.POST.get("confirmed"):
-            return render(
+            return TemplateResponse(
                 request,
                 "exhibitors/publish_confirm.html",
                 {
                     "organization_type": self.organization_type,
-                    "waiting": waiting,
+                    "waiting": list(self.unpublished_approved()),
                     "list_url": self.list_url(),
                     "query_string": request.GET.urlencode(),
                 },
             )
-        if not waiting:
+        published = self.apply(self.unpublished_approved(), True, request.user)
+        if not published:
             messages.info(request, _("Every approved organization is already published."))
             return redirect(self.list_url())
-        published = self.apply(waiting, True, request.user)
         messages.success(request, self.published_message(len(published)))
         return redirect(self.list_url())
 
     def publish_selected(self, request, *, published):
-        selected = self.selected()
-        if published:
-            # Publishing an inactive organization would reveal it the moment it is reactivated.
-            selected = selected.filter(active=True)
-        changed = self.apply(list(selected), published, request.user)
+        changed = self.apply(self.selected(), published, request.user)
         if not changed:
             messages.info(request, _("Nothing changed: the selected organizations already had that status."))
         elif published:
