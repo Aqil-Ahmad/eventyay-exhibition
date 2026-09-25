@@ -30,7 +30,7 @@
                 <form class="filter-form" method="get" action="">
                     <input type="hidden" name="status" value="">
                     <button type="submit" class="btn btn-sm {% if showing_unredeemed %}btn-default{% else %}btn-primary{% endif %}">
-                        {% blocktrans trimmed with count=redeemed_count %}Redeemed ({{ count }}){% endblocktrans %}
+                        {% blocktrans trimmed with count=redemption_count %}Redeemed ({{ count }}){% endblocktrans %}
                     </button>
                 </form>
                 <form class="filter-form" method="get" action="">

@@ -950,9 +950,11 @@ class UserVoucherListView(PublicCallEnabledMixin, PublicEventLoginRequiredMixin,
                 }
                 for position in context["voucher_rows"]
             ]
-        context["redeemed_count"] = len(self.redemptions)
+        redeemed_vouchers = len({position.voucher_id for position in self.redemptions})
+        context["redemption_count"] = len(self.redemptions)
+        context["redeemed_count"] = redeemed_vouchers
         context["unredeemed_count"] = len(self.unredeemed)
-        context["issued_count"] = context["redeemed_count"] + context["unredeemed_count"]
+        context["issued_count"] = redeemed_vouchers + len(self.unredeemed)
         return context
 
 
