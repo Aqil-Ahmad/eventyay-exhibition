@@ -10,7 +10,7 @@
 {% block exhibitors_content %}
     {% if waiting %}
         <p>
-            {% blocktrans trimmed count counter=waiting|length with count=waiting|length %}
+            {% blocktrans trimmed count count=waiting|length %}
                 {{ count }} approved organization will become visible on the public event website.
             {% plural %}
                 {{ count }} approved organizations will become visible on the public event website.
