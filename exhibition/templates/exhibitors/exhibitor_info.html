@@ -72,23 +72,30 @@
                     </button>
                 {% endif %}
                 {% if publish_url %}
-                    <button type="submit" form="organization-publish" name="action" value="publish_all" class="btn btn-primary" title="{% trans "Reveal every approved organization on the public website at once" %}">
-                        <i class="fa fa-globe"></i>
-                        {% blocktrans trimmed with count=unpublished_approved_count %}
-                            Publish all approved ({{ count }})
-                        {% endblocktrans %}
-                    </button>
-                    <button type="submit" form="organization-publish" name="action" value="publish" class="btn btn-default" data-organization-publish disabled>
-                        <i class="fa fa-eye"></i> {% trans "Publish selected" %}
-                    </button>
-                    <button type="submit" form="organization-publish" name="action" value="unpublish" class="btn btn-default" data-organization-publish disabled>
-                        <i class="fa fa-eye-slash"></i> {% trans "Unpublish selected" %}
-                    </button>
-                {% endif %}
-                {% if public_preview_url %}
-                    <a href="{{ public_preview_url }}" class="btn btn-default" target="_blank" rel="noopener noreferrer" title="{% trans "See the public page including organizations that are not published yet" %}">
-                        <i class="fa fa-search"></i> {% trans "Preview public page" %}
-                    </a>
+                    <div class="btn-group organization-publish-actions">
+                        <button type="submit" form="organization-publish" name="action" value="publish_all" class="btn btn-primary" title="{% trans "Reveal every approved organization on the public website at once" %}">
+                            <i class="fa fa-globe"></i>
+                            {% blocktrans trimmed with count=unpublished_approved_count %}
+                                Publish all approved ({{ count }})
+                            {% endblocktrans %}
+                        </button>
+                        <button type="button" class="btn btn-primary dropdown-toggle" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                            <span class="caret"></span>
+                            <span class="sr-only">{% trans "More publishing actions" %}</span>
+                        </button>
+                        <ul class="dropdown-menu dropdown-menu-right">
+                            <li>
+                                <button type="submit" form="organization-publish" name="action" value="publish" data-organization-publish disabled>
+                                    <i class="fa fa-eye"></i> {% trans "Publish selected" %}
+                                </button>
+                            </li>
+                            <li>
+                                <button type="submit" form="organization-publish" name="action" value="unpublish" data-organization-publish disabled>
+                                    <i class="fa fa-eye-slash"></i> {% trans "Unpublish selected" %}
+                                </button>
+                            </li>
+                        </ul>
+                    </div>
                 {% endif %}
                 <span class="text-muted" data-organization-selected-count></span>
             {% endif %}

@@ -652,7 +652,6 @@ class ExhibitorListView(EventPermissionRequiredMixin, FilteredListMixin, ListVie
         context["send_vouchers_url"] = self.send_vouchers_url()
         context["publish_url"] = self.publish_url()
         context["unpublished_approved_count"] = self.unpublished_approved_count() if context["publish_url"] else 0
-        context["public_preview_url"] = self.public_preview_url()
         context["query_string"] = self.request.GET.urlencode()
         if self.organization_type == "sponsor":
             context["sponsor_group_sections"] = self.build_sponsor_group_sections(context["exhibitors"])
@@ -684,18 +683,6 @@ class ExhibitorListView(EventPermissionRequiredMixin, FilteredListMixin, ListVie
             "exhibitor": "plugins:exhibition:exhibitors.publish",
         }.get(self.organization_type, "plugins:exhibition:organizations.publish")
         return reverse(route, kwargs=event_kwargs(self.request.event))
-
-    def public_preview_url(self):
-        """Public exhibitor page with unpublished entries included, for organizers only."""
-        if not self.request.user.has_event_permission(
-            self.request.event.organizer, self.request.event, "can_change_event_settings", request=self.request
-        ):
-            return None
-        url = reverse(
-            "plugins:exhibition:public_list",
-            kwargs={"organizer": self.request.event.organizer.slug, "event": self.request.event.slug},
-        )
-        return f"{url}?preview=1"
 
     def unpublished_approved_count(self):
         queryset = ExhibitorInfo.objects.filter(event=self.request.event, active=True, published=False)
