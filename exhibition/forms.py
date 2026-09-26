@@ -31,6 +31,7 @@ from eventyay.common.forms.mixins import (
     EventLocalizedModelMultipleChoiceField,
 )
 from eventyay.common.forms.widgets import EmailEditorWidget, HtmlDateTimeInput, I18nEmailEditorWidget
+from eventyay.common.templatetags.filesize import filesize
 from eventyay.common.urls import normalize_url_scheme
 from eventyay.common.utils.language import localize_event_text
 from eventyay.consts import SizeKey
@@ -71,6 +72,18 @@ from .social_links import (
     get_social_link_value,
 )
 from .utils import localized_value_for, merge_localized_value, pool_tag_choices
+
+
+def flag_oversized_upload(form, field_name, submitted):
+    """Reject an upload past the limit the field advertises, which ImageField itself does not check."""
+    if not isinstance(submitted, UploadedFile):
+        return False
+    key = SizeKey.UPLOAD_SIZE_PDF if field_name == "slides" else SizeKey.UPLOAD_SIZE_IMAGE
+    max_size = django_settings.MAX_SIZE_CONFIG[key]
+    if submitted.size <= max_size:
+        return False
+    form.add_error(field_name, _("The upload limit is {size}.").format(size=filesize(max_size)))
+    return True
 
 
 def get_tz_help(event):
@@ -619,7 +632,11 @@ class ExhibitorInfoForm(ExhibitionQuestionFieldsMixin, I18nModelForm):
 
     def _validate_required_file(self, field_name, submitted):
         """Flag a required file field when nothing is uploaded and nothing stored remains."""
-        if not self.profile_key_is_required(field_name) or field_name not in self.fields:
+        if field_name not in self.fields:
+            return
+        if flag_oversized_upload(self, field_name, submitted):
+            return
+        if not self.profile_key_is_required(field_name):
             return
         if isinstance(submitted, UploadedFile):
             return
@@ -1546,11 +1563,15 @@ class ExhibitionRequestForm(ExhibitionQuestionFieldsMixin, I18nModelForm):
 
     def validate_required_file(self, field_name, submitted):
         """Flag a required file field when nothing is uploaded and nothing stored remains."""
+        if field_name not in self.fields:
+            return
+        if flag_oversized_upload(self, field_name, submitted):
+            return
         if self.draft_save:
             return
         if not self.field_setting_is_active(field_name) or not self.field_setting_is_required(field_name):
             return
-        if field_name not in self.fields or isinstance(submitted, UploadedFile):
+        if isinstance(submitted, UploadedFile):
             return
         has_existing = submitted is not False and bool(getattr(self.instance, f"visible_{field_name}_url", ""))
         if not has_existing:
