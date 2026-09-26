@@ -14,6 +14,12 @@
         var downloadLink = scope.querySelector('[data-organization-download-link]')
         var sendButton = scope.querySelector('[data-organization-send-vouchers]')
         var sendForm = sendButton ? document.getElementById(sendButton.getAttribute('form')) : null
+        var publishForm = document.getElementById('organization-publish')
+        var publishSubmit = scope.querySelector('[data-organization-publish-submit]')
+        var publishLabel = scope.querySelector('[data-organization-publish-label]')
+        var publishIcon = scope.querySelector('[data-organization-publish-icon]')
+        var publishModes = Array.prototype.slice.call(scope.querySelectorAll('[data-organization-publish-mode]'))
+        var publishNeedsSelection = false
         var selectedLabel = scope.dataset.selectedLabel || 'selected'
         var baseHref = downloadLink ? downloadLink.getAttribute('href') : null
         var store = window.ExhibitionSelection.create({ scope: scope })
@@ -51,6 +57,43 @@
             if (sendButton) {
                 sendButton.disabled = total === 0
             }
+            if (publishSubmit) {
+                publishSubmit.disabled = publishNeedsSelection && total === 0
+            }
+            syncPublishForm()
+        }
+
+        publishModes.forEach(function (option) {
+            option.addEventListener('click', function () {
+                if (!publishSubmit) {
+                    return
+                }
+                publishSubmit.value = option.dataset.organizationPublishMode
+                publishNeedsSelection = option.dataset.needsSelection === '1'
+                if (publishLabel) {
+                    publishLabel.textContent = option.dataset.label
+                }
+                if (publishIcon) {
+                    publishIcon.className = 'fa ' + option.dataset.icon
+                }
+                refreshSelection()
+            })
+        })
+
+        function syncPublishForm() {
+            if (!publishForm) {
+                return
+            }
+            publishForm.querySelectorAll('input[name="selected"]').forEach(function (input) {
+                input.remove()
+            })
+            store.ids().forEach(function (value) {
+                var input = document.createElement('input')
+                input.type = 'hidden'
+                input.name = 'selected'
+                input.value = value
+                publishForm.appendChild(input)
+            })
         }
 
         if (selectAll) {
