@@ -652,7 +652,6 @@ class ExhibitorListView(EventPermissionRequiredMixin, FilteredListMixin, ListVie
         context["reorder_enabled"] = not self.filter_form.filtered and not context["is_paginated"]
         context["send_vouchers_url"] = self.send_vouchers_url()
         context["publish_url"] = self.publish_url()
-        context["unpublished_approved_count"] = self.unpublished_approved_count() if context["publish_url"] else 0
         context["query_string"] = self.request.GET.urlencode()
         if self.organization_type == "sponsor":
             context["sponsor_group_sections"] = self.build_sponsor_group_sections(context["exhibitors"])
@@ -684,14 +683,6 @@ class ExhibitorListView(EventPermissionRequiredMixin, FilteredListMixin, ListVie
             "exhibitor": "plugins:exhibition:exhibitors.publish",
         }.get(self.organization_type, "plugins:exhibition:organizations.publish")
         return reverse(route, kwargs=event_kwargs(self.request.event))
-
-    def unpublished_approved_count(self):
-        queryset = ExhibitorInfo.objects.filter(event=self.request.event, active=True, published=False)
-        if self.organization_type == "sponsor":
-            queryset = queryset.filter(is_sponsor=True)
-        elif self.organization_type == "exhibitor":
-            queryset = queryset.filter(is_exhibitor=True)
-        return queryset.count()
 
     def annotate_voucher_status(self, exhibitors):
         ids = [exhibitor.pk for exhibitor in exhibitors]

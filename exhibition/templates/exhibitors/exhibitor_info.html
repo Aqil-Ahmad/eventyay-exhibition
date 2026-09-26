@@ -72,9 +72,7 @@
                     </button>
                 {% endif %}
                 {% if publish_url %}
-                    {% blocktrans trimmed asvar label_publish_all with count=unpublished_approved_count %}
-                        Publish all approved ({{ count }})
-                    {% endblocktrans %}
+                    {% trans "Publish all approved" as label_publish_all %}
                     {% trans "Publish selected" as label_publish %}
                     {% trans "Unpublish selected" as label_unpublish %}
                     <div class="btn-group organization-publish-actions" data-organization-publish-group>
