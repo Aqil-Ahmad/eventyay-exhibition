@@ -426,6 +426,7 @@ class ExhibitorInfoForm(ExhibitionQuestionFieldsMixin, I18nModelForm):
             "allow_lead_access",
             "lead_scanning_scope_by_device",
             "sessions",
+            "published",
         ]
         labels = {
             "name": _("Organization name"),
@@ -441,6 +442,7 @@ class ExhibitorInfoForm(ExhibitionQuestionFieldsMixin, I18nModelForm):
             "is_sponsor": _("Mark this organization as an event sponsor"),
             "booth_name": _("Preferred booth name"),
             "lead_scanning_enabled": _("Can scan attendee badges"),
+            "published": _("Show on the public event website"),
         }
         help_texts = {
             "lead_scanning_enabled": _(

@@ -197,9 +197,12 @@
         {% endfor %}
     </fieldset>
 
-    {% if form.is_exhibitor or form.is_sponsor or form.sponsor_group or form.booth_id %}
+    {% if form.published or form.is_exhibitor or form.is_sponsor or form.sponsor_group or form.booth_id %}
     <fieldset>
         <legend>{% trans "Organizer only" %}</legend>
+        {% if form.published %}
+            {% bootstrap_field form.published layout="control" %}
+        {% endif %}
         {% if form.is_exhibitor %}
         <div id="is-exhibitor-wrapper">
             {% bootstrap_field form.is_exhibitor layout="control" %}
