@@ -983,3 +983,15 @@ def test_pool_lookup_ignores_links_from_other_events(voucher_event):
         _pool(voucher_event, 3)
 
         assert pool_remaining(voucher_event, POOL) == 3
+
+
+@pytest.mark.django_db
+def test_bulk_send_keeps_selected_rows_outside_the_current_filter(voucher_event):
+    with scopes_disabled():
+        scanning = _exhibitor(voucher_event, name="Scanning", email="scan@example.com", lead_scanning_enabled=True)
+        idle = _exhibitor(voucher_event, name="Idle", email="idle@example.com", lead_scanning_enabled=False)
+        view, request = _bulk_view(voucher_event, selected=[scanning, idle])
+        request.GET = request.GET.copy()
+        request.GET["lead_scanning"] = "1"
+
+        assert set(view.target_queryset()) == {scanning, idle}
