@@ -40,6 +40,7 @@ from .views import (
     ExhibitorPublishView,
     ExhibitorReorderView,
     ExhibitorVoucherBulkSendView,
+    ExhibitorVoucherLinkView,
     ExhibitorVoucherManageView,
     PublicCallSecretView,
     PublicCallView,
@@ -110,6 +111,11 @@ urlpatterns = [
         "<str:organizer>/<str:event>/exhibition/call/requests/<str:code>/vouchers/",
         UserVoucherListView.as_view(),
         name="request.user_vouchers",
+    ),
+    path(
+        "<str:organizer>/<str:event>/exhibition/vouchers/<str:token>/",
+        ExhibitorVoucherLinkView.as_view(),
+        name="vouchers.link",
     ),
     path(
         "<str:organizer>/<str:event>/exhibition/call/proposals/<str:code>/withdraw/",
