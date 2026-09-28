@@ -1,17 +1,24 @@
+import datetime as dt
+from decimal import Decimal
+
 import pytest
 from django.test import Client, override_settings
 from django.urls import reverse
 from django.utils.timezone import now
 from django_scopes import scopes_disabled
-from eventyay.base.models import Event, Product, Quota
+from eventyay.base.models import Event, LogEntry, Product
 from eventyay.base.models.auth import User
 
-from exhibition.models import ExhibitionProduct, ExhibitionProductPurpose
-from exhibition.utils import mixed_booth_quotas
+from exhibition.forms import ExhibitionProductForm
+from exhibition.models import (
+    LOG_PRODUCT_ADDED,
+    ExhibitionProduct,
+    ExhibitionProductPurpose,
+)
 
 
-def _product(event, name, **kwargs):
-    return Product.objects.create(event=event, name={"en": name}, default_price=100, **kwargs)
+def _product(event, name="Gold Sponsor", **kwargs):
+    return ExhibitionProduct.objects.create(event=event, name={"en": name}, **kwargs)
 
 
 def _organizer(event, email="organizer@example.com", **flags):
@@ -31,74 +38,81 @@ def _other_event(event, slug="other-event"):
     )
 
 
-def _formset_payload(*rows):
-    """The table posts one formset row per product, so tests speak the same language."""
-    data = {
-        "form-TOTAL_FORMS": str(len(rows)),
-        "form-INITIAL_FORMS": str(len(rows)),
-        "form-MIN_NUM_FORMS": "0",
-        "form-MAX_NUM_FORMS": "1000",
-    }
-    for index, row in enumerate(rows):
-        for name, value in row.items():
-            data[f"form-{index}-{name}"] = value
-    return data
-
-
-def _products_url(event):
+def _url(event, name, **kwargs):
     return reverse(
-        "plugins:exhibition:products",
-        kwargs={"organizer": event.organizer.slug, "event": event.slug},
+        f"plugins:exhibition:{name}",
+        kwargs={"organizer": event.organizer.slug, "event": event.slug, **kwargs},
     )
+
+
+def _api_url(event, **kwargs):
+    name = "api-v1:exhibitionproduct-detail" if kwargs else "api-v1:exhibitionproduct-list"
+    return reverse(name, kwargs={"organizer": event.organizer.slug, "event": event.slug, **kwargs})
+
+
+def _organizer_client(event, **flags):
+    with scopes_disabled():
+        event.plugins = "exhibition"
+        event.save()
+        user = _organizer(event, **(flags or {"can_change_event_settings": True}))
+    client = Client()
+    client.force_login(user)
+    return client
+
+
+def _form_data(**overrides):
+    data = {
+        "name_0": "Gold Sponsor",
+        "purpose": "sponsorship",
+        "includes_booth": "on",
+        "price": "1500.00",
+        "active": "on",
+    }
+    data.update(overrides)
+    return {key: value for key, value in data.items() if value is not None}
+
+
+# The booth rule
 
 
 @pytest.mark.django_db
 def test_sponsorship_product_includes_a_booth_by_default(event):
     with scopes_disabled():
-        role = ExhibitionProduct.objects.create(product=_product(event, "Gold Sponsor"))
+        product = _product(event)
 
-        assert role.purpose == ExhibitionProductPurpose.SPONSORSHIP
-        assert role.includes_booth is True
-        assert role.consumes_booth_capacity is True
+        assert product.purpose == ExhibitionProductPurpose.SPONSORSHIP
+        assert product.includes_booth is True
+        assert product.consumes_booth_capacity is True
 
 
 @pytest.mark.django_db
 def test_sponsorship_product_can_drop_the_booth(event):
     with scopes_disabled():
-        role = ExhibitionProduct.objects.create(
-            product=_product(event, "Digital Sponsor"),
-            includes_booth=False,
-        )
-        role.refresh_from_db()
+        product = _product(event, "Digital Sponsor", includes_booth=False)
+        product.refresh_from_db()
 
-        assert role.is_sponsorship is True
-        assert role.includes_booth is False
-        assert role.consumes_booth_capacity is False
+        assert product.is_sponsorship is True
+        assert product.includes_booth is False
+        assert product.consumes_booth_capacity is False
 
 
 @pytest.mark.django_db
 def test_exhibition_product_always_includes_a_booth(event):
     with scopes_disabled():
-        role = ExhibitionProduct.objects.create(
-            product=_product(event, "Standard Booth"),
-            purpose=ExhibitionProductPurpose.EXHIBITION,
-            includes_booth=False,
-        )
-        role.refresh_from_db()
+        product = _product(event, "Standard Booth", purpose=ExhibitionProductPurpose.EXHIBITION, includes_booth=False)
+        product.refresh_from_db()
 
-        assert role.is_exhibition is True
-        assert role.includes_booth is True
-        assert role.consumes_booth_capacity is True
+        assert product.is_exhibition is True
+        assert product.includes_booth is True
+        assert product.consumes_booth_capacity is True
 
 
 @pytest.mark.django_db
 def test_only_booth_products_count_towards_booth_capacity(event):
     with scopes_disabled():
-        booth = ExhibitionProduct.objects.create(product=_product(event, "Premium Booth"))
-        digital = ExhibitionProduct.objects.create(
-            product=_product(event, "Digital Sponsor"),
-            includes_booth=False,
-        )
+        booth = _product(event, "Premium Booth")
+        digital = _product(event, "Digital Sponsor", includes_booth=False)
+        _product(_other_event(event), "Someone else's booth")
 
         consuming = ExhibitionProduct.objects.for_event(event).consuming_booth_capacity()
 
@@ -106,250 +120,226 @@ def test_only_booth_products_count_towards_booth_capacity(event):
         assert digital not in consuming
 
 
-@pytest.mark.django_db
-def test_quota_mixing_booth_and_non_booth_products_is_flagged(event):
-    with scopes_disabled():
-        gold = _product(event, "Gold Sponsor")
-        digital = _product(event, "Digital Sponsor")
-        ExhibitionProduct.objects.create(product=gold)
-        ExhibitionProduct.objects.create(product=digital, includes_booth=False)
-
-        booth_quota = Quota.objects.create(event=event, name="Exhibition booths", size=40)
-        booth_quota.products.add(gold, digital)
-        sponsor_quota = Quota.objects.create(event=event, name="Gold sponsors", size=5)
-        sponsor_quota.products.add(gold)
-
-        assert list(mixed_booth_quotas(event)) == [booth_quota]
+# The model on its own
 
 
 @pytest.mark.django_db
-def test_quota_sharing_a_booth_with_a_product_without_a_role_is_flagged(event):
+def test_exhibition_products_are_kept_apart_from_ticket_products(event):
     with scopes_disabled():
-        booth = _product(event, "Premium Booth")
-        ticket = _product(event, "Visitor Ticket")
-        ExhibitionProduct.objects.create(product=booth)
+        ticket = Product.objects.create(event=event, name={"en": "Visitor Ticket"}, default_price=20)
+        _product(event, "Gold Sponsor")
 
-        shared_quota = Quota.objects.create(event=event, name="Shared", size=100)
-        shared_quota.products.add(booth, ticket)
-
-        assert list(mixed_booth_quotas(event)) == [shared_quota]
+        assert list(Product.objects.filter(event=event)) == [ticket]
+        assert [str(product) for product in ExhibitionProduct.objects.for_event(event)] == ["Gold Sponsor"]
 
 
 @pytest.mark.django_db
-def test_quota_with_only_regular_products_is_not_flagged(event):
+def test_new_products_are_added_at_the_end(event):
     with scopes_disabled():
-        tickets_quota = Quota.objects.create(event=event, name="Tickets", size=500)
-        tickets_quota.products.add(_product(event, "Visitor Ticket"), _product(event, "Student Ticket"))
+        first = _product(event, "Gold Sponsor")
+        second = _product(event, "Silver Sponsor")
+        elsewhere = _product(_other_event(event), "Other Gold")
 
-        assert list(mixed_booth_quotas(event)) == []
+        assert (first.position, second.position) == (0, 1)
+        assert elsewhere.position == 0
+        assert list(ExhibitionProduct.objects.for_event(event)) == [first, second]
+
+
+@pytest.mark.django_db
+def test_availability_follows_the_active_flag_and_the_sales_period(event):
+    moment = now()
+    with scopes_disabled():
+        on_sale = _product(event, "On sale", available_from=moment - dt.timedelta(days=1))
+        not_yet = _product(event, "Not yet", available_from=moment + dt.timedelta(days=1))
+        over = _product(event, "Over", available_until=moment - dt.timedelta(days=1))
+        inactive = _product(event, "Inactive", active=False)
+
+    assert on_sale.is_available(moment) is True
+    assert not_yet.is_available(moment) is False
+    assert over.is_available(moment) is False
+    assert inactive.is_available(moment) is False
+    assert inactive.is_available_by_time(moment) is True
+
+
+# The form
+
+
+@pytest.mark.django_db
+def test_form_rejects_a_negative_price(event):
+    with scopes_disabled():
+        form = ExhibitionProductForm(data=_form_data(price="-1"), event=event)
+
+        assert not form.is_valid()
+        assert "price" in form.errors
+
+
+@pytest.mark.django_db
+def test_form_rejects_a_sales_period_that_ends_before_it_starts(event):
+    with scopes_disabled():
+        form = ExhibitionProductForm(
+            data=_form_data(
+                available_from_0="2026-10-10",
+                available_from_1="10:00:00",
+                available_until_0="2026-10-01",
+                available_until_1="10:00:00",
+            ),
+            event=event,
+        )
+
+        assert not form.is_valid()
+        assert "available_until" in form.errors
+
+
+@pytest.mark.django_db
+def test_form_saves_an_exhibition_product_with_a_booth_even_when_unticked(event):
+    with scopes_disabled():
+        form = ExhibitionProductForm(
+            data=_form_data(name_0="Standard Booth", purpose="exhibition", includes_booth=None),
+            event=event,
+        )
+        assert form.is_valid(), form.errors
+        form.instance.event = event
+        product = form.save()
+
+        product.refresh_from_db()
+        assert product.includes_booth is True
+
+
+# The organizer pages
 
 
 @pytest.mark.django_db
 @override_settings(SITE_URL="https://testserver")
-def test_products_page_lists_the_event_products(event):
+def test_products_page_lists_only_this_events_exhibition_products(event):
+    client = _organizer_client(event)
     with scopes_disabled():
-        event.plugins = "exhibition"
-        event.save()
-        digital = _product(event, "Digital Sponsor")
-        ExhibitionProduct.objects.create(product=digital, includes_booth=False)
-        user = _organizer(event, can_change_items=True)
+        _product(event, "Gold Sponsor")
+        _product(_other_event(event), "Someone else's booth")
+        Product.objects.create(event=event, name={"en": "Visitor Ticket"}, default_price=20)
 
-    client = Client()
-    client.force_login(user)
-    response = client.get(_products_url(event))
+    response = client.get(_url(event, "products"))
     content = response.content.decode()
 
     assert response.status_code == 200
-    assert "Digital Sponsor" in content
-    assert 'name="form-0-purpose"' in content
-    assert f'name="form-0-product" value="{digital.pk}"' in content
+    assert "Gold Sponsor" in content
+    assert "Someone else&#x27;s booth" not in content
+    assert "Visitor Ticket" not in content
 
 
 @pytest.mark.django_db
 @override_settings(SITE_URL="https://testserver")
-def test_organizer_assigns_a_purpose_and_booth_to_a_product(event):
-    with scopes_disabled():
-        event.plugins = "exhibition"
-        event.save()
-        gold = _product(event, "Gold Sponsor")
-        digital = _product(event, "Digital Sponsor")
-        booth = _product(event, "Standard Booth")
-        user = _organizer(event, can_change_items=True)
+def test_organizer_creates_a_product(event):
+    client = _organizer_client(event)
 
-    client = Client()
-    client.force_login(user)
-    response = client.post(
-        _products_url(event),
-        _formset_payload(
-            {"product": gold.pk, "purpose": "sponsorship", "includes_booth": "on"},
-            {"product": digital.pk, "purpose": "sponsorship"},
-            {"product": booth.pk, "purpose": "exhibition"},
-        ),
-    )
+    form_page = client.get(_url(event, "products.add"))
+    assert form_page.status_code == 200
+    assert "data-exhibition-product-booth" in form_page.content.decode()
+
+    response = client.post(_url(event, "products.add"), _form_data(includes_booth=None))
 
     assert response.status_code == 302
     with scopes_disabled():
-        assert gold.exhibition_product.purpose == ExhibitionProductPurpose.SPONSORSHIP
-        assert gold.exhibition_product.includes_booth is True
-        assert digital.exhibition_product.includes_booth is False
-        assert booth.exhibition_product.purpose == ExhibitionProductPurpose.EXHIBITION
-        assert booth.exhibition_product.includes_booth is True
+        product = ExhibitionProduct.objects.get(event=event)
+        assert str(product) == "Gold Sponsor"
+        assert product.price == Decimal("1500.00")
+        assert product.includes_booth is False
+        assert not Product.objects.filter(event=event).exists()
+        assert LogEntry.objects.filter(action_type=LOG_PRODUCT_ADDED, object_id=product.pk).exists()
 
 
 @pytest.mark.django_db
 @override_settings(SITE_URL="https://testserver")
-def test_clearing_the_purpose_drops_the_exhibition_role(event):
+def test_organizer_edits_a_product(event):
+    client = _organizer_client(event)
     with scopes_disabled():
-        event.plugins = "exhibition"
-        event.save()
         product = _product(event, "Gold Sponsor")
-        ExhibitionProduct.objects.create(product=product)
-        user = _organizer(event, can_change_items=True)
 
-    client = Client()
-    client.force_login(user)
-    response = client.post(_products_url(event), _formset_payload({"product": product.pk, "purpose": ""}))
+    assert client.get(_url(event, "products.edit", pk=product.pk)).status_code == 200
 
-    assert response.status_code == 302
-    with scopes_disabled():
-        assert not ExhibitionProduct.objects.filter(product=product).exists()
-
-
-@pytest.mark.django_db
-@override_settings(SITE_URL="https://testserver")
-def test_an_unknown_purpose_leaves_the_whole_submission_unchanged(event):
-    with scopes_disabled():
-        event.plugins = "exhibition"
-        event.save()
-        gold = _product(event, "Gold Sponsor")
-        booth = _product(event, "Standard Booth")
-        ExhibitionProduct.objects.create(product=gold)
-        user = _organizer(event, can_change_items=True)
-
-    client = Client()
-    client.force_login(user)
     response = client.post(
-        _products_url(event),
-        _formset_payload(
-            {"product": gold.pk, "purpose": ""},
-            {"product": booth.pk, "purpose": "keynote"},
-        ),
-    )
-
-    assert response.status_code == 200
-    with scopes_disabled():
-        assert ExhibitionProduct.objects.filter(product=gold).exists()
-        assert not ExhibitionProduct.objects.filter(product=booth).exists()
-
-
-@pytest.mark.django_db
-@override_settings(SITE_URL="https://testserver")
-def test_a_product_of_another_event_is_rejected(event):
-    with scopes_disabled():
-        event.plugins = "exhibition"
-        event.save()
-        foreign = _product(_other_event(event), "Someone else's booth")
-        user = _organizer(event, can_change_items=True)
-
-    client = Client()
-    client.force_login(user)
-    response = client.post(
-        _products_url(event),
-        _formset_payload({"product": foreign.pk, "purpose": "exhibition"}),
-    )
-
-    assert response.status_code == 200
-    with scopes_disabled():
-        assert not ExhibitionProduct.objects.filter(product=foreign).exists()
-
-
-@pytest.mark.django_db
-@override_settings(SITE_URL="https://testserver")
-def test_a_rejected_row_leaves_the_rest_of_the_table_submittable(event):
-    with scopes_disabled():
-        event.plugins = "exhibition"
-        event.save()
-        gold = _product(event, "Gold Sponsor")
-        foreign = _product(_other_event(event), "Someone else's booth")
-        user = _organizer(event, can_change_items=True)
-
-    client = Client()
-    client.force_login(user)
-    response = client.post(
-        _products_url(event),
-        _formset_payload(
-            {"product": foreign.pk, "purpose": "exhibition"},
-            {"product": gold.pk, "purpose": "sponsorship"},
-        ),
-    )
-    content = response.content.decode()
-
-    assert response.status_code == 200
-    # The row that named no product of this event is gone and the rest are renumbered,
-    # so what the page shows back can be submitted again as it stands.
-    assert 'name="form-TOTAL_FORMS" value="1"' in content
-    assert f'name="form-0-product" value="{gold.pk}"' in content
-    assert f'value="{foreign.pk}"' not in content
-
-
-@pytest.mark.django_db
-@override_settings(SITE_URL="https://testserver")
-def test_the_same_product_twice_in_one_submission_is_rejected(event):
-    with scopes_disabled():
-        event.plugins = "exhibition"
-        event.save()
-        gold = _product(event, "Gold Sponsor")
-        user = _organizer(event, can_change_items=True)
-
-    client = Client()
-    client.force_login(user)
-    response = client.post(
-        _products_url(event),
-        _formset_payload(
-            {"product": gold.pk, "purpose": "exhibition"},
-            {"product": gold.pk, "purpose": "sponsorship"},
-        ),
-    )
-
-    assert response.status_code == 200
-    with scopes_disabled():
-        assert not ExhibitionProduct.objects.filter(product=gold).exists()
-
-
-@pytest.mark.django_db
-@override_settings(SITE_URL="https://testserver")
-def test_a_product_the_request_does_not_mention_keeps_its_role(event):
-    with scopes_disabled():
-        event.plugins = "exhibition"
-        event.save()
-        gold = _product(event, "Gold Sponsor")
-        digital = _product(event, "Digital Sponsor")
-        ExhibitionProduct.objects.create(product=digital, includes_booth=False)
-        user = _organizer(event, can_change_items=True)
-
-    client = Client()
-    client.force_login(user)
-    response = client.post(
-        _products_url(event),
-        _formset_payload({"product": gold.pk, "purpose": "exhibition"}),
+        _url(event, "products.edit", pk=product.pk),
+        _form_data(name_0="Platinum Sponsor", price="2500.00"),
     )
 
     assert response.status_code == 302
     with scopes_disabled():
-        assert ExhibitionProduct.objects.get(product=gold).purpose == ExhibitionProductPurpose.EXHIBITION
-        assert ExhibitionProduct.objects.get(product=digital).includes_booth is False
+        product.refresh_from_db()
+        assert str(product) == "Platinum Sponsor"
+        assert product.price == Decimal("2500.00")
 
 
 @pytest.mark.django_db
 @override_settings(SITE_URL="https://testserver")
-def test_products_page_needs_the_product_permission(event):
+def test_organizer_deletes_a_product(event):
+    client = _organizer_client(event)
     with scopes_disabled():
-        event.plugins = "exhibition"
-        event.save()
-        user = _organizer(event, "viewer@example.com", can_view_orders=True)
+        product = _product(event, "Gold Sponsor")
 
-    client = Client()
-    client.force_login(user)
-    response = client.get(_products_url(event))
+    confirm_page = client.get(_url(event, "products.delete", pk=product.pk))
+    assert confirm_page.status_code == 200
+    assert "Gold Sponsor" in confirm_page.content.decode()
 
-    assert response.status_code == 403
+    response = client.post(_url(event, "products.delete", pk=product.pk))
+
+    assert response.status_code == 302
+    with scopes_disabled():
+        assert not ExhibitionProduct.objects.filter(pk=product.pk).exists()
+
+
+@pytest.mark.django_db
+@override_settings(SITE_URL="https://testserver")
+def test_a_product_of_another_event_cannot_be_changed(event):
+    client = _organizer_client(event)
+    with scopes_disabled():
+        foreign = _product(_other_event(event), "Someone else's booth")
+
+    assert client.get(_url(event, "products.edit", pk=foreign.pk)).status_code == 404
+    assert client.post(_url(event, "products.edit", pk=foreign.pk), _form_data()).status_code == 404
+    assert client.post(_url(event, "products.delete", pk=foreign.pk)).status_code == 404
+    with scopes_disabled():
+        foreign.refresh_from_db()
+        assert str(foreign) == "Someone else's booth"
+
+
+@pytest.mark.django_db
+@override_settings(SITE_URL="https://testserver")
+def test_products_pages_need_the_exhibition_settings_permission(event):
+    # The Tickets product permission alone is not enough: these are exhibition settings.
+    client = _organizer_client(event, can_change_items=True)
+
+    assert client.get(_url(event, "products")).status_code == 403
+    assert client.get(_url(event, "products.add")).status_code == 403
+
+
+# The API
+
+
+@pytest.mark.django_db
+def test_api_lists_this_events_products_with_their_exhibition_fields(event):
+    client = _organizer_client(event)
+    with scopes_disabled():
+        product = _product(event, "Digital Sponsor", includes_booth=False, price=Decimal("300.00"))
+        _product(_other_event(event), "Someone else's booth")
+
+    response = client.get(_api_url(event))
+
+    assert response.status_code == 200
+    results = response.json()["results"]
+    assert [row["id"] for row in results] == [product.pk]
+    assert results[0]["name"] == {"en": "Digital Sponsor"}
+    assert results[0]["purpose"] == "sponsorship"
+    assert results[0]["includes_booth"] is False
+    assert results[0]["price"] == "300.00"
+    assert set(results[0]) >= {"active", "available_from", "available_until", "position", "description"}
+
+
+@pytest.mark.django_db
+def test_api_is_read_only(event):
+    client = _organizer_client(event)
+    with scopes_disabled():
+        product = _product(event, "Gold Sponsor")
+
+    assert client.post(_api_url(event), {"name": {"en": "New"}}, content_type="application/json").status_code == 405
+    assert client.delete(_api_url(event, id=product.pk)).status_code == 405
+    with scopes_disabled():
+        assert ExhibitionProduct.objects.filter(pk=product.pk).exists()

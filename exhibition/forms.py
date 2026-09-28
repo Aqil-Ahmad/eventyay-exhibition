@@ -37,6 +37,7 @@ from eventyay.consts import SizeKey
 from eventyay.control.forms import ExtFileField, SplitDateTimeField
 from eventyay.helpers.countries import CachedCountries
 from eventyay.helpers.i18n import get_format_without_seconds, is_rtl
+from eventyay.helpers.money import change_decimal_field
 from i18nfield.forms import I18nFormField, I18nTextInput
 from i18nfield.strings import LazyI18nString
 from phonenumber_field.formfields import PhoneNumberField
@@ -50,7 +51,7 @@ from .models import (
     ExhibitionAnswer,
     ExhibitionCustomEmailTemplate,
     ExhibitionEmailQueue,
-    ExhibitionProductPurpose,
+    ExhibitionProduct,
     ExhibitionQuestion,
     ExhibitionQuestionOption,
     ExhibitionQuestionVariant,
@@ -2243,73 +2244,47 @@ class ExhibitionCustomEmailTemplateForm(I18nModelForm):
             self.fields["body"].widget.enabled_locales = self.event.settings.get("locales")
 
 
-class ExhibitionProductForm(forms.Form):
-    """The exhibition role of one Tickets product, as one row of the products table.
+class ExhibitionProductForm(I18nModelForm):
+    """An exhibition or sponsorship package, laid out like the Tickets product form."""
 
-    The product is carried in the row itself rather than in the field names, so the page
-    can post as many or as few rows as it likes and each one still says what it is about.
-    """
+    class Meta:
+        model = ExhibitionProduct
+        localized_fields = "__all__"
+        fields = [
+            "name",
+            "description",
+            "purpose",
+            "includes_booth",
+            "price",
+            "active",
+            "available_from",
+            "available_until",
+        ]
+        field_classes = {
+            "available_from": SplitDateTimeField,
+            "available_until": SplitDateTimeField,
+        }
+        widgets = {
+            "purpose": forms.Select(attrs={"data-exhibition-product-purpose": ""}),
+            "includes_booth": forms.CheckboxInput(attrs={"data-exhibition-product-booth": ""}),
+            "available_from": SplitDateTimePickerWidget(),
+            "available_until": SplitDateTimePickerWidget(attrs={"data-date-after": "#id_available_from_0"}),
+        }
 
-    product = forms.IntegerField(widget=forms.HiddenInput)
-    purpose = forms.ChoiceField(
-        required=False,
-        choices=[("", _("Not an exhibition product"))] + ExhibitionProductPurpose.choices,
-        widget=forms.Select(attrs={"class": "form-control exhibition-purpose-input"}),
-    )
-    includes_booth = forms.BooleanField(
-        required=False,
-        widget=forms.CheckboxInput(attrs={"class": "exhibition-booth-input"}),
-    )
-
-    def __init__(self, *args, products=None, **kwargs):
+    def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.products = products or {}
-        self.product_object = self.products.get(self._submitted_product_pk())
-        if self.product_object is not None:
-            self.fields["purpose"].widget.attrs["aria-label"] = _("Exhibition purpose for %(product)s") % {
-                "product": self.product_object
-            }
-            self.fields["includes_booth"].widget.attrs["aria-label"] = _(
-                "Includes an exhibition booth for %(product)s"
-            ) % {"product": self.product_object}
+        change_decimal_field(self.fields["price"], self.event.currency)
 
-    def _submitted_product_pk(self):
-        try:
-            return int(self.data.get(self.add_prefix("product"), self.initial.get("product")))
-        except (TypeError, ValueError):
-            return None
-
-    def clean_product(self):
-        product = self.products.get(self.cleaned_data["product"])
-        if product is None:
-            raise ValidationError(_("This product does not belong to this event."))
-        return product
+    def clean_price(self):
+        price = self.cleaned_data.get("price")
+        if price is not None and price < 0:
+            raise ValidationError(_("The price must not be negative."))
+        return price
 
     def clean(self):
-        """An exhibition product is the booth, so an unticked box still means "with booth"."""
         cleaned_data = super().clean()
-        if cleaned_data.get("purpose") == ExhibitionProductPurpose.EXHIBITION:
-            cleaned_data["includes_booth"] = True
+        available_from = cleaned_data.get("available_from")
+        available_until = cleaned_data.get("available_until")
+        if available_from and available_until and available_until < available_from:
+            self.add_error("available_until", _("The end of the sales period must be after its start."))
         return cleaned_data
-
-
-class BaseExhibitionProductFormSet(forms.BaseFormSet):
-    def clean(self):
-        super().clean()
-        if any(self.errors):
-            return
-        seen = set()
-        for form in self.forms:
-            product = form.cleaned_data.get("product")
-            if product is None:
-                continue
-            if product.pk in seen:
-                raise ValidationError(_("The same product was submitted more than once."))
-            seen.add(product.pk)
-
-
-ExhibitionProductFormSet = forms.formset_factory(
-    ExhibitionProductForm,
-    formset=BaseExhibitionProductFormSet,
-    extra=0,
-)

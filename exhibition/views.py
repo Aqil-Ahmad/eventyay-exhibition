@@ -41,7 +41,7 @@ from .forms import (
     ExhibitionDefaultFieldForm,
     ExhibitionEmailQueueForm,
     ExhibitionMailTemplatesForm,
-    ExhibitionProductFormSet,
+    ExhibitionProductForm,
     ExhibitionQuestionForm,
     ExhibitionQuestionOptionFormSet,
     ExhibitionRequestExtraLinkFormSet,
@@ -69,7 +69,9 @@ from .models import (
     LOG_ORGANIZATION_DELETED,
     LOG_ORGANIZATION_PUBLISHED,
     LOG_ORGANIZATION_UNPUBLISHED,
+    LOG_PRODUCT_ADDED,
     LOG_PRODUCT_CHANGED,
+    LOG_PRODUCT_DELETED,
     LOG_QUESTION_ADDED,
     LOG_QUESTION_CHANGED,
     LOG_QUESTION_DELETED,
@@ -104,8 +106,6 @@ from .utils import (
     build_voucher_csv,
     claim_pool_vouchers,
     event_exhibitor_settings,
-    exhibition_products_for_event,
-    mixed_booth_quotas,
     pool_remaining,
     provision_exhibitor_devices,
     public_exhibitor_sessions,
@@ -1658,113 +1658,72 @@ class RequestActionView(EventPermissionRequiredMixin, View):
         return redirect("plugins:exhibition:request.list", **event_kwargs(request.event))
 
 
-class ExhibitionProductListView(EventPermissionRequiredMixin, TemplateView):
-    """Give the event's Tickets products an exhibition role.
+class ExhibitionProductMixin(EventPermissionRequiredMixin):
+    """Exhibition products belong to the exhibition setup, so they need the same permission as the rest of it."""
 
-    Price, category, quota and order form stay in Tickets; this page only says which
-    products are sold as exhibition or sponsorship packages and which of them come with
-    a booth.
-    """
+    permission = "can_change_event_settings"
 
-    permission = "can_change_items"
+    def get_queryset(self):
+        return ExhibitionProduct.objects.filter(event=self.request.event)
+
+    def get_success_url(self):
+        return reverse("plugins:exhibition:products", kwargs=event_kwargs(self.request.event))
+
+
+class ExhibitionProductListView(ExhibitionProductMixin, ListView):
     template_name = "exhibitors/products.html"
+    context_object_name = "products"
 
-    def get_formset(self, data=None):
-        products = {product.pk: product for product in exhibition_products_for_event(self.request.event)}
-        initial = []
-        for product in products.values():
-            role = getattr(product, "exhibition_product", None)
-            initial.append(
-                {
-                    "product": product.pk,
-                    "purpose": role.purpose if role else "",
-                    "includes_booth": role.includes_booth if role else True,
-                }
-            )
-        return ExhibitionProductFormSet(
-            data=data,
-            initial=initial,
-            form_kwargs={"products": products},
-        )
 
-    def known_products_only(self, formset):
-        """The same submission with the rows that name no product of this event dropped.
+class ExhibitionProductFormMixin(ExhibitionProductMixin):
+    model = ExhibitionProduct
+    form_class = ExhibitionProductForm
+    template_name = "exhibitors/product_form.html"
 
-        Such a row has nothing to draw, so the page cannot show it back to the organiser.
-        Leaving it in the formset would leave a hole in the row numbering that the next
-        submission could not fill, so the rows are renumbered without it and the page
-        stays usable.
-        """
-        kept = [form for form in formset.forms if form.product_object is not None]
-        if len(kept) == len(formset.forms):
-            return formset
+    def form_invalid(self, form):
+        messages.error(self.request, _("We could not save your changes. See below for details."))
+        return super().form_invalid(form)
 
-        data = {
-            f"{formset.prefix}-TOTAL_FORMS": str(len(kept)),
-            f"{formset.prefix}-INITIAL_FORMS": str(len(kept)),
-        }
-        for index, form in enumerate(kept):
-            prefix = formset.add_prefix(index)
-            data[f"{prefix}-product"] = form.product_object.pk
-            data[f"{prefix}-purpose"] = form["purpose"].value() or ""
-            if form["includes_booth"].value():
-                data[f"{prefix}-includes_booth"] = "on"
-        return self.get_formset(data=data)
 
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        formset = kwargs.get("formset") or self.get_formset()
-        context["formset"] = formset
-        context["product_rows"] = [
-            {"product": form.product_object, "quotas": form.product_object.quotas.all(), "form": form}
-            for form in formset
-            if form.product_object is not None
-        ]
-        context["mixed_booth_quotas"] = mixed_booth_quotas(self.request.event)
-        context["tickets_products_url"] = reverse(
-            "control:event.products",
-            kwargs=event_kwargs(self.request.event),
-        )
-        return context
-
-    def post(self, request, *args, **kwargs):
-        formset = self.get_formset(data=request.POST)
-        if not formset.is_valid():
-            messages.error(request, _("Nothing was saved because the form contained errors."))
-            return self.render_to_response(self.get_context_data(formset=self.known_products_only(formset)))
-
+class ExhibitionProductCreateView(ExhibitionProductFormMixin, CreateView):
+    def form_valid(self, form):
+        form.instance.event = self.request.event
         with transaction.atomic():
-            for form in formset:
-                product = form.cleaned_data["product"]
-                purpose = form.cleaned_data["purpose"]
-                role = getattr(product, "exhibition_product", None)
+            response = super().form_valid(form)
+            self.object.log_action(
+                LOG_PRODUCT_ADDED,
+                data={"name": self.object.localized_name},
+                user=self.request.user,
+            )
+        messages.success(self.request, _("Your changes have been saved."))
+        return response
 
-                if not purpose:
-                    if role is not None:
-                        role.delete()
-                        product.log_action(
-                            LOG_PRODUCT_CHANGED,
-                            data={"purpose": None},
-                            user=request.user,
-                        )
-                    continue
 
-                includes_booth = form.cleaned_data["includes_booth"]
-                if role is None:
-                    role = ExhibitionProduct(product=product)
-                elif role.purpose == purpose and role.includes_booth == includes_booth:
-                    continue
-                role.purpose = purpose
-                role.includes_booth = includes_booth
-                role.save()
-                product.log_action(
+class ExhibitionProductEditView(ExhibitionProductFormMixin, UpdateView):
+    def form_valid(self, form):
+        with transaction.atomic():
+            response = super().form_valid(form)
+            if form.has_changed():
+                self.object.log_action(
                     LOG_PRODUCT_CHANGED,
-                    data={"purpose": role.purpose, "includes_booth": role.includes_booth},
-                    user=request.user,
+                    data={"changed": form.changed_data},
+                    user=self.request.user,
                 )
+        messages.success(self.request, _("Your changes have been saved."))
+        return response
 
-        messages.success(request, _("Exhibition product settings have been saved."))
-        return redirect("plugins:exhibition:products", **event_kwargs(request.event))
+
+class ExhibitionProductDeleteView(ExhibitionProductMixin, DeleteView):
+    model = ExhibitionProduct
+    template_name = "exhibitors/product_delete.html"
+
+    def form_valid(self, form):
+        self.object.log_action(
+            LOG_PRODUCT_DELETED,
+            data={"name": self.object.localized_name},
+            user=self.request.user,
+        )
+        return super().form_valid(form)
 
 
 class ExhibitionQuestionListView(EventPermissionRequiredMixin, ListView):
