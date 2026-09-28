@@ -29,6 +29,10 @@ def generate_call_secret():
     return secrets.token_urlsafe(24)
 
 
+def generate_voucher_link_token():
+    return secrets.token_urlsafe(32)
+
+
 def generate_request_code():
     alphabet = string.ascii_uppercase + string.digits
     return get_random_string(length=12, allowed_chars=alphabet)
@@ -404,6 +408,12 @@ class ExhibitorInfo(LoggedModel):
         default=False,
         verbose_name=_("Published"),
         help_text=_("Only published organizations appear on the public event website."),
+    )
+    voucher_link_token = models.CharField(
+        max_length=64,
+        unique=True,
+        default=generate_voucher_link_token,
+        editable=False,
     )
     booth_id = models.CharField(
         max_length=100,
