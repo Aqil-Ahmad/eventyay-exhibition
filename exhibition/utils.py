@@ -1,9 +1,11 @@
 from datetime import timedelta
 from typing import TYPE_CHECKING
-from urllib.parse import parse_qs, quote_plus, urlparse
+from urllib.parse import parse_qs, quote_plus, urljoin, urlparse
 
+from django.conf import settings as django_settings
 from django.db import transaction
 from django.db.models import Q, QuerySet
+from django.urls import reverse
 from django.utils import timezone
 from django_scopes import scope
 from eventyay.base.models import TalkSlot
@@ -556,6 +558,57 @@ def store_voucher_csv(event, vouchers):
 
 
 VOUCHER_REDEMPTION_CSV_FILENAME = "voucher-redemptions.csv"
+
+VOUCHER_LINK_GRACE = timedelta(days=30)
+
+
+def voucher_link_expires_at(event):
+    """Organizer-created exhibitors keep link access for a while after the event, then lose it."""
+    return (event.date_to or event.date_from) + VOUCHER_LINK_GRACE
+
+
+def is_organizer_created(exhibitor) -> bool:
+    return not exhibitor.source_requests.exists()
+
+
+def exhibitor_for_voucher_link(event, token):
+    """The organizer-created exhibitor a voucher link opens, or ``None`` when the link must not work."""
+    from .models import ExhibitorInfo
+
+    if not token or timezone.now() > voucher_link_expires_at(event):
+        return None
+    exhibitor = ExhibitorInfo.objects.filter(
+        event=event, voucher_link_token=token, active=True, allow_voucher_access=True
+    ).first()
+    if exhibitor is None or not is_organizer_created(exhibitor):
+        return None
+    return exhibitor
+
+
+def exhibitor_voucher_link(exhibitor) -> str:
+    """Where an exhibitor goes to see their vouchers.
+
+    Organizer-created exhibitors get the no-login page; exhibitors that came through the call
+    use their logged-in request page, which the no-login route deliberately does not serve.
+    """
+    from .models import ExhibitionRequestState
+
+    event = exhibitor.event
+    event_kwargs = {"organizer": event.organizer.slug, "event": event.slug}
+    exhibition_request = exhibitor.source_requests.filter(state=ExhibitionRequestState.ACCEPTED).order_by("-pk").first()
+    if exhibition_request is not None:
+        path = reverse(
+            "plugins:exhibition:request.user_vouchers",
+            kwargs={**event_kwargs, "code": exhibition_request.code},
+        )
+    elif is_organizer_created(exhibitor):
+        path = reverse(
+            "plugins:exhibition:vouchers.link",
+            kwargs={**event_kwargs, "token": exhibitor.voucher_link_token},
+        )
+    else:
+        return ""
+    return urljoin(django_settings.SITE_URL, path)
 
 
 def exhibitor_voucher_redemptions(exhibitor):
