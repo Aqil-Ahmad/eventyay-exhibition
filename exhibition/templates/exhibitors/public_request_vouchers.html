@@ -2,6 +2,8 @@
 {% load i18n %}
 {% load static %}
 
+{% block pagetitle %}{% trans "Vouchers" %}{% endblock %}
+
 {% block custom_header %}
     {{ block.super }}
     <link rel="stylesheet" href="{% static 'exhibition/css/voucher-list.css' %}">
