@@ -240,3 +240,13 @@ def test_blank_status_shows_the_redeemed_tab(event):
 
         assert view.showing_unredeemed is False
         assert [position.voucher.code for position in view.get_queryset()] == ["USED1234"]
+
+
+@pytest.mark.django_db
+def test_exhibitor_without_vouchers_gets_empty_lists(event):
+    with scopes_disabled():
+        _settings(event)
+        exhibition_request, exhibitor, user = _accepted(event)
+
+        assert list(exhibitor_voucher_redemptions(exhibitor)) == []
+        assert exhibitor_unredeemed_vouchers(exhibitor) == []
