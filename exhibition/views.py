@@ -2481,13 +2481,6 @@ class ExhibitorVoucherBulkSendView(EventPermissionRequiredMixin, View):
             queryset = queryset.filter(is_exhibitor=True).order_by("exhibitor_position", "name", "pk")
         else:
             queryset = queryset.order_by("name", "pk")
-        form = ExhibitorFilterForm(
-            data=self.request.GET,
-            event=self.request.event,
-            organization_type=self.organization_type,
-        )
-        if form.is_valid():
-            queryset = form.filter_qs(queryset)
         return queryset
 
     def list_url(self):
