@@ -105,6 +105,7 @@ from .utils import (
     build_voucher_redemption_csv,
     claim_pool_vouchers,
     event_exhibitor_settings,
+    exhibitor_for_voucher_link,
     exhibitor_unredeemed_vouchers,
     exhibitor_voucher_redemptions,
     pool_remaining,
@@ -879,43 +880,16 @@ class UserRequestListView(PublicCallEnabledMixin, PublicEventLoginRequiredMixin,
         return context
 
 
-class UserVoucherListView(PublicCallEnabledMixin, PublicEventLoginRequiredMixin, ListView):
-    """An accepted submitter's own vouchers: what has been redeemed, and what is still theirs to hand out."""
+class ExhibitorVoucherPageMixin:
+    """The voucher page itself; subclasses decide how the exhibitor is identified."""
 
     template_name = "exhibitors/public_request_vouchers.html"
     context_object_name = "voucher_rows"
     paginate_by = 50
-    enforce_private = True
-    require_call_enabled = False
-
-    def has_private_call_access(self, settings):
-        if super().has_private_call_access(settings):
-            return True
-        return self.request.user.is_authenticated
-
-    @cached_property
-    def exhibition_request(self):
-        return get_object_or_404(
-            ExhibitionRequest.objects.select_related("approved_exhibitor"),
-            event=self.request.event,
-            user=self.request.user,
-            code=self.kwargs["code"],
-        )
-
-    @cached_property
-    def exhibitor(self):
-        exhibitor = self.exhibition_request.approved_exhibitor
-        if (
-            self.exhibition_request.state != ExhibitionRequestState.ACCEPTED
-            or exhibitor is None
-            or not exhibitor.allow_voucher_access
-        ):
-            raise Http404
-        return exhibitor
 
     @cached_property
     def exhibition_settings(self):
-        return self.get_exhibition_settings()
+        return event_exhibitor_settings(self.request.event)
 
     @property
     def showing_unredeemed(self):
@@ -952,7 +926,6 @@ class UserVoucherListView(PublicCallEnabledMixin, PublicEventLoginRequiredMixin,
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         settings = self.exhibition_settings
-        context["exhibition_request"] = self.exhibition_request
         context["exhibitor"] = self.exhibitor
         context["showing_unredeemed"] = self.showing_unredeemed
         context["attendee_labels"] = attendee_field_labels(settings)
@@ -985,6 +958,65 @@ class UserVoucherListView(PublicCallEnabledMixin, PublicEventLoginRequiredMixin,
         context["unredeemed_count"] = len(self.unredeemed)
         context["issued_count"] = redeemed_vouchers + len(self.unredeemed)
         return context
+
+
+class UserVoucherListView(ExhibitorVoucherPageMixin, PublicCallEnabledMixin, PublicEventLoginRequiredMixin, ListView):
+    """An accepted submitter's own vouchers, reached from their exhibition requests."""
+
+    enforce_private = True
+    require_call_enabled = False
+
+    def has_private_call_access(self, settings):
+        if super().has_private_call_access(settings):
+            return True
+        return self.request.user.is_authenticated
+
+    @cached_property
+    def exhibition_request(self):
+        return get_object_or_404(
+            ExhibitionRequest.objects.select_related("approved_exhibitor"),
+            event=self.request.event,
+            user=self.request.user,
+            code=self.kwargs["code"],
+        )
+
+    @cached_property
+    def exhibitor(self):
+        exhibitor = self.exhibition_request.approved_exhibitor
+        if (
+            self.exhibition_request.state != ExhibitionRequestState.ACCEPTED
+            or exhibitor is None
+            or not exhibitor.allow_voucher_access
+        ):
+            raise Http404
+        return exhibitor
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["exhibition_request"] = self.exhibition_request
+        return context
+
+
+class ExhibitorVoucherLinkView(ExhibitorVoucherPageMixin, ListView):
+    """The same page for organizer-created exhibitors, opened from the link in their voucher email.
+
+    The token in the URL is the only credential, so the page is kept out of caches, search
+    indexes and Referer headers — the redeem links it shows lead off to the ticket shop.
+    """
+
+    @cached_property
+    def exhibitor(self):
+        exhibitor = exhibitor_for_voucher_link(self.request.event, self.kwargs["token"])
+        if exhibitor is None:
+            raise Http404
+        return exhibitor
+
+    def dispatch(self, request, *args, **kwargs):
+        response = super().dispatch(request, *args, **kwargs)
+        response["Referrer-Policy"] = "no-referrer"
+        response["Cache-Control"] = "no-store"
+        response["X-Robots-Tag"] = "noindex, nofollow"
+        return response
 
 
 def formset_has_entries(formset):
