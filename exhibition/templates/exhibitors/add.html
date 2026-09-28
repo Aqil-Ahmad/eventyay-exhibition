@@ -244,6 +244,27 @@
     <fieldset id="voucher-section">
         <legend>{% trans "Vouchers" %}</legend>
         {% bootstrap_field form.allow_voucher_access layout="control" %}
+        {% if voucher_link %}
+            <div class="form-group">
+                <label class="col-md-3 control-label" for="voucher-link-field">{% trans "Voucher link" %}</label>
+                <div class="col-md-9">
+                    <div class="input-group">
+                        <input type="text" id="voucher-link-field" class="form-control" value="{{ voucher_link }}" readonly data-voucher-link>
+                        <span class="input-group-btn">
+                            <button type="button" class="btn btn-default" data-voucher-link-copy data-copied-label="{% trans "Copied!" %}" title="{% trans "Copy link" %}">
+                                <i class="fa fa-copy"></i>
+                            </button>
+                            <button type="submit" form="voucher-link-regenerate" class="btn btn-default" title="{% trans "Create a new link; the current one stops working" %}">
+                                <i class="fa fa-refresh"></i> {% trans "Regenerate" %}
+                            </button>
+                        </span>
+                    </div>
+                    <p class="help-block">
+                        {% trans "Opens this organization's vouchers and redemptions without logging in. It is included in the voucher email and works while voucher access is enabled." %}
+                    </p>
+                </div>
+            </div>
+        {% endif %}
     </fieldset>
     {% endif %}
 
@@ -270,6 +291,11 @@
         </a>
     </div>
 </form>
+{% if voucher_link_regenerate_url %}
+    <form id="voucher-link-regenerate" action="{{ voucher_link_regenerate_url }}" method="post">
+        {% csrf_token %}
+    </form>
+{% endif %}
 {% if action == 'edit' %}
     <div class="panel panel-default exhibition-history">
         <div class="panel-heading">

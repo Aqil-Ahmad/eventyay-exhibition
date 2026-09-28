@@ -190,5 +190,26 @@
                 })
             }
         }
+
+        var voucherLinkField = document.querySelector('[data-voucher-link]')
+        var voucherLinkCopy = document.querySelector('[data-voucher-link-copy]')
+        if (voucherLinkField && voucherLinkCopy) {
+            voucherLinkCopy.addEventListener('click', function () {
+                var original = voucherLinkCopy.innerHTML
+                var showCopied = function () {
+                    voucherLinkCopy.textContent = voucherLinkCopy.dataset.copiedLabel
+                    window.setTimeout(function () {
+                        voucherLinkCopy.innerHTML = original
+                    }, 1500)
+                }
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    navigator.clipboard.writeText(voucherLinkField.value).then(showCopied)
+                } else {
+                    voucherLinkField.select()
+                    document.execCommand('copy')
+                    showCopied()
+                }
+            })
+        }
     })
 })()
