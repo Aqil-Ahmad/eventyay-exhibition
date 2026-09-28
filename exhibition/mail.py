@@ -41,6 +41,10 @@ PLACEHOLDER_DOCS = (
             "for this exhibitor (access email only)"
         ),
     ),
+    (
+        "{voucher_link}",
+        _lazy("Link where the exhibitor sees their vouchers and redemptions (voucher email only)"),
+    ),
 )
 
 _SETTINGS_PREFIX = "exhibition_mail_"
@@ -114,6 +118,8 @@ DEFAULT_TEMPLATE_SOURCES = {
             "your audience — anyone who uses one gets credited to you as a lead.\n\n"
             "{voucher_list}\n\n"
             "They can redeem a code on the event ticket shop at checkout.\n\n"
+            "You can see which codes have been redeemed, and download your vouchers, at any time here:\n"
+            "{voucher_link}\n\n"
             "If you have any questions, please don't hesitate to reach out.\n\n"
             "Best regards,\n"
             "The {event_name} Team"

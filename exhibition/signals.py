@@ -44,6 +44,7 @@ from .models import (
     LOG_ORGANIZATION_REACTIVATED,
     LOG_ORGANIZATION_SYNCED,
     LOG_ORGANIZATION_UNPUBLISHED,
+    LOG_ORGANIZATION_VOUCHER_LINK_REGENERATED,
     LOG_PREFIX,
     LOG_QUESTION_ADDED,
     LOG_QUESTION_CHANGED,
@@ -63,7 +64,7 @@ from .models import (
     clear_dependencies_on,
     prune_dependency_option,
 )
-from .utils import add_external_image_csp_sources, public_exhibitors_queryset
+from .utils import add_external_image_csp_sources, exhibitor_voucher_link, public_exhibitors_queryset
 
 
 def exhibition_access(event, request):
@@ -301,6 +302,12 @@ def exhibition_mail_placeholders(sender, **kwargs):
             render_voucher_list,
             sample_voucher_list,
         ),
+        SimpleFunctionalMailTextPlaceholder(
+            "voucher_link",
+            ["exhibitor"],
+            exhibitor_voucher_link,
+            "https://example.com/organizer/event/exhibition/vouchers/abc123/",
+        ),
     ]
 
 
@@ -364,6 +371,7 @@ LOG_ENTRY_LABELS = {
     LOG_ORGANIZATION_SYNCED: _("Organization profile updated from the submitter's changes."),
     LOG_ORGANIZATION_PUBLISHED: _("Organization profile published to the public event website."),
     LOG_ORGANIZATION_UNPUBLISHED: _("Organization profile removed from the public event website."),
+    LOG_ORGANIZATION_VOUCHER_LINK_REGENERATED: _("Voucher link replaced; the previous link no longer works."),
     LOG_ORGANIZATION_ADDED: _("Organization profile created."),
     LOG_ORGANIZATION_CHANGED: _("Organization profile changed."),
     LOG_ORGANIZATION_DELETED: _("Organization profile deleted."),
