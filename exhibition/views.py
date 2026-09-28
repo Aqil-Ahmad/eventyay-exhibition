@@ -68,6 +68,7 @@ from .models import (
     LOG_ORGANIZATION_DELETED,
     LOG_ORGANIZATION_PUBLISHED,
     LOG_ORGANIZATION_UNPUBLISHED,
+    LOG_ORGANIZATION_VOUCHER_LINK_REGENERATED,
     LOG_QUESTION_ADDED,
     LOG_QUESTION_CHANGED,
     LOG_QUESTION_DELETED,
@@ -89,6 +90,7 @@ from .models import (
     ExhibitorVoucher,
     SponsorGroup,
     generate_booth_id,
+    generate_voucher_link_token,
     get_next_sponsor_group_level,
     storable_request_field_settings,
 )
@@ -107,7 +109,9 @@ from .utils import (
     event_exhibitor_settings,
     exhibitor_for_voucher_link,
     exhibitor_unredeemed_vouchers,
+    exhibitor_voucher_link,
     exhibitor_voucher_redemptions,
+    is_organizer_created,
     pool_remaining,
     provision_exhibitor_devices,
     public_exhibitor_sessions,
@@ -2301,6 +2305,12 @@ class ExhibitorEditView(ExhibitorLinkFormsetMixin, EventPermissionRequiredMixin,
             "exhibitor": _("Edit Exhibitor"),
             "both": _("Edit Exhibitor & Sponsor"),
         }.get(organization_type_of(self.object), _("Edit Exhibitor or Sponsor"))
+        if is_organizer_created(self.object):
+            context["voucher_link"] = exhibitor_voucher_link(self.object)
+            context["voucher_link_regenerate_url"] = reverse(
+                "plugins:exhibition:vouchers.link.regenerate",
+                kwargs={**event_kwargs(self.request.event), "pk": self.object.pk},
+            )
         return context
 
     def get_success_url(self):
@@ -2309,6 +2319,22 @@ class ExhibitorEditView(ExhibitorLinkFormsetMixin, EventPermissionRequiredMixin,
         if organization_type not in ("sponsor", "exhibitor"):
             organization_type = "sponsor" if self.object.is_sponsor and not self.object.is_exhibitor else "exhibitor"
         return organization_list_url(self.request.event, organization_type)
+
+
+class ExhibitorVoucherLinkRegenerateView(EventPermissionRequiredMixin, View):
+    """Replace an organizer-created organization's voucher link, cutting off the old one."""
+
+    permission = ("can_change_event_settings",)
+
+    def post(self, request, *args, **kwargs):
+        exhibitor = get_object_or_404(ExhibitorInfo, event=request.event, pk=kwargs["pk"])
+        if not is_organizer_created(exhibitor):
+            raise Http404
+        exhibitor.voucher_link_token = generate_voucher_link_token()
+        exhibitor.save(update_fields=["voucher_link_token"])
+        exhibitor.log_action(LOG_ORGANIZATION_VOUCHER_LINK_REGENERATED, user=request.user)
+        messages.success(request, _("A new voucher link was created. The previous link no longer works."))
+        return redirect(reverse("plugins:exhibition:edit", kwargs={**event_kwargs(request.event), "pk": exhibitor.pk}))
 
 
 class ExhibitorDeleteView(EventPermissionRequiredMixin, DeleteView):

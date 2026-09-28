@@ -40,6 +40,7 @@ from .views import (
     ExhibitorPublishView,
     ExhibitorReorderView,
     ExhibitorVoucherBulkSendView,
+    ExhibitorVoucherLinkRegenerateView,
     ExhibitorVoucherLinkView,
     ExhibitorVoucherManageView,
     PublicCallSecretView,
@@ -290,6 +291,11 @@ urlpatterns = [
         "exhibitors/event/<orgslug:organizer>/<slug:event>/edit/<int:pk>",
         ExhibitorEditView.as_view(),
         name="edit",
+    ),
+    path(
+        "exhibitors/event/<orgslug:organizer>/<slug:event>/edit/<int:pk>/voucher-link/regenerate",
+        ExhibitorVoucherLinkRegenerateView.as_view(),
+        name="vouchers.link.regenerate",
     ),
     path(
         "exhibitors/event/<orgslug:organizer>/<slug:event>/delete/<int:pk>",
