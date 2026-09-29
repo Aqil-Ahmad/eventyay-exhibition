@@ -1670,7 +1670,7 @@ class ExhibitionProductMixin(EventPermissionRequiredMixin):
         return reverse("plugins:exhibition:products", kwargs=event_kwargs(self.request.event))
 
 
-class ExhibitionProductListView(ExhibitionProductMixin, ListView):
+class ExhibitionProductListView(ExhibitionProductMixin, PaginationMixin, ListView):
     template_name = "exhibitors/products.html"
     context_object_name = "products"
 

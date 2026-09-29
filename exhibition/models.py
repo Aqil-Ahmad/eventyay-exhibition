@@ -1119,6 +1119,15 @@ class ExhibitionProductQuerySet(models.QuerySet):
         """The products that take up physical exhibition space."""
         return self.filter(includes_booth=True)
 
+    def available(self, now_dt=None):
+        """The products on sale right now: the database side of ``ExhibitionProduct.is_available()``."""
+        now_dt = now_dt or timezone.now()
+        return self.filter(
+            Q(available_from__isnull=True) | Q(available_from__lte=now_dt),
+            Q(available_until__isnull=True) | Q(available_until__gte=now_dt),
+            active=True,
+        )
+
 
 def get_next_product_position(event):
     max_position = ExhibitionProduct.objects.filter(event=event).aggregate(value=Max("position")).get("value")

@@ -161,6 +161,24 @@ def test_availability_follows_the_active_flag_and_the_sales_period(event):
     assert inactive.is_available_by_time(moment) is True
 
 
+@pytest.mark.django_db
+def test_available_products_query_agrees_with_is_available(event):
+    moment = now()
+    with scopes_disabled():
+        _product(event, "Always")
+        _product(event, "Starts now", available_from=moment)
+        _product(event, "Ends now", available_until=moment)
+        _product(event, "Not yet", available_from=moment + dt.timedelta(seconds=1))
+        _product(event, "Over", available_until=moment - dt.timedelta(seconds=1))
+        _product(event, "Inactive", active=False)
+        products = list(ExhibitionProduct.objects.for_event(event))
+
+        available = set(ExhibitionProduct.objects.for_event(event).available(moment))
+
+    assert available == {product for product in products if product.is_available(moment)}
+    assert {str(product) for product in available} == {"Always", "Starts now", "Ends now"}
+
+
 # The form
 
 
@@ -224,6 +242,23 @@ def test_products_page_lists_only_this_events_exhibition_products(event):
     assert "Gold Sponsor" in content
     assert "Someone else&#x27;s booth" not in content
     assert "Visitor Ticket" not in content
+
+
+@pytest.mark.django_db
+@override_settings(SITE_URL="https://testserver")
+def test_products_page_is_paginated_like_the_other_organizer_lists(event):
+    client = _organizer_client(event)
+    with scopes_disabled():
+        for name in ("Gold Sponsor", "Silver Sponsor", "Bronze Sponsor"):
+            _product(event, name)
+
+    first_page = client.get(_url(event, "products") + "?page_size=2").content.decode()
+    second_page = client.get(_url(event, "products") + "?page_size=2&page=2").content.decode()
+
+    assert "Gold Sponsor" in first_page and "Silver Sponsor" in first_page
+    assert "Bronze Sponsor" not in first_page
+    assert "Bronze Sponsor" in second_page
+    assert "Gold Sponsor" not in second_page
 
 
 @pytest.mark.django_db
@@ -331,6 +366,24 @@ def test_api_lists_this_events_products_with_their_exhibition_fields(event):
     assert results[0]["includes_booth"] is False
     assert results[0]["price"] == "300.00"
     assert set(results[0]) >= {"active", "available_from", "available_until", "position", "description"}
+
+
+@pytest.mark.django_db
+def test_api_leaves_out_products_that_are_not_on_sale(event):
+    client = _organizer_client(event)
+    moment = now()
+    with scopes_disabled():
+        on_sale = _product(event, "On sale")
+        inactive = _product(event, "Inactive", active=False)
+        not_yet = _product(event, "Not yet", available_from=moment + dt.timedelta(days=1))
+        over = _product(event, "Over", available_until=moment - dt.timedelta(days=1))
+
+    response = client.get(_api_url(event))
+
+    assert response.status_code == 200
+    assert [row["id"] for row in response.json()["results"]] == [on_sale.pk]
+    for hidden in (inactive, not_yet, over):
+        assert client.get(_api_url(event, id=hidden.pk)).status_code == 404
 
 
 @pytest.mark.django_db

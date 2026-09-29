@@ -367,7 +367,11 @@ class ExhibitionProductSerializer(I18nAwareModelSerializer):
 
 
 class ExhibitionProductViewSet(viewsets.ReadOnlyModelViewSet):
-    """Exhibition and sponsorship products, readable like the Tickets products."""
+    """Exhibition and sponsorship products that are on sale right now.
+
+    Inactive products and those outside their availability window are left out, as they are
+    not on offer; organizers see every product on the Exhibition products page.
+    """
 
     serializer_class = ExhibitionProductSerializer
     queryset = ExhibitionProduct.objects.none()
@@ -375,7 +379,7 @@ class ExhibitionProductViewSet(viewsets.ReadOnlyModelViewSet):
     permission = None
 
     def get_queryset(self):
-        return ExhibitionProduct.objects.filter(event=self.request.event)
+        return ExhibitionProduct.objects.for_event(self.request.event).available()
 
 
 class LeadCreateView(views.APIView):
