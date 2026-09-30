@@ -177,6 +177,34 @@ def test_my_exhibitions_lists_requests_and_organizer_added_profiles(event):
         assert user_has_exhibitions(user)
 
 
+def _my_exhibitions(user, query=""):
+    request = RequestFactory().get(f"/{query}")
+    request.user = user
+    view = MyExhibitionsView()
+    view.request = request
+    view.kwargs = {}
+    return [str(entry["name"]) for entry in view.get_queryset()]
+
+
+@pytest.mark.django_db
+def test_my_exhibitions_search_matches_the_organization_name(event):
+    with scopes_disabled():
+        _exhibitor, user = _accepted(event)
+        _organizer_added(event, email="applicant@example.com", name="Second Booth")
+
+        assert _my_exhibitions(user, "?search=second") == ["Second Booth"]
+
+
+@pytest.mark.django_db
+def test_my_exhibitions_filters_by_event(event):
+    with scopes_disabled():
+        _exhibitor, user = _accepted(event)
+        _organizer_added(event, email="applicant@example.com", name="Second Booth")
+
+        assert sorted(_my_exhibitions(user, f"?event={event.pk}")) == ["Acme", "Second Booth"]
+        assert sorted(_my_exhibitions(user, "?event=999999")) == ["Acme", "Second Booth"]
+
+
 @pytest.mark.django_db
 def test_dashboard_link_is_hidden_without_any_exhibition(event):
     with scopes_disabled():
