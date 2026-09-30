@@ -675,6 +675,16 @@ def user_exhibitors(user):
     return queryset.filter(through_request | by_email).distinct()
 
 
+def exhibitor_login_email(exhibitor) -> str:
+    """The address that opens this exhibitor in My Exhibitions: the requester's account, else the contact email."""
+    exhibition_request = (
+        exhibitor.source_requests.filter(user__isnull=False).select_related("user").order_by("-pk").first()
+    )
+    if exhibition_request is not None:
+        return exhibition_request.user.email
+    return exhibitor.email or ""
+
+
 def user_can_view_vouchers(user, exhibitor) -> bool:
     return (
         exhibitor.active and exhibitor.allow_voucher_access and user_exhibitors(user).filter(pk=exhibitor.pk).exists()

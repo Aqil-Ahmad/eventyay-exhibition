@@ -65,7 +65,7 @@ from .models import (
     clear_dependencies_on,
     prune_dependency_option,
 )
-from .utils import add_external_image_csp_sources, public_exhibitors_queryset
+from .utils import add_external_image_csp_sources, exhibitor_login_email, public_exhibitors_queryset
 
 
 def exhibition_access(event, request):
@@ -274,9 +274,9 @@ def exhibition_mail_placeholders(sender, **kwargs):
             _("Acme Corp"),
         ),
         SimpleFunctionalMailTextPlaceholder(
-            "exhibitor_email",
+            "login_email",
             ["exhibitor"],
-            lambda exhibitor: exhibitor.email or "",
+            exhibitor_login_email,
             "exhibitor@example.com",
         ),
         SimpleFunctionalMailTextPlaceholder(
