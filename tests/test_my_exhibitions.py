@@ -35,9 +35,9 @@ def _settings(event, **kwargs):
     )
 
 
-def _user(email, *, verified=True):
+def _user(email):
     user = User.objects.create_user(email=email, password="pw")
-    EmailAddress.objects.create(user=user, email=email, verified=verified, primary=True)
+    EmailAddress.objects.create(user=user, email=email, verified=True, primary=True)
     return user
 
 
