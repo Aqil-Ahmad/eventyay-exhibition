@@ -13,15 +13,16 @@ from eventyay.base.signals import (
     logentry_object_link,
     register_mail_placeholders,
 )
-from eventyay.common.signals import user_menu_items
+from eventyay.common.signals import user_dashboard_links, user_menu_items
 from eventyay.common.utils.language import localize_event_text
-from eventyay.control.signals import event_dashboard_components, nav_event_common
+from eventyay.control.signals import event_dashboard_components, nav_event_common, nav_global
 from eventyay.presale.signals import (
     front_page_after_content,
     header_nav_tabs,
     html_head,
 )
 
+from .dashboard import user_has_exhibitions
 from .mail import (
     render_device_tokens,
     render_voucher_list,
@@ -472,3 +473,31 @@ def exhibition_logentry_object_link(sender, logentry, **kwargs):
     if a_text and a_map:
         a_map["val"] = '<a href="{href}">{val}</a>'.format_map(a_map)
         return a_text.format_map(a_map)
+
+
+@receiver(nav_global, dispatch_uid="exhibition_nav_global")
+def exhibition_nav_global(sender, request=None, **kwargs):
+    """My Exhibitions in the personal dashboard, next to My Tickets and My Sessions."""
+    if request is None or not user_has_exhibitions(request.user):
+        return []
+    url_name = getattr(request.resolver_match, "url_name", "") or ""
+    return [
+        {
+            "label": _("My Exhibitions"),
+            "url": reverse("plugins:exhibition:my_exhibitions"),
+            "active": url_name.startswith("my_exhibitions"),
+            "icon": "building-o",
+        }
+    ]
+
+
+@receiver(user_dashboard_links, dispatch_uid="exhibition_user_dashboard_link")
+def exhibition_user_dashboard_link(sender, **kwargs):
+    """My Exhibitions in the account dropdown of the dashboard header."""
+    if not user_has_exhibitions(sender.user):
+        return ""
+    return format_html(
+        '<a class="dropdown-item" href="{}"><i class="fa fa-building-o"></i> {}</a>',
+        reverse("plugins:exhibition:my_exhibitions"),
+        _("My exhibitions"),
+    )
