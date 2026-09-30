@@ -646,20 +646,23 @@ def build_voucher_redemption_csv(event, positions, settings) -> str:
 
 
 def verified_emails(user) -> set[str]:
-    """Addresses this account has proven it controls, lower-cased."""
+    """The account's login email plus any other address it has verified, lower-cased."""
     from allauth.account.models import EmailAddress
 
-    return {
+    emails = {
         email.lower() for email in EmailAddress.objects.filter(user=user, verified=True).values_list("email", flat=True)
     }
+    if user.email:
+        emails.add(user.email.lower())
+    return emails
 
 
 def user_exhibitors(user):
     """Organizations a logged-in user may manage from their dashboard.
 
     Exhibitors that came through the call belong to whoever sent the request. Exhibitors the
-    organizer added by hand have no request, so they belong to the account whose verified email
-    matches the address the organizer entered — the same rule My Sessions uses for speakers.
+    organizer added by hand have no request, so they belong to the account whose login or verified
+    email matches the address the organizer entered — the same rule My Sessions uses for speakers.
     """
     from django.db.models.functions import Lower
 
