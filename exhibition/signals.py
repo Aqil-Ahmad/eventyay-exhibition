@@ -274,6 +274,12 @@ def exhibition_mail_placeholders(sender, **kwargs):
             _("Acme Corp"),
         ),
         SimpleFunctionalMailTextPlaceholder(
+            "exhibitor_email",
+            ["exhibitor"],
+            lambda exhibitor: exhibitor.email or "",
+            "exhibitor@example.com",
+        ),
+        SimpleFunctionalMailTextPlaceholder(
             "booth_id",
             ["exhibitor"],
             lambda exhibitor: exhibitor.booth_id or "",

@@ -33,6 +33,7 @@ PLACEHOLDER_DOCS = (
     ("{name}", _lazy("The applicant's name")),
     ("{exhibitor_name}", _lazy("The exhibitor / sponsor name (access email only)")),
     ("{booth_id}", _lazy("The exhibitor's booth ID (access email only)")),
+    ("{exhibitor_email}", _lazy("The exhibitor's contact email address")),
     ("{exhibitor_access_code}", _lazy("The exhibitor's secret access code (access email only)")),
     (
         "{device_tokens}",
@@ -122,8 +123,8 @@ DEFAULT_TEMPLATE_SOURCES = {
             "{voucher_list}\n\n"
             "They can redeem a code on the event ticket shop at checkout.\n\n"
             "You can see which codes have been redeemed, and download your vouchers, at any time in "
-            "My Exhibitions. Log in, or create an account, with this email address:\n"
-            "{my_exhibitions_url}\n\n"
+            "My Exhibitions: {my_exhibitions_url}\n\n"
+            "To open it, log in or create an account with {exhibitor_email}.\n\n"
             "If you have any questions, please don't hesitate to reach out.\n\n"
             "Best regards,\n"
             "The {event_name} Team"
