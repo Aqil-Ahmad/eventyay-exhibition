@@ -20,6 +20,7 @@ from exhibition.models import (
 )
 from exhibition.utils import (
     build_voucher_redemption_csv,
+    exhibitor_login_email,
     exhibitor_unredeemed_vouchers,
     exhibitor_voucher_redemptions,
     user_can_view_vouchers,
@@ -203,6 +204,22 @@ def test_my_exhibitions_filters_by_event(event):
 
         assert sorted(_my_exhibitions(user, f"?event={event.pk}")) == ["Acme", "Second Booth"]
         assert sorted(_my_exhibitions(user, "?event=999999")) == ["Acme", "Second Booth"]
+
+
+@pytest.mark.django_db
+def test_login_email_is_the_requesters_account_for_request_based_exhibitors(event):
+    with scopes_disabled():
+        exhibitor, _user_ = _accepted(event)
+        exhibitor.email = "contact@example.com"
+        exhibitor.save(update_fields=["email"])
+
+        assert exhibitor_login_email(exhibitor) == "applicant@example.com"
+
+
+@pytest.mark.django_db
+def test_login_email_is_the_contact_email_for_organizer_added_exhibitors(event):
+    with scopes_disabled():
+        assert exhibitor_login_email(_organizer_added(event)) == "booth@example.com"
 
 
 @pytest.mark.django_db
