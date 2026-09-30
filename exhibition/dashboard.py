@@ -36,7 +36,7 @@ def _event_kwargs(event):
 
 def user_has_exhibitions(user) -> bool:
     """Whether the dashboard should offer My Exhibitions to this account at all."""
-    if not user.is_authenticated:
+    if user is None or not user.is_authenticated:
         return False
     if ExhibitionRequest.objects.filter(user=user).exists():
         return True
