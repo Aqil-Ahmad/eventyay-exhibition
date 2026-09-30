@@ -41,6 +41,13 @@ PLACEHOLDER_DOCS = (
             "for this exhibitor (access email only)"
         ),
     ),
+    (
+        "{my_exhibitions_url}",
+        _lazy(
+            "Link to My Exhibitions in the personal dashboard, where the exhibitor sees "
+            "their vouchers and redemptions (voucher email only)"
+        ),
+    ),
 )
 
 _SETTINGS_PREFIX = "exhibition_mail_"
@@ -114,6 +121,9 @@ DEFAULT_TEMPLATE_SOURCES = {
             "your audience — anyone who uses one gets credited to you as a lead.\n\n"
             "{voucher_list}\n\n"
             "They can redeem a code on the event ticket shop at checkout.\n\n"
+            "You can see which codes have been redeemed, and download your vouchers, at any time in "
+            "My Exhibitions. Log in, or create an account, with this email address:\n"
+            "{my_exhibitions_url}\n\n"
             "If you have any questions, please don't hesitate to reach out.\n\n"
             "Best regards,\n"
             "The {event_name} Team"
@@ -356,6 +366,10 @@ def _sample_redeem_url(event, code):
     from eventyay.multidomain.urlreverse import build_absolute_uri
 
     return f"{build_absolute_uri(event, 'presale:event.redeem')}?voucher={code}"
+
+
+def my_exhibitions_url(exhibitor=None):
+    return urljoin(django_settings.SITE_URL, reverse("plugins:exhibition:my_exhibitions"))
 
 
 def sample_voucher_list(event=None):

@@ -24,6 +24,7 @@ from eventyay.presale.signals import (
 
 from .dashboard import user_has_exhibitions
 from .mail import (
+    my_exhibitions_url,
     render_device_tokens,
     render_voucher_list,
     request_public_url,
@@ -301,6 +302,12 @@ def exhibition_mail_placeholders(sender, **kwargs):
             ["exhibitor"],
             render_voucher_list,
             sample_voucher_list,
+        ),
+        SimpleFunctionalMailTextPlaceholder(
+            "my_exhibitions_url",
+            ["exhibitor"],
+            my_exhibitions_url,
+            my_exhibitions_url(),
         ),
     ]
 
