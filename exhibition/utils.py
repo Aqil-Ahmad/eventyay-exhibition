@@ -643,3 +643,36 @@ def build_voucher_redemption_csv(event, positions, settings) -> str:
             ]
         )
     return output.getvalue()
+
+
+def verified_emails(user) -> set[str]:
+    """Addresses this account has proven it controls, lower-cased."""
+    from allauth.account.models import EmailAddress
+
+    return {
+        email.lower() for email in EmailAddress.objects.filter(user=user, verified=True).values_list("email", flat=True)
+    }
+
+
+def user_exhibitors(user):
+    """Organizations a logged-in user may manage from their dashboard.
+
+    Exhibitors that came through the call belong to whoever sent the request. Exhibitors the
+    organizer added by hand have no request, so they belong to the account whose verified email
+    matches the address the organizer entered — the same rule My Sessions uses for speakers.
+    """
+    from django.db.models.functions import Lower
+
+    from .models import ExhibitorInfo
+
+    queryset = ExhibitorInfo.objects.annotate(email_lower=Lower("email"))
+    through_request = Q(source_requests__user=user)
+    emails = verified_emails(user)
+    by_email = Q(source_requests__isnull=True, email_lower__in=emails) if emails else Q(pk__in=[])
+    return queryset.filter(through_request | by_email).distinct()
+
+
+def user_can_view_vouchers(user, exhibitor) -> bool:
+    return (
+        exhibitor.active and exhibitor.allow_voucher_access and user_exhibitors(user).filter(pk=exhibitor.pk).exists()
+    )
