@@ -659,7 +659,7 @@ def user_exhibitors(user):
 
     Exhibitors that came through the call belong to whoever sent the request. Exhibitors the
     organizer added by hand have no request, so they belong to the account whose verified email
-    matches the address the organizer entered — the same rule My Sessions uses for speakers.
+    matches the address the organizer entered.
     """
     from django.db.models.functions import Lower
 
