@@ -50,7 +50,8 @@ def _accepted(event, *, allow_voucher_access=True, state=ExhibitionRequestState.
 
 def _organizer_added(event, email="booth@example.com", **kwargs):
     kwargs.setdefault("allow_voucher_access", True)
-    return ExhibitorInfo.objects.create(event=event, name="Booth Co", email=email, **kwargs)
+    kwargs.setdefault("name", "Booth Co")
+    return ExhibitorInfo.objects.create(event=event, email=email, **kwargs)
 
 
 def _redeem(event, exhibitor, *, code, status=Order.STATUS_PAID):
