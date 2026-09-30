@@ -18,9 +18,9 @@
     <form action="" method="post" class="form-horizontal">
         {% csrf_token %}
         {% bootstrap_form_errors form %}
-        {% include 'exhibitors/_i18n_language_switcher.html' %}
         <fieldset>
             <legend>{% trans "General information" %}</legend>
+            {% include 'exhibitors/_i18n_language_switcher.html' %}
             {% bootstrap_field form.name layout="control" %}
             {% bootstrap_field form.description layout="control" %}
             {% bootstrap_field form.purpose layout="control" %}
