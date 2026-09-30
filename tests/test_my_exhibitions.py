@@ -109,9 +109,19 @@ def test_organizer_added_exhibitor_opens_for_the_matching_verified_email(event):
 def test_unverified_email_does_not_unlock_an_organizer_added_exhibitor(event):
     with scopes_disabled():
         exhibitor = _organizer_added(event)
-        claimant = _user("booth@example.com", verified=False)
+        claimant = _user("claimant@example.com")
+        EmailAddress.objects.create(user=claimant, email="booth@example.com", verified=False)
 
         assert not user_can_view_vouchers(claimant, exhibitor)
+
+
+@pytest.mark.django_db
+def test_login_email_opens_an_organizer_added_exhibitor_without_an_address_record(event):
+    with scopes_disabled():
+        exhibitor = _organizer_added(event)
+        owner = User.objects.create_user(email="Booth@example.com", password="pw")
+
+        assert user_can_view_vouchers(owner, exhibitor)
 
 
 @pytest.mark.django_db
