@@ -1,10 +1,40 @@
 {% extends "eventyay_common/base.html" %}
 {% load i18n %}
+{% load bootstrap3 %}
 
 {% block title %}{% translate "My Exhibitions" %}{% endblock %}
 
 {% block content %}
     <h1>{% translate "My Exhibitions" %}</h1>
+
+    <div class="advanced-filter-search" data-advanced-filter-search>
+        <form class="filter-form advanced-filter-search-form" action="" method="get">
+            <div class="advanced-filter-search-bar">
+                <div class="input-group advanced-filter-search-query-group">
+                    <input id="id_search" type="text" name="search" class="form-control" placeholder="{% translate 'Search exhibitions…' %}" aria-label="{% translate 'Search exhibitions…' %}" value="{{ filter_form.search.value|default_if_none:'' }}">
+                    <span class="input-group-btn">
+                        <button class="btn btn-primary" type="submit">
+                            <span class="fa fa-search" aria-hidden="true"></span>
+                            {% translate "Search" %}
+                        </button>
+                    </span>
+                </div>
+                <div class="advanced-filter-field advanced-filter-field--inline">
+                    {% bootstrap_field filter_form.event layout='inline' %}
+                </div>
+                <div class="advanced-filter-search-actions">
+                    <button class="btn btn-primary" type="submit">
+                        <span class="fa fa-filter" aria-hidden="true"></span>
+                        {% translate "Filter" %}
+                    </button>
+                    <a href="{{ request.path }}" class="btn btn-default btn-clear-filter" aria-label="{% translate 'Clear filters' %}" title="{% translate 'Clear filters' %}">
+                        <span class="fa fa-eraser" aria-hidden="true"></span>
+                        <span class="sr-only">{% translate "Clear filters" %}</span>
+                    </a>
+                </div>
+            </div>
+        </form>
+    </div>
 
     <div data-ajax-results-region>
         {% if entries %}
@@ -49,6 +79,8 @@
                 </table>
             </div>
             {% include "pretixcontrol/pagination.html" %}
+        {% elif has_active_filters %}
+            <div class="alert alert-info">{% translate "No exhibitions match your filters." %}</div>
         {% else %}
             {% url 'presale:events.upcoming' as upcoming_url %}
             {% url 'eventyay_common:dashboard' as dashboard_url %}

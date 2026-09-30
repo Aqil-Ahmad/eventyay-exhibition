@@ -1,10 +1,13 @@
+from django import forms
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.db.models import Q
 from django.http import Http404, HttpResponse
 from django.shortcuts import get_object_or_404
 from django.urls import reverse
 from django.utils.functional import cached_property
 from django.utils.translation import gettext_lazy as _
 from django.views.generic import ListView
+from eventyay.base.models import Event
 
 from .models import ExhibitionRequest, ExhibitionRequestState, ExhibitorInfo
 from .utils import (
@@ -41,6 +44,31 @@ def user_has_exhibitions(user) -> bool:
     if ExhibitionRequest.objects.filter(user=user).exists():
         return True
     return user_exhibitors(user).filter(source_requests__isnull=True).exists()
+
+
+class MyExhibitionsFilterForm(forms.Form):
+    search = forms.CharField(required=False, label=_("Search"))
+    event = forms.ModelChoiceField(
+        queryset=Event.objects.none(),
+        required=False,
+        label=_("Event"),
+        widget=forms.Select(attrs={"class": "form-control"}),
+        empty_label=_("Select an Event"),
+    )
+
+    def __init__(self, *args, user=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        if user is not None:
+            request_events = ExhibitionRequest.objects.filter(user=user).values("event")
+            added_events = user_exhibitors(user).filter(source_requests__isnull=True).values("event")
+            self.fields["event"].queryset = Event.objects.filter(
+                Q(pk__in=request_events) | Q(pk__in=added_events)
+            ).order_by("-date_from")
+
+    def has_active_filters(self) -> bool:
+        if not self.is_bound or not self.is_valid():
+            return False
+        return bool(self.cleaned_data.get("event") or (self.cleaned_data.get("search") or "").strip())
 
 
 def _vouchers_url(exhibitor):
@@ -97,10 +125,27 @@ class MyExhibitionsView(LoginRequiredMixin, ListView):
                 "vouchers_url": _vouchers_url(exhibitor),
             }
 
+    @cached_property
+    def filter_form(self):
+        return MyExhibitionsFilterForm(self.request.GET, user=self.request.user)
+
     def get_queryset(self):
         entries = [*self.request_entries(), *self.organizer_added_entries()]
+        if self.filter_form.is_valid():
+            event = self.filter_form.cleaned_data.get("event")
+            search = (self.filter_form.cleaned_data.get("search") or "").strip().lower()
+            if event:
+                entries = [entry for entry in entries if entry["event"].pk == event.pk]
+            if search:
+                entries = [entry for entry in entries if search in str(entry["name"]).lower()]
         entries.sort(key=lambda entry: entry["event"].date_from, reverse=True)
         return entries
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["filter_form"] = self.filter_form
+        context["has_active_filters"] = self.filter_form.has_active_filters()
+        return context
 
 
 class MyExhibitionVouchersView(LoginRequiredMixin, ListView):
