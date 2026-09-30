@@ -336,6 +336,7 @@ def test_default_voucher_template_links_to_my_exhibitions():
     _subject, body = mail_helpers.DEFAULT_TEMPLATES[mail_helpers.VOUCHERS]
 
     assert "{my_exhibitions_url}" in str(body)
+    assert "{exhibitor_email}" in str(body)
 
 
 @pytest.mark.django_db
@@ -346,6 +347,8 @@ def test_voucher_email_points_the_exhibitor_to_my_exhibitions(voucher_event):
 
     assert "{my_exhibitions_url}" not in queued.body
     assert mail_helpers.my_exhibitions_url() in queued.body
+    assert "{exhibitor_email}" not in queued.body
+    assert "acme@example.com" in queued.body
 
 
 @pytest.mark.django_db
