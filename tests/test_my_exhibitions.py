@@ -1,5 +1,6 @@
 from datetime import timedelta
 from decimal import Decimal
+from unittest.mock import patch
 
 import pytest
 from allauth.account.models import EmailAddress
@@ -10,8 +11,16 @@ from django_scopes import scopes_disabled
 from eventyay.base.models import Order, OrderPosition, Product, Voucher
 from eventyay.base.models.auth import User
 
-from exhibition.dashboard import MyExhibitionsView, MyExhibitionVouchersView, user_has_exhibitions
+from exhibition import mail as mail_helpers
+from exhibition.dashboard import (
+    MyExhibitionEditView,
+    MyExhibitionsView,
+    MyExhibitionVouchersView,
+    user_has_exhibitions,
+)
+from exhibition.forms import ExhibitorSelfEditForm
 from exhibition.models import (
+    ExhibitionEmailQueue,
     ExhibitionRequest,
     ExhibitionRequestState,
     ExhibitorInfo,
@@ -23,8 +32,10 @@ from exhibition.utils import (
     exhibitor_login_email,
     exhibitor_unredeemed_vouchers,
     exhibitor_voucher_redemptions,
+    user_can_edit_profile,
     user_can_view_vouchers,
 )
+from exhibition.views import send_profile_invitation
 
 
 def _settings(event, **kwargs):
@@ -300,3 +311,152 @@ def test_each_tab_downloads_its_own_csv(event):
         assert "USED1234" in redeemed_body and "SPARE123" not in redeemed_body
         assert pending_response["Content-Disposition"].endswith('filename="exhibitor-vouchers.csv"')
         assert "SPARE123" in pending_response.content.decode("utf-8")
+
+
+def _edit_view(exhibitor, user):
+    request = RequestFactory().get("/")
+    request.user = user
+    view = MyExhibitionEditView()
+    view.request = request
+    view.kwargs = {"pk": exhibitor.pk}
+    view.args = ()
+    return view
+
+
+@pytest.mark.django_db
+def test_verified_email_owner_can_edit_an_organizer_added_profile(event):
+    with scopes_disabled():
+        exhibitor = _organizer_added(event)
+        owner = _user("booth@example.com")
+
+        assert user_can_edit_profile(owner, exhibitor)
+        assert _edit_view(exhibitor, owner).exhibitor == exhibitor
+
+
+@pytest.mark.django_db
+def test_stranger_cannot_edit_an_organizer_added_profile(event):
+    with scopes_disabled():
+        exhibitor = _organizer_added(event)
+        stranger = _user("stranger@example.com")
+
+        with pytest.raises(Http404):
+            _edit_view(exhibitor, stranger).exhibitor
+
+
+@pytest.mark.django_db
+def test_unverified_email_cannot_edit_an_organizer_added_profile(event):
+    with scopes_disabled():
+        exhibitor = _organizer_added(event)
+        claimant = User.objects.create_user(email="booth@example.com", password="pw")
+
+        assert not user_can_edit_profile(claimant, exhibitor)
+
+
+@pytest.mark.django_db
+def test_request_based_profiles_are_not_editable_here(event):
+    with scopes_disabled():
+        exhibitor, owner = _accepted(event)
+
+        assert not user_can_edit_profile(owner, exhibitor)
+        with pytest.raises(Http404):
+            _edit_view(exhibitor, owner).exhibitor
+
+
+@pytest.mark.django_db
+def test_inactive_profile_cannot_be_edited(event):
+    with scopes_disabled():
+        exhibitor = _organizer_added(event, active=False)
+        owner = _user("booth@example.com")
+
+        assert not user_can_edit_profile(owner, exhibitor)
+
+
+@pytest.mark.django_db
+def test_only_organizer_added_profiles_get_an_edit_link(event):
+    with scopes_disabled():
+        _settings(event)
+        _exhibitor, user = _accepted(event)
+        _organizer_added(event, email="applicant@example.com", name="Second Booth")
+        view = MyExhibitionsView()
+        view.request = RequestFactory().get("/")
+        view.request.user = user
+        view.kwargs = {}
+
+        links = {str(entry["name"]): entry["edit_url"] for entry in view.get_queryset()}
+
+        assert not links["Acme"]
+        assert links["Second Booth"]
+
+
+@pytest.mark.django_db
+def test_self_edit_form_leaves_out_organizer_only_fields(event):
+    with scopes_disabled():
+        _settings(event)
+        exhibitor = _organizer_added(event)
+
+        form = ExhibitorSelfEditForm(instance=exhibitor, event=event)
+
+        for name in ("email", "published", "is_sponsor", "is_exhibitor", "allow_voucher_access", "booth_id", "comment"):
+            assert name not in form.fields
+
+
+@pytest.mark.django_db
+def test_self_edit_saves_content_without_touching_organizer_settings(event):
+    with scopes_disabled():
+        _settings(event)
+        exhibitor = _organizer_added(event, is_sponsor=True, is_exhibitor=False, booth_id="B-7")
+        form = ExhibitorSelfEditForm(
+            {"name_0": "Booth Co", "url": "https://booth.example.com"},
+            instance=exhibitor,
+            event=event,
+        )
+
+        assert form.is_valid(), form.errors
+        form.save()
+        exhibitor.refresh_from_db()
+
+        assert exhibitor.url == "https://booth.example.com"
+        assert exhibitor.email == "booth@example.com"
+        assert exhibitor.is_sponsor and not exhibitor.is_exhibitor
+        assert exhibitor.allow_voucher_access
+        assert exhibitor.booth_id == "B-7"
+
+
+@pytest.mark.django_db
+def test_profile_email_is_queued_for_the_exhibitor(event):
+    with scopes_disabled():
+        _settings(event)
+        exhibitor = _organizer_added(event)
+
+        queued = mail_helpers.queue_exhibitor_profile_email(event, exhibitor)
+
+        assert queued.role == mail_helpers.EXHIBITOR_PROFILE
+        assert queued.to_email == "booth@example.com"
+        assert mail_helpers.my_exhibitions_url() in queued.body
+        assert "booth@example.com" in queued.body
+        assert "{my_exhibitions_url}" not in queued.body
+        assert "{login_email}" not in queued.body
+
+
+@pytest.mark.django_db
+def test_profile_email_is_skipped_without_an_address(event):
+    with scopes_disabled():
+        _settings(event)
+        exhibitor = _organizer_added(event, email="")
+
+        assert mail_helpers.queue_exhibitor_profile_email(event, exhibitor) is None
+        assert not ExhibitionEmailQueue.objects.filter(event=event).exists()
+
+
+@pytest.mark.django_db
+def test_creating_a_profile_sends_the_invitation_once_committed(event, django_capture_on_commit_callbacks):
+    with scopes_disabled():
+        _settings(event)
+        exhibitor = _organizer_added(event)
+
+        with patch.object(ExhibitionEmailQueue, "send") as send:
+            with django_capture_on_commit_callbacks(execute=True):
+                send_profile_invitation(event, exhibitor, None)
+
+        send.assert_called_once()
+        assert ExhibitionEmailQueue.objects.filter(event=event, role=mail_helpers.EXHIBITOR_PROFILE).count() == 1
