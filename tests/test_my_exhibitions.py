@@ -372,7 +372,7 @@ def test_inactive_profile_cannot_be_edited(event):
 
 
 @pytest.mark.django_db
-def test_only_organizer_added_profiles_get_an_edit_link(event):
+def test_organizer_added_profiles_link_their_title_to_the_edit_page(event):
     with scopes_disabled():
         _settings(event)
         _exhibitor, user = _accepted(event)
@@ -382,10 +382,10 @@ def test_only_organizer_added_profiles_get_an_edit_link(event):
         view.request.user = user
         view.kwargs = {}
 
-        links = {str(entry["name"]): entry["edit_url"] for entry in view.get_queryset()}
+        links = {str(entry["name"]): entry["request_url"] for entry in view.get_queryset()}
 
-        assert not links["Acme"]
-        assert links["Second Booth"]
+        assert "/edit/" not in links["Acme"]
+        assert links["Second Booth"].endswith("/edit/")
 
 
 @pytest.mark.django_db
