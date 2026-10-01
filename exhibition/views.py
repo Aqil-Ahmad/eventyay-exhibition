@@ -1199,8 +1199,12 @@ class ExhibitorLinkFormsetMixin:
     social_formset_prefix = "social_links"
     extra_formset_prefix = "extra_links"
 
+    @property
+    def exhibition_event(self):
+        return self.request.event
+
     def get_request_field_settings(self):
-        settings = ExhibitorSettings.objects.get_or_create(event=self.request.event)[0]
+        settings = ExhibitorSettings.objects.get_or_create(event=self.exhibition_event)[0]
         return settings.normalized_request_field_settings
 
     def request_field_is_active(self, key):
@@ -1211,7 +1215,7 @@ class ExhibitorLinkFormsetMixin:
 
     def get_formset_instance(self):
         obj = getattr(self, "object", None)
-        return obj if obj is not None else ExhibitorInfo(event=self.request.event)
+        return obj if obj is not None else ExhibitorInfo(event=self.exhibition_event)
 
     def get_social_formset(self):
         return ExhibitorSocialLinkFormSet(
