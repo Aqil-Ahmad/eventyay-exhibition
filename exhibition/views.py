@@ -154,6 +154,13 @@ def send_request_confirmation(event, exhibition_request, requestor):
     )
 
 
+def send_profile_invitation(event, exhibitor, requestor):
+    """Tell an exhibitor their profile exists and how to edit it, once the transaction commits."""
+    transaction.on_commit(
+        lambda: mail_helpers.queue_exhibitor_profile_email(event, exhibitor, send_now=True, requestor=requestor)
+    )
+
+
 def queue_exhibitor_access_mail(request, exhibitor):
     """Queue the access-credentials email for review, saying so when there is nothing to send."""
     if not (exhibitor.email or "").strip():
@@ -2072,6 +2079,7 @@ class ExhibitorCreateView(ExhibitorLinkFormsetMixin, EventPermissionRequiredMixi
         )
         if access_newly_granted(form.instance):
             grant_lead_scanning_access(self.request, self.object)
+        send_profile_invitation(self.request.event, self.object, self.request.user)
         return response
 
     def get_context_data(self, **kwargs):
@@ -3207,6 +3215,7 @@ class EmailTemplatesView(EventPermissionRequiredMixin, TemplateView):
                 (mail_helpers.REQUEST_REJECTED, _("Request rejected")),
                 (mail_helpers.EXHIBITOR_ACCESS, _("Exhibitor lead scanning key")),
                 (mail_helpers.VOUCHERS, _("Vouchers")),
+                (mail_helpers.EXHIBITOR_PROFILE, _("Profile created for the exhibitor")),
             )
         ]
         context["custom_panels"] = custom_panels

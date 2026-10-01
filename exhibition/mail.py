@@ -22,8 +22,9 @@ REQUEST_ACCEPTED = "request_accepted"
 REQUEST_REJECTED = "request_rejected"
 EXHIBITOR_ACCESS = "exhibitor_access"
 VOUCHERS = "vouchers"
+EXHIBITOR_PROFILE = "exhibitor_profile"
 
-LIFECYCLE_ROLES = (REQUEST_NEW, REQUEST_ACCEPTED, REQUEST_REJECTED, EXHIBITOR_ACCESS, VOUCHERS)
+LIFECYCLE_ROLES = (REQUEST_NEW, REQUEST_ACCEPTED, REQUEST_REJECTED, EXHIBITOR_ACCESS, VOUCHERS, EXHIBITOR_PROFILE)
 
 PLACEHOLDER_DOCS = (
     ("{event_name}", _lazy("The event's name")),
@@ -46,7 +47,7 @@ PLACEHOLDER_DOCS = (
         "{my_exhibitions_url}",
         _lazy(
             "Link to My Exhibitions in the personal dashboard, where the exhibitor sees "
-            "their vouchers and redemptions (voucher email only)"
+            "their profile, vouchers and redemptions (voucher and profile emails only)"
         ),
     ),
 )
@@ -114,6 +115,19 @@ DEFAULT_TEMPLATE_SOURCES = {
             "The {event_name} Team"
         ),
     ),
+    EXHIBITOR_PROFILE: (
+        gettext_noop("Complete your profile for {event_name}"),
+        gettext_noop(
+            "Dear {exhibitor_name},\n\n"
+            "A profile for {exhibitor_name} has been created for {event_name}. "
+            "Please add your logo, banner and other details so it can be shown to attendees.\n\n"
+            "You can edit your profile in My Exhibitions: {my_exhibitions_url}\n\n"
+            "To open it, log in or create an account with {login_email}.\n\n"
+            "If you have any questions, please don't hesitate to reach out.\n\n"
+            "Best regards,\n"
+            "The {event_name} Team"
+        ),
+    ),
     VOUCHERS: (
         gettext_noop("Your vouchers for {event_name} — {exhibitor_name}"),
         gettext_noop(
@@ -177,6 +191,7 @@ ROLE_PLACEHOLDER_CONTEXT = {
     REQUEST_REJECTED: REQUEST_PLACEHOLDER_CONTEXT,
     EXHIBITOR_ACCESS: EXHIBITOR_PLACEHOLDER_CONTEXT,
     VOUCHERS: EXHIBITOR_PLACEHOLDER_CONTEXT,
+    EXHIBITOR_PROFILE: EXHIBITOR_PLACEHOLDER_CONTEXT,
 }
 
 
@@ -497,6 +512,32 @@ def queue_exhibitor_access_email(event, exhibitor, *, requestor=None):
         body=_render(body_tpl, context, locale),
         locale=locale or "",
     )
+
+
+def queue_exhibitor_profile_email(event, exhibitor, *, send_now=False, requestor=None):
+    """Queue the invitation to complete a profile created for the exhibitor; ``None`` without a recipient."""
+    from .models import ExhibitionEmailQueue
+
+    to_email = exhibitor.recipient_email
+    if not to_email:
+        return None
+
+    subject_tpl, body_tpl = get_email_template(event, EXHIBITOR_PROFILE)
+    locale = recipient_locale(event)
+    context = build_exhibitor_context(event, exhibitor)
+
+    queued = ExhibitionEmailQueue.objects.create(
+        event=event,
+        exhibitor=exhibitor,
+        role=EXHIBITOR_PROFILE,
+        to_email=to_email,
+        subject=_render(subject_tpl, context, locale),
+        body=_render(body_tpl, context, locale),
+        locale=locale or "",
+    )
+    if send_now:
+        queued.send(requestor=requestor)
+    return queued
 
 
 def exhibitor_vouchers(exhibitor):
