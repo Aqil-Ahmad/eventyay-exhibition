@@ -278,6 +278,11 @@ class MyExhibitionEditView(LoginRequiredMixin, ExhibitorLinkFormsetMixin, Update
     def get_object(self, queryset=None):
         return self.exhibitor
 
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs["event"] = self.exhibitor.event
+        return kwargs
+
     def post(self, request, *args, **kwargs):
         self.object = self.get_object()
         return self.post_with_formsets()
