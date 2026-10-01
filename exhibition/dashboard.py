@@ -116,7 +116,6 @@ class MyExhibitionsView(LoginRequiredMixin, ListView):
                     "plugins:exhibition:request.user_edit",
                     kwargs={**_event_kwargs(exhibition_request.event), "code": exhibition_request.code},
                 ),
-                "edit_url": None,
                 "vouchers_url": _vouchers_url(exhibitor),
             }
 
@@ -133,8 +132,7 @@ class MyExhibitionsView(LoginRequiredMixin, ListView):
                 "event": exhibitor.event,
                 "status": _("Added by the organizer") if exhibitor.active else _("Inactive"),
                 "status_class": "label-success" if exhibitor.active else "label-default",
-                "request_url": None,
-                "edit_url": _edit_url(exhibitor),
+                "request_url": _edit_url(exhibitor),
                 "vouchers_url": _vouchers_url(exhibitor),
             }
 
