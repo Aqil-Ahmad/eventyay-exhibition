@@ -1,6 +1,6 @@
 import io
 import json
-from urllib.parse import quote
+from urllib.parse import quote, urlencode
 
 from defusedcsv import csv
 from django.conf import settings as django_settings
@@ -652,6 +652,7 @@ class ExhibitorListView(EventPermissionRequiredMixin, FilteredListMixin, ListVie
         context["reorder_enabled"] = not self.filter_form.filtered and not context["is_paginated"]
         context["send_vouchers_url"] = self.send_vouchers_url()
         context["publish_url"] = self.publish_url()
+        context["public_preview_url"] = self.public_preview_url()
         context["query_string"] = self.request.GET.urlencode()
         if self.organization_type == "sponsor":
             context["sponsor_group_sections"] = self.build_sponsor_group_sections(context["exhibitors"])
@@ -684,6 +685,13 @@ class ExhibitorListView(EventPermissionRequiredMixin, FilteredListMixin, ListVie
         }.get(self.organization_type, "plugins:exhibition:organizations.publish")
         return reverse(route, kwargs=event_kwargs(self.request.event))
 
+    def public_preview_url(self):
+        """Public Exhibition page including approved exhibitors that are not published yet."""
+        # The public Exhibition page lists exhibitors only, so a sponsor list has nothing to preview there.
+        if self.organization_type == "sponsor":
+            return None
+        return reverse("plugins:exhibition:public_list", kwargs=event_kwargs(self.request.event)) + "?preview=1"
+
     def annotate_voucher_status(self, exhibitors):
         ids = [exhibitor.pk for exhibitor in exhibitors]
         if not ids:
@@ -708,19 +716,12 @@ class ExhibitorListView(EventPermissionRequiredMixin, FilteredListMixin, ListVie
         return sections + [ungrouped]
 
 
-class PublicExhibitorListView(ListView):
-    model = ExhibitorInfo
-    template_name = "exhibitors/public_list.html"
-    context_object_name = "exhibitors"
+class PublicExhibitorBrowsingMixin:
+    """The exhibitors a visitor browses, or an organizer previews, and the filters narrowing them."""
 
     @cached_property
     def filter_form(self):
         return PublicExhibitorFilterForm(data=self.request.GET, event=self.request.event)
-
-    def get(self, request, *args, **kwargs):
-        if "clear" in request.GET:
-            return redirect(request.path)
-        return super().get(request, *args, **kwargs)
 
     @cached_property
     def preview_unpublished(self):
@@ -732,16 +733,38 @@ class PublicExhibitorListView(ListView):
             self.request.event.organizer, self.request.event, "can_change_event_settings", request=self.request
         )
 
+    def public_exhibitors(self):
+        return public_exhibitors_queryset(self.request.event, include_unpublished=self.preview_unpublished)
+
+    def navigation_query(self, *, filtered=True):
+        """Query string that keeps the preview, and optionally the list's filters, on links between exhibitors."""
+        params = {"preview": "1"} if self.preview_unpublished else {}
+        if filtered:
+            params.update(
+                (name, self.request.GET[name]) for name in self.filter_form.fields if self.request.GET.get(name)
+            )
+        return urlencode(params)
+
+
+class PublicExhibitorListView(PublicExhibitorBrowsingMixin, ListView):
+    model = ExhibitorInfo
+    template_name = "exhibitors/public_list.html"
+    context_object_name = "exhibitors"
+
+    def get(self, request, *args, **kwargs):
+        if "clear" in request.GET:
+            return redirect(request.path)
+        return super().get(request, *args, **kwargs)
+
     def get_queryset(self):
-        return self.filter_form.filter_qs(
-            public_exhibitors_queryset(self.request.event, include_unpublished=self.preview_unpublished)
-        )
+        return self.filter_form.filter_qs(self.public_exhibitors())
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context["event"] = self.request.event
         context["filter_form"] = self.filter_form
         context["preview_unpublished"] = self.preview_unpublished
+        context["navigation_query"] = self.navigation_query()
         context["social_image"] = self.request.event.visible_header_image_url
         add_external_image_csp_sources(
             self.request,
@@ -758,18 +781,25 @@ class PublicExhibitorListView(ListView):
         return context
 
 
-class PublicExhibitorDetailView(DetailView):
+class PublicExhibitorDetailView(PublicExhibitorBrowsingMixin, DetailView):
     model = ExhibitorInfo
     template_name = "exhibitors/public_detail.html"
     context_object_name = "exhibitor"
 
     def get_queryset(self):
-        return public_exhibitors_queryset(self.request.event)
+        return self.public_exhibitors()
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        exhibitors = list(public_exhibitors_queryset(self.request.event))
+        # Previous/Next walk the list the visitor came from, with its filters and, in a preview, unpublished ones.
+        # A filter this page no longer matches (say, after a rename) falls back to every exhibitor, not a 404.
+        exhibitors = list(self.filter_form.filter_qs(self.public_exhibitors()))
+        in_filter = self.object in exhibitors
+        if not in_filter:
+            exhibitors = list(self.public_exhibitors())
         context["event"] = self.request.event
+        context["preview_unpublished"] = self.preview_unpublished
+        context["navigation_query"] = self.navigation_query(filtered=in_filter)
         context["social_image"] = self.object.visible_banner_url or self.object.visible_logo_url
         if len(exhibitors) > 1:
             current_index = next(index for index, exhibitor in enumerate(exhibitors) if exhibitor.pk == self.object.pk)
