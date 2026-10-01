@@ -67,11 +67,6 @@
                                 <span class="label {{ entry.status_class }}">{{ entry.status }}</span>
                             </td>
                             <td class="text-right events-table__cell--no-border">
-                                {% if entry.edit_url %}
-                                    <a class="btn btn-default btn-sm" href="{{ entry.edit_url }}">
-                                        <i class="fa fa-pencil"></i> {% translate "Edit" %}
-                                    </a>
-                                {% endif %}
                                 {% if entry.vouchers_url %}
                                     <a class="btn btn-default btn-sm" href="{{ entry.vouchers_url }}">
                                         <i class="fa fa-ticket"></i> {% translate "Vouchers" %}
