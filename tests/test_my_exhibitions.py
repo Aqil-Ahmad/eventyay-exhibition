@@ -38,6 +38,13 @@ from exhibition.utils import (
 from exhibition.views import send_profile_invitation
 
 
+@pytest.fixture
+def mail_event(event):
+    event.plugins = "exhibition"
+    event.save(update_fields=["plugins"])
+    return event
+
+
 def _settings(event, **kwargs):
     return ExhibitorSettings.objects.create(
         event=event,
@@ -406,7 +413,7 @@ def test_self_edit_saves_content_without_touching_organizer_settings(event):
         _settings(event)
         exhibitor = _organizer_added(event, is_sponsor=True, is_exhibitor=False, booth_id="B-7")
         form = ExhibitorSelfEditForm(
-            {"name_0": "Booth Co", "url": "https://booth.example.com"},
+            {"name_0": "Booth Co", "description_0": "About our booth"},
             instance=exhibitor,
             event=event,
         )
@@ -415,7 +422,7 @@ def test_self_edit_saves_content_without_touching_organizer_settings(event):
         form.save()
         exhibitor.refresh_from_db()
 
-        assert exhibitor.url == "https://booth.example.com"
+        assert str(exhibitor.description) == "About our booth"
         assert exhibitor.email == "booth@example.com"
         assert exhibitor.is_sponsor and not exhibitor.is_exhibitor
         assert exhibitor.allow_voucher_access
@@ -423,12 +430,12 @@ def test_self_edit_saves_content_without_touching_organizer_settings(event):
 
 
 @pytest.mark.django_db
-def test_profile_email_is_queued_for_the_exhibitor(event):
+def test_profile_email_is_queued_for_the_exhibitor(mail_event):
     with scopes_disabled():
-        _settings(event)
-        exhibitor = _organizer_added(event)
+        _settings(mail_event)
+        exhibitor = _organizer_added(mail_event)
 
-        queued = mail_helpers.queue_exhibitor_profile_email(event, exhibitor)
+        queued = mail_helpers.queue_exhibitor_profile_email(mail_event, exhibitor)
 
         assert queued.role == mail_helpers.EXHIBITOR_PROFILE
         assert queued.to_email == "booth@example.com"
