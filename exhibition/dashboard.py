@@ -271,7 +271,9 @@ class MyExhibitionEditView(LoginRequiredMixin, ExhibitorLinkFormsetMixin, Update
         return self.exhibitor.event
 
     def get_queryset(self):
-        return user_exhibitors(self.request.user).filter(source_requests__isnull=True).select_related("event__organizer")
+        return (
+            user_exhibitors(self.request.user).filter(source_requests__isnull=True).select_related("event__organizer")
+        )
 
     def get_object(self, queryset=None):
         return self.exhibitor
