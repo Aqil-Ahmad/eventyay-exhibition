@@ -119,8 +119,7 @@ DEFAULT_TEMPLATE_SOURCES = {
         gettext_noop("You have been added as an exhibitor for {event_name}"),
         gettext_noop(
             "Dear {exhibitor_name},\n\n"
-            "A profile for {exhibitor_name} has been created for {event_name}. "
-            "Please add your logo, banner and other details so it can be shown to attendees.\n\n"
+            "A profile for {exhibitor_name} has been created for {event_name}.\n\n"
             "You can edit your profile in My Exhibitions: {my_exhibitions_url}\n\n"
             "To open it, log in or create an account with {login_email}. "
             "If you create a new account, confirm the address from the email we send you first.\n\n"
