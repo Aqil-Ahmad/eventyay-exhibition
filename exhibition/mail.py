@@ -116,7 +116,7 @@ DEFAULT_TEMPLATE_SOURCES = {
         ),
     ),
     EXHIBITOR_PROFILE: (
-        gettext_noop("Complete your profile for {event_name}"),
+        gettext_noop("You have been added as an exhibitor for {event_name}"),
         gettext_noop(
             "Dear {exhibitor_name},\n\n"
             "A profile for {exhibitor_name} has been created for {event_name}. "
@@ -125,8 +125,7 @@ DEFAULT_TEMPLATE_SOURCES = {
             "To open it, log in or create an account with {login_email}. "
             "If you create a new account, confirm the address from the email we send you first.\n\n"
             "If you have any questions, please don't hesitate to reach out.\n\n"
-            "Best regards,\n"
-            "The {event_name} Team"
+            "The {event_name} organisers"
         ),
     ),
     VOUCHERS: (
@@ -517,7 +516,7 @@ def queue_exhibitor_access_email(event, exhibitor, *, requestor=None):
 
 
 def queue_exhibitor_profile_email(event, exhibitor, *, send_now=False, requestor=None):
-    """Queue the invitation to complete a profile created for the exhibitor; ``None`` without a recipient."""
+    """Queue the invitation to edit a profile created for the exhibitor; ``None`` without a recipient."""
     from .models import ExhibitionEmailQueue
 
     to_email = exhibitor.recipient_email
