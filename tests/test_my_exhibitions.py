@@ -35,7 +35,7 @@ from exhibition.utils import (
     user_can_edit_profile,
     user_can_view_vouchers,
 )
-from exhibition.views import send_profile_invitation
+from exhibition.views import queue_profile_invitation
 
 
 @pytest.fixture
@@ -456,14 +456,15 @@ def test_profile_email_is_skipped_without_an_address(event):
 
 
 @pytest.mark.django_db
-def test_creating_a_profile_sends_the_invitation_once_committed(event, django_capture_on_commit_callbacks):
+def test_creating_a_profile_queues_the_invitation_without_sending_it(event, django_capture_on_commit_callbacks):
     with scopes_disabled():
         _settings(event)
         exhibitor = _organizer_added(event)
 
         with patch.object(ExhibitionEmailQueue, "send") as send:
             with django_capture_on_commit_callbacks(execute=True):
-                send_profile_invitation(event, exhibitor, None)
+                queue_profile_invitation(event, exhibitor)
 
-        send.assert_called_once()
-        assert ExhibitionEmailQueue.objects.filter(event=event, role=mail_helpers.EXHIBITOR_PROFILE).count() == 1
+        send.assert_not_called()
+        queued = ExhibitionEmailQueue.objects.get(event=event, role=mail_helpers.EXHIBITOR_PROFILE)
+        assert queued.sent_at is None
