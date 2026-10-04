@@ -28,7 +28,8 @@ def _request(event, email, state=ExhibitionRequestState.SUBMITTED, **kwargs):
     [
         (ExhibitionRequestState.DRAFT, {"submitted"}),
         (ExhibitionRequestState.SUBMITTED, {"accepted", "rejected", "withdrawn"}),
-        (ExhibitionRequestState.ACCEPTED, {"submitted", "rejected", "withdrawn"}),
+        (ExhibitionRequestState.ACCEPTED, {"confirmed", "submitted", "rejected", "withdrawn"}),
+        (ExhibitionRequestState.CONFIRMED, {"submitted", "rejected", "withdrawn"}),
         (ExhibitionRequestState.REJECTED, {"submitted", "accepted"}),
         (ExhibitionRequestState.WITHDRAWN, {"submitted"}),
     ],
@@ -39,6 +40,7 @@ def test_transition_matrix(event, state, expected):
         candidates = (
             ExhibitionRequestState.SUBMITTED,
             ExhibitionRequestState.ACCEPTED,
+            ExhibitionRequestState.CONFIRMED,
             ExhibitionRequestState.REJECTED,
             ExhibitionRequestState.WITHDRAWN,
         )
