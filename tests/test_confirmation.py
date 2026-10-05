@@ -63,6 +63,21 @@ def test_confirm_moves_an_accepted_request_to_confirmed_and_logs_it(event):
 
 
 @pytest.mark.django_db
+def test_confirm_does_not_overwrite_a_state_changed_in_the_meantime(event):
+    with scopes_disabled():
+        exhibition_request = _request(event)
+        stale = ExhibitionRequest.objects.get(pk=exhibition_request.pk)
+        exhibition_request.reject()
+
+        assert stale.confirm(requestor=stale.user) is False
+        exhibition_request.refresh_from_db()
+
+        assert stale.state == ExhibitionRequestState.REJECTED
+        assert exhibition_request.state == ExhibitionRequestState.REJECTED
+        assert not exhibition_request.all_logentries().filter(action_type=REQUEST_LOG_ACTIONS["confirm"]).exists()
+
+
+@pytest.mark.django_db
 @pytest.mark.parametrize(
     "state",
     [

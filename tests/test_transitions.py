@@ -59,7 +59,7 @@ def test_available_review_actions_for_rejected_includes_approve(event):
 def test_available_review_actions_for_accepted_has_no_approve(event):
     with scopes_disabled():
         exhibition_request = _request(event, "acc@e.com", state=ExhibitionRequestState.ACCEPTED)
-        assert set(exhibition_request.available_review_actions()) == {"reject", "withdraw", "reopen"}
+        assert set(exhibition_request.available_review_actions()) == {"confirm", "reject", "withdraw", "reopen"}
 
 
 @pytest.mark.django_db
