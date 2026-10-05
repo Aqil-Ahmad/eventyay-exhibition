@@ -224,7 +224,7 @@ def organization_type_of(exhibitor):
 
 class PublicEventLoginRequiredMixin(LoginRequiredMixin):
     def get_login_url(self):
-        return reverse("cfp:event.login", kwargs=event_kwargs(self.request.event))
+        return reverse("auth.login")
 
 
 class PublicCallEnabledMixin:
