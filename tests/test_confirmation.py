@@ -2,6 +2,7 @@ import pytest
 from django.contrib.messages.storage.fallback import FallbackStorage
 from django.http import Http404
 from django.test import RequestFactory
+from django.urls import reverse
 from django_scopes import scopes_disabled
 from eventyay.base.models.auth import User
 
@@ -244,3 +245,12 @@ def test_confirmation_link_goes_to_the_confirm_page(mail_event):
         url = mail_helpers.request_confirmation_url(exhibition_request)
 
         assert url.endswith(f"/exhibition/call/requests/{exhibition_request.code}/confirm/")
+
+
+@pytest.mark.django_db
+def test_login_prompt_points_to_the_main_login_not_the_talks_one(event):
+    view = UserRequestConfirmView()
+    view.request = RequestFactory().get("/")
+    view.request.event = event
+
+    assert view.get_login_url() == reverse("auth.login")
