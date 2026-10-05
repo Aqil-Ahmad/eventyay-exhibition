@@ -1183,8 +1183,7 @@ class UserRequestConfirmView(PublicCallEnabledMixin, PublicEventLoginRequiredMix
 
     def post(self, request, *args, **kwargs):
         self.object = self.get_object()
-        if self.object.can_be_confirmed:
-            self.object.confirm(requestor=request.user)
+        if self.object.can_be_confirmed and self.object.confirm(requestor=request.user):
             messages.success(request, _("Thank you, your participation is confirmed."))
         elif self.object.state == ExhibitionRequestState.CONFIRMED:
             messages.success(request, _("Your participation was already confirmed."))
@@ -1616,8 +1615,10 @@ class RequestDetailView(EventPermissionRequiredMixin, UpdateView):
             self.object.reject(requestor=requestor)
             messages.success(self.request, _("Request rejected. A rejection email was placed in the outbox."))
         elif action == "confirm":
-            self.object.confirm(requestor=requestor)
-            messages.success(self.request, _("Request confirmed on behalf of the applicant."))
+            if self.object.confirm(requestor=requestor):
+                messages.success(self.request, _("Request confirmed on behalf of the applicant."))
+            else:
+                messages.error(self.request, _("This request can no longer be changed to that state."))
         elif action == "withdraw":
             self.object.withdraw(requestor=requestor)
             messages.success(self.request, _("Request withdrawn."))

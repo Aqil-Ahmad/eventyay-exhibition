@@ -779,11 +779,17 @@ class ExhibitionRequest(LoggedModel):
         return exhibitor
 
     def confirm(self, requestor=None):
-        """Record that the applicant has confirmed they will take part."""
+        """Confirm participation only while the request is still accepted; ``False`` if it changed meanwhile."""
+        updated = ExhibitionRequest.objects.filter(pk=self.pk, state=ExhibitionRequestState.ACCEPTED).update(
+            state=ExhibitionRequestState.CONFIRMED, updated=timezone.now()
+        )
+        if not updated:
+            self.refresh_from_db(fields=["state"])
+            return False
         previous = self.state
         self.state = ExhibitionRequestState.CONFIRMED
-        self.save(update_fields=["state", "updated"])
         self.log_transition("confirm", previous, requestor=requestor)
+        return True
 
     def reject(self, requestor=None):
         """Reject the request, hide any organization profile and queue the rejection email."""
