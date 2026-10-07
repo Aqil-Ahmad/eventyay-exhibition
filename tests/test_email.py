@@ -9,6 +9,7 @@ from django.test import RequestFactory
 from django.utils import timezone
 from django.utils.translation import get_language
 from django_scopes import scopes_disabled
+from eventyay.base.models import LogEntry
 from eventyay.base.models.auth import User
 from i18nfield.strings import LazyI18nString
 
@@ -18,8 +19,10 @@ from exhibition.forms import (
     ExhibitionEmailBodyFormField,
     ExhibitionEmailQueueForm,
     ExhibitionMailTemplatesForm,
+    ExhibitionRequestEmailForm,
 )
 from exhibition.models import (
+    LOG_REQUEST_EMAILED,
     ExhibitionEmailQueue,
     ExhibitionRequest,
     ExhibitionRequestState,
@@ -36,6 +39,7 @@ from exhibition.views import (
     EmailSendView,
     EmailTemplatePreviewView,
     ExhibitorDeviceManageView,
+    RequestEmailView,
     grant_lead_scanning_access,
     group_email_entries,
     queue_exhibitor_access_mail,
@@ -1217,3 +1221,120 @@ def test_no_credentials_go_out_while_lead_scanning_is_off(mail_event):
         assert not _access_emails(mail_event).exists()
 
     assert _message_texts(request) == []
+
+
+@pytest.mark.django_db
+def test_request_message_template_is_rendered_for_the_applicant(mail_event, exhibition_request):
+    with scopes_disabled():
+        subject, body = mail_helpers.render_request_template(
+            mail_event, exhibition_request, mail_helpers.REQUEST_MESSAGE
+        )
+
+    assert str(mail_event.name) in subject
+    assert "Acme Corp" in body
+    assert "{request_name}" not in body
+
+
+@pytest.mark.django_db
+def test_request_message_template_is_editable_under_email_templates(mail_event):
+    form = ExhibitionMailTemplatesForm(obj=mail_event)
+
+    assert mail_helpers.subject_settings_key(mail_helpers.REQUEST_MESSAGE) in form.fields
+    assert mail_helpers.body_settings_key(mail_helpers.REQUEST_MESSAGE) in form.fields
+
+
+@pytest.mark.django_db
+def test_queue_request_message_places_it_in_the_outbox(mail_event, exhibition_request):
+    with scopes_disabled():
+        queued = mail_helpers.queue_request_message(
+            mail_event, exhibition_request, "About {request_name}", "Please send your booth plan."
+        )
+        logged = LogEntry.objects.filter(action_type=LOG_REQUEST_EMAILED, object_id=exhibition_request.pk)
+
+        assert queued.exhibition_request == exhibition_request
+        assert queued.role == mail_helpers.REQUEST_MESSAGE
+        assert queued.to_email == "applicant@example.com"
+        assert queued.subject == "About Acme Corp"
+        assert queued.sent_at is None
+        assert logged.count() == 1
+        assert logged.get().parsed_data["sent"] is False
+
+
+@pytest.mark.django_db
+def test_queue_request_message_prefers_the_request_contact_email(mail_event, exhibition_request):
+    exhibition_request.email = "contact@acme.example"
+    with scopes_disabled():
+        exhibition_request.save(update_fields=["email"])
+        queued = mail_helpers.queue_request_message(mail_event, exhibition_request, "S", "B")
+
+    assert queued.to_email == "contact@acme.example"
+
+
+@pytest.mark.django_db
+def test_queue_request_message_send_now_delivers_it(mail_event, exhibition_request):
+    with patch("eventyay.base.services.mail.mail") as mocked_mail:
+        with scopes_disabled():
+            queued = mail_helpers.queue_request_message(mail_event, exhibition_request, "S", "B", send_now=True)
+
+    assert queued.sent_at is not None
+    assert mocked_mail.call_count == 1
+
+
+@pytest.mark.django_db
+def test_queue_request_message_skips_applicants_without_an_address(mail_event):
+    exhibition_request = _request(mail_event, "No Address", ExhibitionRequestState.SUBMITTED)
+    User.objects.filter(pk=exhibition_request.user_id).update(email="")
+    exhibition_request.user.refresh_from_db()
+
+    with scopes_disabled():
+        assert mail_helpers.queue_request_message(mail_event, exhibition_request, "S", "B") is None
+        assert not ExhibitionEmailQueue.objects.filter(event=mail_event).exists()
+
+
+@pytest.mark.django_db
+def test_request_email_form_rejects_an_empty_body():
+    form = ExhibitionRequestEmailForm(data={"subject": "Hi", "body": "<p></p>"})
+
+    assert not form.is_valid()
+    assert "body" in form.errors
+
+
+def _request_email_view(event, exhibition_request, data):
+    request = _organiser_request(event, data=data)
+    view = RequestEmailView()
+    view.request = request
+    view.kwargs = {"code": exhibition_request.code}
+    return view, request
+
+
+@pytest.mark.django_db
+def test_request_email_view_saves_to_the_outbox(mail_event, exhibition_request):
+    view, request = _request_email_view(mail_event, exhibition_request, {"_save": "save"})
+    form = ExhibitionRequestEmailForm(data={"subject": "Hi", "body": "<p>More details please.</p>"})
+    assert form.is_valid(), form.errors
+
+    with scopes_disabled():
+        response = view.form_valid(form)
+        queued = ExhibitionEmailQueue.objects.get(event=mail_event)
+
+    assert response.status_code == 302
+    assert exhibition_request.code in response.url
+    assert queued.exhibition_request == exhibition_request
+    assert queued.sent_at is None
+    assert _message_texts(request) == ["The email has been placed in the outbox."]
+
+
+@pytest.mark.django_db
+def test_request_email_view_sends_right_away(mail_event, exhibition_request):
+    view, request = _request_email_view(mail_event, exhibition_request, {"_send": "send"})
+    form = ExhibitionRequestEmailForm(data={"subject": "Hi", "body": "<p>More details please.</p>"})
+    assert form.is_valid(), form.errors
+
+    with patch("eventyay.base.services.mail.mail") as mocked_mail:
+        with scopes_disabled():
+            view.form_valid(form)
+            queued = ExhibitionEmailQueue.objects.get(event=mail_event)
+
+    assert queued.sent_at is not None
+    assert mocked_mail.call_count == 1
+    assert _message_texts(request) == ["The email has been sent."]
