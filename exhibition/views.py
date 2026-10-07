@@ -3266,6 +3266,7 @@ class EmailTemplatesView(EventPermissionRequiredMixin, TemplateView):
                 (mail_helpers.REQUEST_REJECTED, _("Request rejected")),
                 (mail_helpers.EXHIBITOR_ACCESS, _("Exhibitor lead scanning key")),
                 (mail_helpers.VOUCHERS, _("Vouchers")),
+                (mail_helpers.REQUEST_MESSAGE, _("Request more information")),
             )
         ]
         context["custom_panels"] = custom_panels
@@ -3304,7 +3305,7 @@ class EmailTemplatePreviewView(EventPermissionRequiredMixin, View):
         elif custom_pk is not None:
             if not ExhibitionCustomEmailTemplate.objects.filter(event=request.event, pk=custom_pk).exists():
                 return JsonResponse({"detail": _("Unknown template.")}, status=400)
-        elif role in mail_helpers.LIFECYCLE_ROLES:
+        elif role in mail_helpers.TEMPLATE_ROLES:
             pass
         else:
             return JsonResponse({"detail": _("Unknown template.")}, status=400)

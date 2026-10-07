@@ -2200,7 +2200,7 @@ class ExhibitionMailTemplatesForm(SettingsForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        for role in mail_helpers.LIFECYCLE_ROLES:
+        for role in mail_helpers.TEMPLATE_ROLES:
             default_subject, default_body = mail_helpers.default_template_initial(role, self.locales)
             # The panel heading already names the template, so the fields are not prefixed with it.
             self.fields[mail_helpers.subject_settings_key(role)] = I18nFormField(
