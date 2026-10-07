@@ -2903,7 +2903,6 @@ class RequestEmailView(EventPermissionRequiredMixin, FormView):
         return redirect(self.detail_url())
 
     def form_invalid(self, form):
-        messages.error(self.request, _("We could not send your email. See below for details."))
         if self.request.POST.get("from_dialog"):
             return self.render_review_page(form)
         return super().form_invalid(form)
