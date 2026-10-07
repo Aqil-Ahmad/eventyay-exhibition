@@ -2799,11 +2799,13 @@ class EmailComposeView(EventPermissionRequiredMixin, FormView):
         scheduled_at = form.cleaned_data.get("scheduled_at")
         send_now = "_send" in self.request.POST and not scheduled_at
 
+        exhibition_requests, profiles = form.recipients()
         created = mail_helpers.queue_compose_emails(
             event,
-            form.recipients(),
+            exhibition_requests,
             form.cleaned_data["subject"],
             form.cleaned_data["body"],
+            exhibitors=profiles,
             scheduled_at=scheduled_at,
             send_now=send_now,
             requestor=self.request.user,

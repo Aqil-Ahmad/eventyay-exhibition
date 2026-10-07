@@ -1251,7 +1251,7 @@ def test_compose_form_filters_recipients_by_the_chosen_state(mail_event):
 
 
 @pytest.mark.django_db
-def test_compose_form_lists_every_non_draft_organization(mail_event):
+def test_compose_form_lists_applications_and_organizer_created_profiles(mail_event):
     accepted = _request(mail_event, "Accepted", ExhibitionRequestState.ACCEPTED, email="a@example.com")
     sponsor = _request(
         mail_event,
@@ -1262,35 +1262,52 @@ def test_compose_form_lists_every_non_draft_organization(mail_event):
         is_sponsor=True,
     )
     _request(mail_event, "Draft", ExhibitionRequestState.DRAFT, email="d@example.com")
-
     with scopes_disabled():
-        offered = set(ExhibitionComposeForm(event=mail_event).fields["organizations"].queryset)
+        added = ExhibitorInfo.objects.create(event=mail_event, name="Added", email="added@example.com")
+        ExhibitorInfo.objects.create(event=mail_event, name="No Address", email="")
+        approved = ExhibitorInfo.objects.create(event=mail_event, name="Approved", email="ap@example.com")
+        accepted.approved_exhibitor = approved
+        accepted.save(update_fields=["approved_exhibitor"])
 
-    assert offered == {accepted, sponsor}
+        offered = dict(ExhibitionComposeForm(event=mail_event).fields["organizations"].choices)
+
+    assert set(offered) == {f"request-{accepted.pk}", f"request-{sponsor.pk}", f"profile-{added.pk}"}
 
 
 @pytest.mark.django_db
 def test_chosen_organizations_override_the_filters(mail_event):
     _request(mail_event, "Accepted", ExhibitionRequestState.ACCEPTED, email="a@example.com")
-    first = _request(mail_event, "Rejected", ExhibitionRequestState.REJECTED, email="r@example.com")
-    second = _request(mail_event, "Withdrawn", ExhibitionRequestState.WITHDRAWN, email="w@example.com")
-    form = _compose_form(mail_event, organization_type="sponsor", organizations=[first.pk, second.pk])
+    rejected = _request(mail_event, "Rejected", ExhibitionRequestState.REJECTED, email="r@example.com")
+    with scopes_disabled():
+        added = ExhibitorInfo.objects.create(event=mail_event, name="Added", email="added@example.com")
+    form = _compose_form(
+        mail_event,
+        organization_type="sponsor",
+        organizations=[f"request-{rejected.pk}", f"profile-{added.pk}"],
+    )
 
     with scopes_disabled():
         assert form.is_valid(), form.errors
-        created = mail_helpers.queue_compose_emails(mail_event, form.recipients(), "S", "B")
+        exhibition_requests, profiles = form.recipients()
+        created = mail_helpers.queue_compose_emails(mail_event, exhibition_requests, "S", "B", exhibitors=profiles)
 
-    assert {row.to_email for row in created} == {"r@example.com", "w@example.com"}
+    assert {row.to_email for row in created} == {"r@example.com", "added@example.com"}
+    assert {row.exhibitor_id for row in created} == {None, added.pk}
     assert all(row.sent_at is None for row in created)
+    assert len({row.batch for row in created}) == 1
 
 
 @pytest.mark.django_db
 def test_organization_options_show_email_and_state_unless_emails_are_hidden(mail_event):
     exhibition_request = _request(mail_event, "Acme", ExhibitionRequestState.ACCEPTED, email="a@example.com")
-
     with scopes_disabled():
-        shown = ExhibitionComposeForm(event=mail_event).fields["organizations"].widget
-        hidden = ExhibitionComposeForm(event=mail_event, show_emails=False).fields["organizations"].widget
+        added = ExhibitorInfo.objects.create(event=mail_event, name="Added", email="added@example.com")
+        shown = ExhibitionComposeForm(event=mail_event).fields["organizations"].widget.option_details
+        hidden = (
+            ExhibitionComposeForm(event=mail_event, show_emails=False).fields["organizations"].widget.option_details
+        )
 
-        assert shown.detail_from_instance(exhibition_request) == "a@example.com · accepted"
-        assert hidden.detail_from_instance(exhibition_request) == "accepted"
+    assert shown[f"request-{exhibition_request.pk}"] == "a@example.com · accepted"
+    assert shown[f"profile-{added.pk}"] == "added@example.com"
+    assert hidden[f"request-{exhibition_request.pk}"] == "accepted"
+    assert hidden[f"profile-{added.pk}"] == ""
