@@ -2771,6 +2771,9 @@ class EmailComposeView(EventPermissionRequiredMixin, FormView):
     def get_form_kwargs(self):
         kwargs = super().get_form_kwargs()
         kwargs["event"] = self.request.event
+        kwargs["show_emails"] = not should_hide_applicant_emails(
+            self.request.user, self.request.event, request=self.request
+        )
         return kwargs
 
     def get_initial(self):
@@ -2796,15 +2799,9 @@ class EmailComposeView(EventPermissionRequiredMixin, FormView):
         scheduled_at = form.cleaned_data.get("scheduled_at")
         send_now = "_send" in self.request.POST and not scheduled_at
 
-        recipients = mail_helpers.compose_recipients(
-            event,
-            states=form.cleaned_data["states"],
-            organization_type=form.cleaned_data["organization_type"],
-            sponsor_group=form.cleaned_data["sponsor_group"],
-        )
         created = mail_helpers.queue_compose_emails(
             event,
-            recipients,
+            form.recipients(),
             form.cleaned_data["subject"],
             form.cleaned_data["body"],
             scheduled_at=scheduled_at,

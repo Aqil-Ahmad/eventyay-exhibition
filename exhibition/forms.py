@@ -2144,8 +2144,27 @@ class ExhibitionEmailQueueForm(forms.ModelForm):
         return scheduled_at
 
 
+class OrganizationSelectWidget(SearchableSelectWidget):
+    placeholder = _("No organizations selected")
+    search_placeholder = _("Search by organization name or email…")
+    empty_text = _("No organizations match your search.")
+    show_emails = True
+
+    def detail_from_instance(self, instance):
+        state = instance.get_state_display()
+        email = ((instance.email or "").strip() or instance.user.email) if self.show_emails else ""
+        return f"{email} · {state}" if email else state
+
+
+class OrganizationChoiceField(forms.ModelMultipleChoiceField):
+    widget = OrganizationSelectWidget
+
+    def label_from_instance(self, obj):
+        return localize_event_text(obj.name) or str(obj.name)
+
+
 class ExhibitionComposeForm(forms.Form):
-    """Compose a broadcast email to a filtered group of applicants."""
+    """Compose a broadcast email to a filtered group of applicants, or to chosen organizations."""
 
     ORGANIZATION_TYPE_CHOICES = (
         ("", _("Exhibitors and sponsors")),
@@ -2153,13 +2172,12 @@ class ExhibitionComposeForm(forms.Form):
         ("sponsor", _("Sponsors only")),
     )
 
-    states = forms.MultipleChoiceField(
+    state = forms.ChoiceField(
         label=_("Application state"),
         choices=[
             (state.value, state.label) for state in ExhibitionRequestState if state != ExhibitionRequestState.DRAFT
         ],
-        initial=[ExhibitionRequestState.ACCEPTED],
-        widget=forms.CheckboxSelectMultiple,
+        initial=ExhibitionRequestState.ACCEPTED,
     )
     organization_type = forms.ChoiceField(
         label=_("Organization type"),
@@ -2172,6 +2190,12 @@ class ExhibitionComposeForm(forms.Form):
         required=False,
         empty_label=_("Any sponsor group"),
     )
+    organizations = OrganizationChoiceField(
+        label=_("Send to specific organizations"),
+        queryset=ExhibitionRequest.objects.none(),
+        required=False,
+        help_text=_("When you select organizations here, the filters above are ignored."),
+    )
     subject = I18nFormField(label=_("Subject"), widget=I18nTextInput, max_length=255)
     scheduled_at = forms.DateTimeField(
         label=_("Send at"),
@@ -2182,13 +2206,18 @@ class ExhibitionComposeForm(forms.Form):
 
     def __init__(self, *args, **kwargs):
         self.event = kwargs.pop("event")
+        show_emails = kwargs.pop("show_emails", True)
         super().__init__(*args, **kwargs)
         self.fields["sponsor_group"].queryset = SponsorGroup.objects.filter(event=self.event).order_by("level", "pk")
+        self.fields["organizations"].queryset = mail_helpers.compose_recipients(self.event).order_by("name", "pk")
+        self.fields["organizations"].widget.show_emails = show_emails
         self.fields["body"] = ExhibitionEmailBodyFormField(
             label=_("Body"),
             placeholders=mail_helpers.placeholder_names(self.event, mail_helpers.REQUEST_PLACEHOLDER_CONTEXT),
         )
-        self.order_fields(["states", "organization_type", "sponsor_group", "subject", "body", "scheduled_at"])
+        self.order_fields(
+            ["state", "organization_type", "sponsor_group", "organizations", "subject", "body", "scheduled_at"]
+        )
         locales = self.event.settings.get("locales")
         self.fields["subject"].widget.enabled_locales = locales
         self.fields["body"].widget.enabled_locales = locales
@@ -2221,6 +2250,17 @@ class ExhibitionComposeForm(forms.Form):
         if scheduled_at and scheduled_at <= timezone.now():
             raise forms.ValidationError(_("The scheduled time must be in the future."))
         return scheduled_at
+
+    def recipients(self):
+        """Chosen organizations when any are selected, otherwise everyone matching the filters."""
+        if self.cleaned_data.get("organizations"):
+            return self.cleaned_data["organizations"]
+        return mail_helpers.compose_recipients(
+            self.event,
+            states=[self.cleaned_data["state"]],
+            organization_type=self.cleaned_data["organization_type"],
+            sponsor_group=self.cleaned_data["sponsor_group"],
+        )
 
 
 class ExhibitionMailTemplatesForm(SettingsForm):
