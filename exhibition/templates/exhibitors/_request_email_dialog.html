@@ -1,9 +1,10 @@
 {% load i18n %}
 {% load event_tags %}
-<dialog id="request-email-dialog" class="exhibition-email-dialog" aria-labelledby="request-email-dialog-title">
+<dialog id="request-email-dialog" class="exhibition-email-dialog" aria-labelledby="request-email-dialog-title"{% if email_dialog_open %} data-open-on-load{% endif %}>
   <form action="{% url 'plugins:exhibition:request.email' organizer=request.event.organizer.slug event=request.event.slug code=exhibition_request.code %}"
         method="post" class="form-horizontal modal-content">
     {% csrf_token %}
+    <input type="hidden" name="from_dialog" value="1">
     <div class="modal-header">
       <button type="button" class="close" data-request-email-close aria-label="{% trans 'Close' %}">
         <span aria-hidden="true">&times;</span>

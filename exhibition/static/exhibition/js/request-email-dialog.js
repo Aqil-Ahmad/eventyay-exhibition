@@ -6,16 +6,20 @@
             return
         }
 
-        trigger.addEventListener('click', function (event) {
-            if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) {
-                return
-            }
-            event.preventDefault()
+        function open() {
             dialog.showModal()
             var subject = dialog.querySelector('input[name="subject"]')
             if (subject) {
                 subject.focus()
             }
+        }
+
+        trigger.addEventListener('click', function (event) {
+            if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) {
+                return
+            }
+            event.preventDefault()
+            open()
         })
 
         dialog.querySelectorAll('[data-request-email-close]').forEach(function (button) {
@@ -33,6 +37,10 @@
         dialog.addEventListener('close', function () {
             trigger.focus()
         })
+
+        if (dialog.hasAttribute('data-open-on-load')) {
+            open()
+        }
     }
 
     if (document.readyState === 'loading') {

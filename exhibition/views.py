@@ -1566,10 +1566,11 @@ class RequestDetailView(EventPermissionRequiredMixin, UpdateView):
         )
         context["can_email"] = bool(mail_helpers.request_recipient(self.object))
         if context["can_email"]:
-            subject, body = mail_helpers.render_request_template(
-                self.request.event, self.object, mail_helpers.REQUEST_MESSAGE
-            )
-            context["email_form"] = ExhibitionRequestEmailForm(initial={"subject": subject, "body": body})
+            if "email_form" not in context:
+                subject, body = mail_helpers.render_request_template(
+                    self.request.event, self.object, mail_helpers.REQUEST_MESSAGE
+                )
+                context["email_form"] = ExhibitionRequestEmailForm(initial={"subject": subject, "body": body})
             context["email_recipient"] = request_email_recipient(self.request, self.object)
         context["emails"] = self.object.emails.order_by("-created")
         return context
@@ -2903,7 +2904,18 @@ class RequestEmailView(EventPermissionRequiredMixin, FormView):
 
     def form_invalid(self, form):
         messages.error(self.request, _("We could not send your email. See below for details."))
+        if self.request.POST.get("from_dialog"):
+            return self.render_review_page(form)
         return super().form_invalid(form)
+
+    def render_review_page(self, email_form):
+        """Show the review page again with the dialog open, so errors appear where the email was written."""
+        detail = RequestDetailView()
+        detail.setup(self.request, **self.kwargs)
+        detail.object = detail.get_object()
+        review_form = detail.get_form_class()(instance=detail.object, event=self.request.event)
+        context = detail.get_context_data(form=review_form, email_form=email_form, email_dialog_open=True)
+        return TemplateResponse(self.request, detail.template_name, context)
 
 
 def request_email_recipient(request, exhibition_request):
