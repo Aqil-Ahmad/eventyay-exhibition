@@ -22,8 +22,10 @@ REQUEST_ACCEPTED = "request_accepted"
 REQUEST_REJECTED = "request_rejected"
 EXHIBITOR_ACCESS = "exhibitor_access"
 VOUCHERS = "vouchers"
+REQUEST_MESSAGE = "request_message"
 
 LIFECYCLE_ROLES = (REQUEST_NEW, REQUEST_ACCEPTED, REQUEST_REJECTED, EXHIBITOR_ACCESS, VOUCHERS)
+TEMPLATE_ROLES = (*LIFECYCLE_ROLES, REQUEST_MESSAGE)
 
 PLACEHOLDER_DOCS = (
     ("{event_name}", _lazy("The event's name")),
@@ -119,6 +121,18 @@ DEFAULT_TEMPLATE_SOURCES = {
             "The {event_name} Team"
         ),
     ),
+    REQUEST_MESSAGE: (
+        gettext_noop("Your request for {event_name}"),
+        gettext_noop(
+            "Hello,\n\n"
+            "thank you for submitting your request \u201c{request_name}\u201d to "
+            "{event_name}. To continue reviewing it, we need some more information "
+            "from you.\n\n"
+            "You can review or edit your request here:\n{request_url}\n\n"
+            "Best regards,\n"
+            "The {event_name} team"
+        ),
+    ),
 }
 
 DEFAULT_TEMPLATES = {
@@ -166,6 +180,7 @@ ROLE_PLACEHOLDER_CONTEXT = {
     REQUEST_REJECTED: REQUEST_PLACEHOLDER_CONTEXT,
     EXHIBITOR_ACCESS: EXHIBITOR_PLACEHOLDER_CONTEXT,
     VOUCHERS: EXHIBITOR_PLACEHOLDER_CONTEXT,
+    REQUEST_MESSAGE: REQUEST_PLACEHOLDER_CONTEXT,
 }
 
 
@@ -370,13 +385,58 @@ def sample_voucher_list(event=None):
     )
 
 
+def request_recipient(exhibition_request):
+    """Address an applicant is reached at: the request's contact email, else their login email."""
+    to_email = (exhibition_request.email or "").strip() or (
+        exhibition_request.user.email if exhibition_request.user_id else ""
+    )
+    return to_email.strip()
+
+
+def render_request_template(event, exhibition_request, role):
+    """Subject and body of a role's template, rendered for one applicant in their language."""
+    user = exhibition_request.user if exhibition_request.user_id else None
+    locale = recipient_locale(event, user)
+    subject_tpl, body_tpl = get_email_template(event, role)
+    context = build_request_context(event, exhibition_request)
+    return _render(subject_tpl, context, locale), _render(body_tpl, context, locale)
+
+
+def queue_request_message(event, exhibition_request, subject, body, *, send_now=False, requestor=None):
+    """Queue an organizer-written email to one applicant; ``send_now`` sends it right away."""
+    from .models import LOG_REQUEST_EMAILED, ExhibitionEmailQueue
+
+    to_email = request_recipient(exhibition_request)
+    if not to_email:
+        return None
+
+    user = exhibition_request.user if exhibition_request.user_id else None
+    locale = recipient_locale(event, user)
+    context = build_request_context(event, exhibition_request)
+    queued = ExhibitionEmailQueue.objects.create(
+        event=event,
+        exhibition_request=exhibition_request,
+        role=REQUEST_MESSAGE,
+        to_email=to_email,
+        subject=_render(subject, context, locale),
+        body=_render(body, context, locale),
+        locale=locale or "",
+    )
+    if send_now:
+        queued.send(requestor=requestor)
+    exhibition_request.log_action(
+        LOG_REQUEST_EMAILED,
+        user=requestor,
+        data={"subject": queued.subject, "to": to_email, "sent": bool(queued.sent_at)},
+    )
+    return queued
+
+
 def queue_request_email(event, exhibition_request, role, *, send_now=False, requestor=None):
     """Queue a lifecycle email; ``send_now`` sends it instead of leaving it in the outbox."""
     from .models import ExhibitionEmailQueue
 
-    to_email = (exhibition_request.email or "").strip() or (
-        exhibition_request.user.email if exhibition_request.user_id else ""
-    )
+    to_email = request_recipient(exhibition_request)
     if not to_email:
         return None
 
@@ -424,10 +484,7 @@ def queue_compose_emails(
     created = []
     seen_emails = set()
     for exhibition_request in exhibition_requests:
-        to_email = (exhibition_request.email or "").strip() or (
-            exhibition_request.user.email if exhibition_request.user_id else ""
-        )
-        to_email = to_email.strip()
+        to_email = request_recipient(exhibition_request)
         if not to_email or to_email.lower() in seen_emails:
             continue
         seen_emails.add(to_email.lower())
