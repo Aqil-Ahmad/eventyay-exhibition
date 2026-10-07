@@ -2116,6 +2116,19 @@ class ExhibitionEmailQueueForm(forms.ModelForm):
         return scheduled_at
 
 
+class ExhibitionRequestEmailForm(forms.Form):
+    """Write an email to the applicant of one exhibition request."""
+
+    subject = forms.CharField(label=_("Subject"), max_length=255)
+    body = forms.CharField(label=_("Message"), widget=_EmailBodyEditorTextarea(attrs={"rows": 12}))
+
+    def clean_body(self):
+        body = self.cleaned_data.get("body")
+        if not body or _is_html_empty(body):
+            raise forms.ValidationError(_("This field is required."))
+        return body
+
+
 class ExhibitionComposeForm(forms.Form):
     """Compose a broadcast email to a filtered group of applicants."""
 

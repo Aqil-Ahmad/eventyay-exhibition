@@ -47,6 +47,7 @@ from .views import (
     PublicExhibitorListView,
     RequestActionView,
     RequestDetailView,
+    RequestEmailView,
     RequestListView,
     SettingsView,
     SponsorGroupDeleteView,
@@ -244,6 +245,11 @@ urlpatterns = [
         "exhibitors/event/<orgslug:organizer>/<slug:event>/call/requests/<str:code>",
         RequestDetailView.as_view(),
         name="request.detail",
+    ),
+    path(
+        "exhibitors/event/<orgslug:organizer>/<slug:event>/call/requests/<str:code>/email",
+        RequestEmailView.as_view(),
+        name="request.email",
     ),
     path(
         "exhibitors/event/<orgslug:organizer>/<slug:event>/call/questions",

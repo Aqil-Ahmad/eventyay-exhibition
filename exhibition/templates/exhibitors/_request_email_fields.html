@@ -1,0 +1,16 @@
+{% load i18n %}
+{% load bootstrap3 %}
+<div class="form-group">
+  <label class="col-md-3 control-label">{% trans 'To' %}</label>
+  <div class="col-md-9">
+    <p class="form-control-static">
+      {% if recipient %}
+        {{ recipient }}
+      {% else %}
+        <span class="text-muted">{% trans 'Hidden' %}</span>
+      {% endif %}
+    </p>
+  </div>
+</div>
+{% bootstrap_field form.subject layout='control' %}
+{% bootstrap_field form.body layout='control' %}
