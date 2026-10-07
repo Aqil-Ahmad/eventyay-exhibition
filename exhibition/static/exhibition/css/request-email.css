@@ -31,14 +31,6 @@ dialog.exhibition-email-dialog .modal-body {
     overflow-y: auto;
 }
 
-dialog.exhibition-email-dialog .modal-footer {
-    text-align: left;
-}
-
-.exhibition-email-dialog-note {
-    margin-bottom: 10px;
-}
-
 .exhibition-email-dialog-actions {
     display: flex;
     flex-wrap: wrap;

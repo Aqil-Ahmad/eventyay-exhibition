@@ -19,9 +19,6 @@
       {% include 'exhibitors/_request_email_fields.html' with form=email_form recipient=email_recipient %}
     </div>
     <div class="modal-footer">
-      <p class="text-muted exhibition-email-dialog-note">
-        {% trans "Sent from the event's email sender. Save to outbox to review it before sending." %}
-      </p>
       <div class="exhibition-email-dialog-actions">
         <button type="button" class="btn btn-default btn-lg" data-request-email-close>{% trans 'Cancel' %}</button>
         <button type="submit" class="btn btn-default btn-lg" name="_save" value="save">{% trans 'Save to outbox' %}</button>
