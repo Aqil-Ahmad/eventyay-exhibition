@@ -318,9 +318,37 @@ class ExhibitionQuestionFieldsMixin(ExhibitionQuestionDependencyMixin):
                 answer.options.clear()
 
 
-class SessionSelectWidget(forms.CheckboxSelectMultiple):
+class SearchableSelectWidget(forms.CheckboxSelectMultiple):
+    """Multi-select shown as chips with a searchable dropdown of the remaining options."""
+
     template_name = "exhibitors/session_select.html"
     option_template_name = "exhibitors/session_select_option.html"
+    placeholder = _("Nothing selected")
+    search_placeholder = _("Search…")
+    empty_text = _("Nothing matches your search.")
+
+    def detail_from_instance(self, instance):
+        """Secondary text shown under an option and included in its search."""
+        return ""
+
+    def get_context(self, name, value, attrs):
+        context = super().get_context(name, value, attrs)
+        context["widget"]["placeholder"] = self.placeholder
+        context["widget"]["search_placeholder"] = self.search_placeholder
+        context["widget"]["empty_text"] = self.empty_text
+        return context
+
+    def create_option(self, *args, **kwargs):
+        option = super().create_option(*args, **kwargs)
+        instance = getattr(option["value"], "instance", None)
+        option["detail"] = self.detail_from_instance(instance) if instance is not None else ""
+        return option
+
+
+class SessionSelectWidget(SearchableSelectWidget):
+    placeholder = _("No sessions selected")
+    search_placeholder = _("Search sessions…")
+    empty_text = _("No sessions match your search.")
 
 
 class SessionChoiceField(forms.ModelMultipleChoiceField):
