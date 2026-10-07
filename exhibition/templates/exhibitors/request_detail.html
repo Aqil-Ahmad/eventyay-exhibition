@@ -15,18 +15,18 @@
 {% block title %}{{ request.event.name }} - {% trans "Review exhibition request" %}{% endblock %}
 
 {% block exhibitors_header %}
-    <div class="exhibition-request-header">
-        <h1>{% trans "Review exhibition request" %}</h1>
-        {% if can_email %}
+    <h1>{% trans "Review exhibition request" %}</h1>
+{% endblock %}
+
+{% block exhibitors_content %}
+    {% if can_email %}
+        <p>
             <a class="btn btn-default" data-request-email-open
                href="{% url 'plugins:exhibition:request.email' organizer=request.event.organizer.slug event=request.event.slug code=exhibition_request.code %}">
                 <i class="fa fa-envelope"></i> {% trans "Send email" %}
             </a>
-        {% endif %}
-    </div>
-{% endblock %}
-
-{% block exhibitors_content %}
+        </p>
+    {% endif %}
     {% if exhibition_request.edited_after_acceptance %}
         <div class="panel panel-warning" id="post-acceptance-changes">
             <div class="panel-heading">
