@@ -32,18 +32,20 @@ dialog.exhibition-email-dialog .modal-body {
 }
 
 dialog.exhibition-email-dialog .modal-footer {
+    text-align: left;
+}
+
+.exhibition-email-dialog-note {
+    margin-bottom: 10px;
+}
+
+.exhibition-email-dialog-actions {
     display: flex;
     flex-wrap: wrap;
-    align-items: center;
     justify-content: flex-end;
     gap: 8px;
 }
 
-dialog.exhibition-email-dialog .modal-footer .btn + .btn {
+.exhibition-email-dialog-actions .btn + .btn {
     margin-left: 0;
-}
-
-.exhibition-email-dialog-note {
-    margin-right: auto;
-    text-align: left;
 }
