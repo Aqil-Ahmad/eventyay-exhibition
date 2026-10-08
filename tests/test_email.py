@@ -1247,7 +1247,9 @@ def test_compose_form_filters_recipients_by_the_chosen_state(mail_event):
 
     with scopes_disabled():
         assert form.is_valid(), form.errors
-        assert list(form.recipients()) == [submitted]
+        exhibition_requests, profiles = form.recipients()
+        assert list(exhibition_requests) == [submitted]
+        assert not profiles.exists()
 
 
 @pytest.mark.django_db
