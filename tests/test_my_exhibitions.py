@@ -266,7 +266,7 @@ def test_exhibitor_without_vouchers_gets_empty_lists(event):
         exhibitor, _user_ = _accepted(event)
 
         assert list(exhibitor_voucher_redemptions(exhibitor)) == []
-        assert exhibitor_unredeemed_vouchers(exhibitor) == []
+        assert list(exhibitor_unredeemed_vouchers(exhibitor)) == []
 
 
 @pytest.mark.django_db
