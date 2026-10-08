@@ -7,7 +7,9 @@ from eventyay.base.models import Event, LogEntry
 from eventyay.base.models.auth import User
 
 from exhibition.forms import ExhibitionProductForm
+from exhibition.signals import exhibition_logentry_object_link
 from exhibition.models import (
+    LOG_PRODUCT_ADDED,
     LOG_PRODUCT_CATEGORY_ADDED,
     LOG_PRODUCT_CATEGORY_DELETED,
     ExhibitionProduct,
@@ -350,3 +352,25 @@ def test_api_lists_categories_in_order_and_products_with_their_category(event):
 
     assert [row["id"] for row in categories] == [exhibition.pk, sponsorship.pk]
     assert [(row["id"], row["category"]) for row in products] == [(booth.pk, exhibition.pk), (gold.pk, sponsorship.pk)]
+
+
+# The activity log
+
+
+@pytest.mark.django_db
+def test_log_entries_link_to_the_product_and_category_edit_pages(event):
+    with scopes_disabled():
+        category = _category(event, "Sponsor tiers")
+        product = _product(event, "Gold Sponsor", category=category)
+        product.log_action(LOG_PRODUCT_ADDED, data={})
+        category.log_action(LOG_PRODUCT_CATEGORY_ADDED, data={})
+        product_entry = LogEntry.objects.get(action_type=LOG_PRODUCT_ADDED, object_id=product.pk)
+        category_entry = LogEntry.objects.get(action_type=LOG_PRODUCT_CATEGORY_ADDED, object_id=category.pk)
+
+        product_link = exhibition_logentry_object_link(sender=event, logentry=product_entry)
+        category_link = exhibition_logentry_object_link(sender=event, logentry=category_entry)
+
+    assert _url(event, "products.edit", pk=product.pk) in product_link
+    assert "Gold Sponsor" in product_link
+    assert _url(event, "products.categories.edit", pk=category.pk) in category_link
+    assert "Sponsor tiers" in category_link
