@@ -2267,7 +2267,9 @@ class ExhibitionComposeForm(forms.Form):
         field.widget.option_details = {value: detail for value, _label, detail in entries}
 
     def organizer_created_profiles(self):
-        return ExhibitorInfo.objects.filter(event=self.event, source_requests__isnull=True).exclude(email="")
+        return ExhibitorInfo.objects.filter(
+            event=self.event, source_requests__isnull=True, email__isnull=False
+        ).exclude(email="")
 
     def chosen_pks(self, prefix):
         return [

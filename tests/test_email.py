@@ -1267,6 +1267,7 @@ def test_compose_form_lists_applications_and_organizer_created_profiles(mail_eve
     with scopes_disabled():
         added = ExhibitorInfo.objects.create(event=mail_event, name="Added", email="added@example.com")
         ExhibitorInfo.objects.create(event=mail_event, name="No Address", email="")
+        ExhibitorInfo.objects.create(event=mail_event, name="Null Address", email=None)
         approved = ExhibitorInfo.objects.create(event=mail_event, name="Approved", email="ap@example.com")
         accepted.approved_exhibitor = approved
         accepted.save(update_fields=["approved_exhibitor"])
