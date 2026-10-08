@@ -176,7 +176,7 @@ class MyExhibitionVouchersView(LoginRequiredMixin, ListView):
 
     @cached_property
     def redemptions(self):
-        return list(exhibitor_voucher_redemptions(self.exhibitor))
+        return exhibitor_voucher_redemptions(self.exhibitor)
 
     @cached_property
     def unredeemed(self):
@@ -232,9 +232,10 @@ class MyExhibitionVouchersView(LoginRequiredMixin, ListView):
                 }
                 for position in context["voucher_rows"]
             ]
-        redeemed_vouchers = len({position.voucher_id for position in self.redemptions})
-        context["redemption_count"] = len(self.redemptions)
+        redeemed_vouchers = self.redemptions.order_by().values("voucher_id").distinct().count()
+        unredeemed_count = self.unredeemed.count()
+        context["redemption_count"] = self.redemptions.count()
         context["redeemed_count"] = redeemed_vouchers
-        context["unredeemed_count"] = len(self.unredeemed)
-        context["issued_count"] = redeemed_vouchers + len(self.unredeemed)
+        context["unredeemed_count"] = unredeemed_count
+        context["issued_count"] = redeemed_vouchers + unredeemed_count
         return context
