@@ -73,6 +73,7 @@ from .models import (
     LOG_QUESTION_CHANGED,
     LOG_QUESTION_DELETED,
     LOG_REQUEST_CHANGED,
+    LOG_REQUEST_EMAILED,
     LOG_SETTINGS_CHANGED,
     QUESTION_OPTION_VARIANTS,
     REQUEST_DEFAULT_FIELD_KEYS,
@@ -2772,19 +2773,42 @@ EMAIL_MANAGE_PERMISSION = (
 
 
 class EmailComposeView(EventPermissionRequiredMixin, FormView):
-    """Compose a broadcast email to a filtered group of applicants."""
+    """Compose a broadcast email to a filtered group of applicants, or to one applicant via ``?request=<code>``."""
 
     permission = EMAIL_MANAGE_PERMISSION
     template_name = "exhibitors/email_compose.html"
     form_class = ExhibitionComposeForm
 
+    @cached_property
+    def single_request(self):
+        code = self.request.GET.get("request")
+        if not code:
+            return None
+        exhibition_request = get_object_or_404(
+            ExhibitionRequest.objects.select_related("user"), event=self.request.event, code=code
+        )
+        if not mail_helpers.request_recipient(exhibition_request):
+            raise Http404()
+        return exhibition_request
+
+    def single_request_url(self):
+        return reverse(
+            "plugins:exhibition:request.detail",
+            kwargs={**event_kwargs(self.request.event), "code": self.single_request.code},
+        )
+
     def get_form_kwargs(self):
         kwargs = super().get_form_kwargs()
         kwargs["event"] = self.request.event
+        kwargs["single_recipient"] = self.single_request is not None
         return kwargs
 
     def get_initial(self):
         initial = super().get_initial()
+        if self.single_request is not None:
+            initial["subject"], initial["body"] = mail_helpers.get_email_template(
+                self.request.event, mail_helpers.REQUEST_MESSAGE
+            )
         template_pk = self.request.GET.get("template")
         if template_pk:
             template = ExhibitionCustomEmailTemplate.objects.filter(event=self.request.event, pk=template_pk).first()
@@ -2797,6 +2821,10 @@ class EmailComposeView(EventPermissionRequiredMixin, FormView):
         context = super().get_context_data(**kwargs)
         context["custom_templates"] = ExhibitionCustomEmailTemplate.objects.filter(event=self.request.event)
         context["locales"] = self.request.event.settings.locales
+        if self.single_request is not None:
+            context["single_request"] = self.single_request
+            context["single_request_url"] = self.single_request_url()
+            context["single_recipient"] = request_email_recipient(self.request, self.single_request)
         return context
 
     def form_valid(self, form):
@@ -2806,12 +2834,15 @@ class EmailComposeView(EventPermissionRequiredMixin, FormView):
         scheduled_at = form.cleaned_data.get("scheduled_at")
         send_now = "_send" in self.request.POST and not scheduled_at
 
-        recipients = mail_helpers.compose_recipients(
-            event,
-            states=form.cleaned_data["states"],
-            organization_type=form.cleaned_data["organization_type"],
-            sponsor_group=form.cleaned_data["sponsor_group"],
-        )
+        if self.single_request is not None:
+            recipients = [self.single_request]
+        else:
+            recipients = mail_helpers.compose_recipients(
+                event,
+                states=form.cleaned_data["states"],
+                organization_type=form.cleaned_data["organization_type"],
+                sponsor_group=form.cleaned_data["sponsor_group"],
+            )
         created = mail_helpers.queue_compose_emails(
             event,
             recipients,
@@ -2828,6 +2859,11 @@ class EmailComposeView(EventPermissionRequiredMixin, FormView):
         if scheduled_at:
             for queued in created:
                 send_scheduled_email.apply_async(args=[event.pk, queued.pk], eta=scheduled_at)
+
+        if self.single_request is not None:
+            return self.single_request_done(created[0], scheduled_at)
+
+        if scheduled_at:
             messages.success(
                 self.request,
                 _("%(count)d emails have been scheduled.") % {"count": len(created)},
@@ -2841,6 +2877,21 @@ class EmailComposeView(EventPermissionRequiredMixin, FormView):
             _("%(count)d emails have been placed in the outbox.") % {"count": len(created)},
         )
         return redirect("plugins:exhibition:email.outbox", **event_kwargs(event))
+
+    def single_request_done(self, queued, scheduled_at):
+        """Note the email on the applicant's request and return to its review page."""
+        self.single_request.log_action(
+            LOG_REQUEST_EMAILED,
+            user=self.request.user,
+            data={"subject": queued.subject, "to": queued.to_email, "sent": bool(queued.sent_at)},
+        )
+        if scheduled_at:
+            messages.success(self.request, _("The email has been scheduled."))
+        elif queued.sent_at:
+            messages.success(self.request, _("The email has been sent."))
+        else:
+            messages.success(self.request, _("The email has been placed in the outbox."))
+        return redirect(self.single_request_url())
 
     def form_invalid(self, form):
         messages.error(self.request, _("We could not save your changes. See below for details."))

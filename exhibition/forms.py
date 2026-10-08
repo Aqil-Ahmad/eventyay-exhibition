@@ -2167,8 +2167,12 @@ class ExhibitionComposeForm(forms.Form):
 
     def __init__(self, *args, **kwargs):
         self.event = kwargs.pop("event")
+        single_recipient = kwargs.pop("single_recipient", False)
         super().__init__(*args, **kwargs)
         self.fields["sponsor_group"].queryset = SponsorGroup.objects.filter(event=self.event).order_by("level", "pk")
+        if single_recipient:
+            for name in ("states", "organization_type", "sponsor_group"):
+                self.fields.pop(name)
         self.fields["body"] = ExhibitionEmailBodyFormField(
             label=_("Body"),
             placeholders=mail_helpers.placeholder_names(self.event, mail_helpers.REQUEST_PLACEHOLDER_CONTEXT),
