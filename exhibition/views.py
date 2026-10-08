@@ -1736,7 +1736,7 @@ class ExhibitionProductMixin(EventPermissionRequiredMixin):
     permission = "can_change_event_settings"
 
     def get_queryset(self):
-        return ExhibitionProduct.objects.filter(event=self.request.event)
+        return ExhibitionProduct.objects.filter(event=self.request.event).select_related("category").in_sales_order()
 
     def get_success_url(self):
         return reverse("plugins:exhibition:products", kwargs=event_kwargs(self.request.event))

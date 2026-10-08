@@ -2263,6 +2263,7 @@ class ExhibitionProductForm(I18nModelForm):
         fields = [
             "name",
             "description",
+            "category",
             "purpose",
             "includes_booth",
             "price",
@@ -2284,6 +2285,8 @@ class ExhibitionProductForm(I18nModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         change_decimal_field(self.fields["price"], self.event.currency)
+        self.fields["category"].queryset = ExhibitionProductCategory.objects.filter(event=self.event)
+        self.fields["category"].empty_label = _("No category")
 
     def clean_price(self):
         price = self.cleaned_data.get("price")

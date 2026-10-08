@@ -4,6 +4,7 @@ from eventyay.api.urls import event_router
 from eventyay.common.urls import OrganizerSlugConverter  # noqa: F401
 
 from .api import (
+    ExhibitionProductCategoryViewSet,
     ExhibitionProductViewSet,
     ExhibitorAuthView,
     ExhibitorInfoViewSet,
@@ -454,3 +455,6 @@ urlpatterns = [
 
 event_router.register("exhibitors", ExhibitorInfoViewSet, basename="exhibitorinfo")
 event_router.register("exhibition-products", ExhibitionProductViewSet, basename="exhibitionproduct")
+event_router.register(
+    "exhibition-product-categories", ExhibitionProductCategoryViewSet, basename="exhibitionproductcategory"
+)

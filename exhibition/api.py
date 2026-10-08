@@ -10,6 +10,7 @@ from rest_framework.response import Response
 
 from .models import (
     ExhibitionProduct,
+    ExhibitionProductCategory,
     ExhibitorExtraLink,
     ExhibitorInfo,
     ExhibitorSettings,
@@ -348,6 +349,13 @@ class ExhibitorInfoViewSet(viewsets.ModelViewSet):
         serializer.save()
 
 
+class ExhibitionProductCategorySerializer(I18nAwareModelSerializer):
+    class Meta:
+        model = ExhibitionProductCategory
+        fields = ("id", "name", "description", "position")
+        read_only_fields = fields
+
+
 class ExhibitionProductSerializer(I18nAwareModelSerializer):
     class Meta:
         model = ExhibitionProduct
@@ -355,6 +363,7 @@ class ExhibitionProductSerializer(I18nAwareModelSerializer):
             "id",
             "name",
             "description",
+            "category",
             "purpose",
             "includes_booth",
             "price",
@@ -379,7 +388,19 @@ class ExhibitionProductViewSet(viewsets.ReadOnlyModelViewSet):
     permission = None
 
     def get_queryset(self):
-        return ExhibitionProduct.objects.for_event(self.request.event).available()
+        return ExhibitionProduct.objects.for_event(self.request.event).available().in_sales_order()
+
+
+class ExhibitionProductCategoryViewSet(viewsets.ReadOnlyModelViewSet):
+    """Exhibition product categories in the order the organizer has set."""
+
+    serializer_class = ExhibitionProductCategorySerializer
+    queryset = ExhibitionProductCategory.objects.none()
+    lookup_field = "id"
+    permission = None
+
+    def get_queryset(self):
+        return ExhibitionProductCategory.objects.filter(event=self.request.event)
 
 
 class LeadCreateView(views.APIView):

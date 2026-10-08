@@ -23,6 +23,7 @@
             {% include 'exhibitors/_i18n_language_switcher.html' %}
             {% bootstrap_field form.name layout="control" %}
             {% bootstrap_field form.description layout="control" %}
+            {% bootstrap_field form.category layout="control" %}
             {% bootstrap_field form.purpose layout="control" %}
             {% bootstrap_field form.includes_booth layout="control" %}
             {% bootstrap_field form.price addon_after=request.event.currency layout="control" %}

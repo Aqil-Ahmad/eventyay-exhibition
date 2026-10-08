@@ -38,44 +38,54 @@
                 </tr>
                 </thead>
                 <tbody>
-                {% for product in products %}
-                    <tr>
-                        <td>
-                            <strong>
-                                {% if not product.active %}<strike>{% endif %}
-                                <a href="{% url 'plugins:exhibition:products.edit' organizer=request.event.organizer.slug event=request.event.slug pk=product.pk %}">{{ product }}</a>
-                                {% if not product.active %}</strike>{% endif %}
-                            </strong>
-                            {% if product.available_from or product.available_until %}
-                                {% if not product.is_available_by_time %}
-                                    <span class="label label-danger" data-toggle="tooltip"
-                                          title="{% trans "Currently unavailable since a limited timeframe for this product has been set" %}">
-                                        <span class="fa fa-clock-o fa-fw"></span>
-                                    </span>
-                                {% else %}
-                                    <span class="fa fa-clock-o fa-fw text-muted" data-toggle="tooltip"
-                                          title="{% trans "Only available in a limited timeframe" %}"></span>
+                {% regroup products by category as product_groups %}
+                {% for group in product_groups %}
+                    {% if group.grouper or product_groups|length > 1 %}
+                        <tr class="active">
+                            <th colspan="5">
+                                {% if group.grouper %}{{ group.grouper.backend_name }}{% else %}{% trans "No category" %}{% endif %}
+                            </th>
+                        </tr>
+                    {% endif %}
+                    {% for product in group.list %}
+                        <tr>
+                            <td>
+                                <strong>
+                                    {% if not product.active %}<strike>{% endif %}
+                                    <a href="{% url 'plugins:exhibition:products.edit' organizer=request.event.organizer.slug event=request.event.slug pk=product.pk %}">{{ product }}</a>
+                                    {% if not product.active %}</strike>{% endif %}
+                                </strong>
+                                {% if product.available_from or product.available_until %}
+                                    {% if not product.is_available_by_time %}
+                                        <span class="label label-danger" data-toggle="tooltip"
+                                              title="{% trans "Currently unavailable since a limited timeframe for this product has been set" %}">
+                                            <span class="fa fa-clock-o fa-fw"></span>
+                                        </span>
+                                    {% else %}
+                                        <span class="fa fa-clock-o fa-fw text-muted" data-toggle="tooltip"
+                                              title="{% trans "Only available in a limited timeframe" %}"></span>
+                                    {% endif %}
                                 {% endif %}
-                            {% endif %}
-                        </td>
-                        <td>{{ product.get_purpose_display }}</td>
-                        <td>
-                            {% if product.includes_booth %}
-                                <span class="fa fa-check text-success" aria-hidden="true"></span>
-                                <span class="sr-only">{% trans "Yes" %}</span>
-                            {% else %}
-                                <span class="fa fa-times text-muted" aria-hidden="true"></span>
-                                <span class="sr-only">{% trans "No" %}</span>
-                            {% endif %}
-                        </td>
-                        <td class="text-right">{{ product.price|money:request.event.currency }}</td>
-                        <td class="text-right flip">
-                            <a href="{% url 'plugins:exhibition:products.edit' organizer=request.event.organizer.slug event=request.event.slug pk=product.pk %}"
-                               class="btn btn-default btn-sm" title="{% trans 'Edit' %}" data-toggle="tooltip"><i class="fa fa-edit"></i></a>
-                            <a href="{% url 'plugins:exhibition:products.delete' organizer=request.event.organizer.slug event=request.event.slug pk=product.pk %}"
-                               class="btn btn-delete btn-danger btn-sm" title="{% trans 'Delete' %}" data-toggle="tooltip"><i class="fa fa-trash"></i></a>
-                        </td>
-                    </tr>
+                            </td>
+                            <td>{{ product.get_purpose_display }}</td>
+                            <td>
+                                {% if product.includes_booth %}
+                                    <span class="fa fa-check text-success" aria-hidden="true"></span>
+                                    <span class="sr-only">{% trans "Yes" %}</span>
+                                {% else %}
+                                    <span class="fa fa-times text-muted" aria-hidden="true"></span>
+                                    <span class="sr-only">{% trans "No" %}</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-right">{{ product.price|money:request.event.currency }}</td>
+                            <td class="text-right flip">
+                                <a href="{% url 'plugins:exhibition:products.edit' organizer=request.event.organizer.slug event=request.event.slug pk=product.pk %}"
+                                   class="btn btn-default btn-sm" title="{% trans 'Edit' %}" data-toggle="tooltip"><i class="fa fa-edit"></i></a>
+                                <a href="{% url 'plugins:exhibition:products.delete' organizer=request.event.organizer.slug event=request.event.slug pk=product.pk %}"
+                                   class="btn btn-delete btn-danger btn-sm" title="{% trans 'Delete' %}" data-toggle="tooltip"><i class="fa fa-trash"></i></a>
+                            </td>
+                        </tr>
+                    {% endfor %}
                 {% endfor %}
                 </tbody>
             </table>
