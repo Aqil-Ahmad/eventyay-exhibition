@@ -13,6 +13,7 @@ from exhibition.forms import ExhibitionProductForm
 from exhibition.models import (
     LOG_PRODUCT_ADDED,
     ExhibitionProduct,
+    ExhibitionProductCategory,
     ExhibitionProductPurpose,
 )
 
@@ -242,6 +243,59 @@ def test_products_page_lists_only_this_events_exhibition_products(event):
     assert "Gold Sponsor" in content
     assert "Someone else&#x27;s booth" not in content
     assert "Visitor Ticket" not in content
+
+
+@pytest.mark.django_db
+@override_settings(SITE_URL="https://testserver")
+def test_reorder_saves_the_product_order_within_a_category(event):
+    client = _organizer_client(event)
+    with scopes_disabled():
+        category = ExhibitionProductCategory.objects.create(event=event, name={"en": "Sponsor tiers"})
+        gold = _product(event, "Gold Sponsor", category=category)
+        silver = _product(event, "Silver Sponsor", category=category)
+        loose = _product(event, "Lanyard")
+
+    response = client.post(
+        _url(event, "products.reorder") + f"?category_id={category.pk}",
+        {"order": f"{silver.pk},{gold.pk}"},
+    )
+
+    assert response.status_code == 204
+    with scopes_disabled():
+        assert list(ExhibitionProduct.objects.for_event(event).in_sales_order()) == [silver, gold, loose]
+
+
+@pytest.mark.django_db
+@override_settings(SITE_URL="https://testserver")
+def test_reorder_rejects_products_outside_the_posted_category(event):
+    client = _organizer_client(event)
+    with scopes_disabled():
+        category = ExhibitionProductCategory.objects.create(event=event, name={"en": "Sponsor tiers"})
+        gold = _product(event, "Gold Sponsor", category=category)
+        loose = _product(event, "Lanyard")
+        foreign = _product(_other_event(event), "Elsewhere")
+    url = _url(event, "products.reorder")
+
+    assert client.post(url + f"?category_id={category.pk}", {"order": f"{gold.pk},{loose.pk}"}).status_code == 400
+    assert client.post(url + "?category_id=none", {"order": f"{loose.pk},{foreign.pk}"}).status_code == 400
+    assert client.post(url + "?category_id=abc", {"order": f"{loose.pk}"}).status_code == 400
+
+
+@pytest.mark.django_db
+@override_settings(SITE_URL="https://testserver")
+def test_products_can_be_reordered_only_when_they_fit_on_one_page(event):
+    client = _organizer_client(event)
+    with scopes_disabled():
+        for name in ("Gold Sponsor", "Silver Sponsor", "Bronze Sponsor"):
+            _product(event, name)
+
+    single_page = client.get(_url(event, "products"))
+    paginated = client.get(_url(event, "products") + "?page_size=2")
+
+    assert single_page.context["reorder_enabled"] is True
+    assert "dragsort-button" in single_page.content.decode()
+    assert paginated.context["reorder_enabled"] is False
+    assert "dragsort-button" not in paginated.content.decode()
 
 
 @pytest.mark.django_db

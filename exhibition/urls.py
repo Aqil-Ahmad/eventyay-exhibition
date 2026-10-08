@@ -38,6 +38,7 @@ from .views import (
     ExhibitionProductDeleteView,
     ExhibitionProductEditView,
     ExhibitionProductListView,
+    ExhibitionProductReorderView,
     ExhibitionQuestionCreateView,
     ExhibitionQuestionDeleteView,
     ExhibitionQuestionEditView,
@@ -195,6 +196,11 @@ urlpatterns = [
         "exhibitors/event/<orgslug:organizer>/<slug:event>/products/add",
         ExhibitionProductCreateView.as_view(),
         name="products.add",
+    ),
+    path(
+        "exhibitors/event/<orgslug:organizer>/<slug:event>/products/reorder",
+        ExhibitionProductReorderView.as_view(),
+        name="products.reorder",
     ),
     path(
         "exhibitors/event/<orgslug:organizer>/<slug:event>/products/<int:pk>/edit",

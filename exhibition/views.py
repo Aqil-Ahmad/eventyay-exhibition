@@ -1746,6 +1746,26 @@ class ExhibitionProductListView(ExhibitionProductMixin, PaginationMixin, ListVie
     template_name = "exhibitors/products.html"
     context_object_name = "products"
 
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["reorder_enabled"] = not context["is_paginated"]
+        return context
+
+
+class ExhibitionProductReorderView(PositionReorderMixin):
+    position_field = "position"
+
+    def get_scope_queryset(self, request):
+        queryset = ExhibitionProduct.objects.filter(event=request.event)
+        category_id = request.GET.get("category_id")
+        if category_id in (None, "", "none"):
+            return queryset.filter(category__isnull=True)
+        try:
+            category_id = int(category_id)
+        except (TypeError, ValueError):
+            return queryset.none()
+        return queryset.filter(category_id=category_id)
+
 
 class ExhibitionProductFormMixin(ExhibitionProductMixin):
     model = ExhibitionProduct
