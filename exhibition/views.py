@@ -43,7 +43,6 @@ from .forms import (
     ExhibitionMailTemplatesForm,
     ExhibitionQuestionForm,
     ExhibitionQuestionOptionFormSet,
-    ExhibitionRequestEmailForm,
     ExhibitionRequestExtraLinkFormSet,
     ExhibitionRequestForm,
     ExhibitionRequestReviewForm,
@@ -1566,13 +1565,6 @@ class RequestDetailView(EventPermissionRequiredMixin, UpdateView):
             self.request.user, self.request.event, request=self.request
         )
         context["can_email"] = bool(mail_helpers.request_recipient(self.object))
-        if context["can_email"]:
-            if "email_form" not in context:
-                subject, body = mail_helpers.render_request_template(
-                    self.request.event, self.object, mail_helpers.REQUEST_MESSAGE
-                )
-                context["email_form"] = ExhibitionRequestEmailForm(initial={"subject": subject, "body": body})
-            context["email_recipient"] = request_email_recipient(self.request, self.object)
         context["emails"] = self.object.emails.order_by("-created")
         return context
 
@@ -2896,76 +2888,6 @@ class EmailComposeView(EventPermissionRequiredMixin, FormView):
     def form_invalid(self, form):
         messages.error(self.request, _("We could not save your changes. See below for details."))
         return super().form_invalid(form)
-
-
-class RequestEmailView(EventPermissionRequiredMixin, FormView):
-    """Write an email to the applicant of one exhibition request, from its review page."""
-
-    permission = EMAIL_MANAGE_PERMISSION
-    template_name = "exhibitors/request_email.html"
-    form_class = ExhibitionRequestEmailForm
-
-    @cached_property
-    def exhibition_request(self):
-        return get_object_or_404(
-            ExhibitionRequest.objects.select_related("user"),
-            event=self.request.event,
-            code=self.kwargs["code"],
-        )
-
-    def detail_url(self):
-        return reverse(
-            "plugins:exhibition:request.detail",
-            kwargs={**event_kwargs(self.request.event), "code": self.exhibition_request.code},
-        )
-
-    def dispatch(self, request, *args, **kwargs):
-        if not mail_helpers.request_recipient(self.exhibition_request):
-            messages.error(request, _("This applicant has no email address."))
-            return redirect(self.detail_url())
-        return super().dispatch(request, *args, **kwargs)
-
-    def get_initial(self):
-        subject, body = mail_helpers.render_request_template(
-            self.request.event, self.exhibition_request, mail_helpers.REQUEST_MESSAGE
-        )
-        return {"subject": subject, "body": body}
-
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        context["exhibition_request"] = self.exhibition_request
-        context["recipient"] = request_email_recipient(self.request, self.exhibition_request)
-        context["detail_url"] = self.detail_url()
-        return context
-
-    def form_valid(self, form):
-        queued = mail_helpers.queue_request_message(
-            self.request.event,
-            self.exhibition_request,
-            form.cleaned_data["subject"],
-            form.cleaned_data["body"],
-            send_now="_send" in self.request.POST,
-            requestor=self.request.user,
-        )
-        if queued.sent_at:
-            messages.success(self.request, _("The email has been sent."))
-        else:
-            messages.success(self.request, _("The email has been placed in the outbox."))
-        return redirect(self.detail_url())
-
-    def form_invalid(self, form):
-        if self.request.POST.get("from_dialog"):
-            return self.render_review_page(form)
-        return super().form_invalid(form)
-
-    def render_review_page(self, email_form):
-        """Show the review page again with the dialog open, so errors appear where the email was written."""
-        detail = RequestDetailView()
-        detail.setup(self.request, **self.kwargs)
-        detail.object = detail.get_object()
-        review_form = detail.get_form_class()(instance=detail.object, event=self.request.event)
-        context = detail.get_context_data(form=review_form, email_form=email_form, email_dialog_open=True)
-        return TemplateResponse(self.request, detail.template_name, context)
 
 
 def request_email_recipient(request, exhibition_request):

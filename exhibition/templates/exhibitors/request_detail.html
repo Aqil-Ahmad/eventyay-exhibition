@@ -9,7 +9,6 @@
     <link rel="stylesheet" href="{% static 'exhibition/css/history-panel.css' %}">
     <link rel="stylesheet" href="{% static 'exhibition/css/request-email.css' %}">
     <script defer src="{% static 'exhibition/js/request-review.js' %}"></script>
-    <script defer src="{% static 'exhibition/js/request-email-dialog.js' %}"></script>
 {% endblock %}
 
 {% block title %}{{ request.event.name }} - {% trans "Review exhibition request" %}{% endblock %}
@@ -21,8 +20,7 @@
 {% block exhibitors_content %}
     {% if can_email %}
         <p>
-            <a class="btn btn-default" data-request-email-open
-               href="{% url 'plugins:exhibition:request.email' organizer=request.event.organizer.slug event=request.event.slug code=exhibition_request.code %}">
+            <a class="btn btn-default" href="{% url 'plugins:exhibition:email.compose' organizer=request.event.organizer.slug event=request.event.slug %}?request={{ exhibition_request.code }}">
                 <i class="fa fa-envelope"></i> {% trans "Send email" %}
             </a>
         </p>
@@ -254,9 +252,6 @@
                 </table>
             </div>
         </div>
-    {% endif %}
-    {% if can_email %}
-        {% include 'exhibitors/_request_email_dialog.html' %}
     {% endif %}
     {% if can_manage %}
         <div class="panel panel-default exhibition-history">

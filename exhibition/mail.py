@@ -393,45 +393,6 @@ def request_recipient(exhibition_request):
     return to_email.strip()
 
 
-def render_request_template(event, exhibition_request, role):
-    """Subject and body of a role's template, rendered for one applicant in their language."""
-    user = exhibition_request.user if exhibition_request.user_id else None
-    locale = recipient_locale(event, user)
-    subject_tpl, body_tpl = get_email_template(event, role)
-    context = build_request_context(event, exhibition_request)
-    return _render(subject_tpl, context, locale), _render(body_tpl, context, locale)
-
-
-def queue_request_message(event, exhibition_request, subject, body, *, send_now=False, requestor=None):
-    """Queue an organizer-written email to one applicant; ``send_now`` sends it right away."""
-    from .models import LOG_REQUEST_EMAILED, ExhibitionEmailQueue
-
-    to_email = request_recipient(exhibition_request)
-    if not to_email:
-        return None
-
-    user = exhibition_request.user if exhibition_request.user_id else None
-    locale = recipient_locale(event, user)
-    context = build_request_context(event, exhibition_request)
-    queued = ExhibitionEmailQueue.objects.create(
-        event=event,
-        exhibition_request=exhibition_request,
-        role=REQUEST_MESSAGE,
-        to_email=to_email,
-        subject=_render(subject, context, locale),
-        body=_render(body, context, locale),
-        locale=locale or "",
-    )
-    if send_now:
-        queued.send(requestor=requestor)
-    exhibition_request.log_action(
-        LOG_REQUEST_EMAILED,
-        user=requestor,
-        data={"subject": queued.subject, "to": to_email, "sent": bool(queued.sent_at)},
-    )
-    return queued
-
-
 def queue_request_email(event, exhibition_request, role, *, send_now=False, requestor=None):
     """Queue a lifecycle email; ``send_now`` sends it instead of leaving it in the outbox."""
     from .models import ExhibitionEmailQueue
