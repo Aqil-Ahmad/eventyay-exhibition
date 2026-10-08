@@ -5,7 +5,7 @@ import string
 from django.conf import settings
 from django.core.validators import MaxValueValidator
 from django.db import models
-from django.db.models import Max, Q
+from django.db.models import F, Max, Q
 from django.utils import timezone
 from django.utils.crypto import get_random_string
 from django.utils.translation import gettext_lazy as _
@@ -594,6 +594,9 @@ LOG_EMAIL_SENT = f"{LOG_PREFIX}.email.sent"
 LOG_PRODUCT_ADDED = f"{LOG_PREFIX}.product.added"
 LOG_PRODUCT_CHANGED = f"{LOG_PREFIX}.product.changed"
 LOG_PRODUCT_DELETED = f"{LOG_PREFIX}.product.deleted"
+LOG_PRODUCT_CATEGORY_ADDED = f"{LOG_PREFIX}.product_category.added"
+LOG_PRODUCT_CATEGORY_CHANGED = f"{LOG_PREFIX}.product_category.changed"
+LOG_PRODUCT_CATEGORY_DELETED = f"{LOG_PREFIX}.product_category.deleted"
 
 SUBMITTER_PROFILE_FIELD_LABELS = {
     "description": _("Organization Description"),
@@ -1128,6 +1131,59 @@ class ExhibitionProductQuerySet(models.QuerySet):
             active=True,
         )
 
+    def in_sales_order(self):
+        """Products grouped by category in the configured order, uncategorised ones last."""
+        return self.order_by(F("category__position").asc(nulls_last=True), "category_id", "position", "id")
+
+
+def get_next_product_category_position(event):
+    max_position = ExhibitionProductCategory.objects.filter(event=event).aggregate(value=Max("position")).get("value")
+    return (max_position if max_position is not None else -1) + 1
+
+
+class ExhibitionProductCategory(LoggedModel):
+    """A group of exhibition products, such as Sponsorship or Add-ons, kept apart from the ticket categories."""
+
+    event = models.ForeignKey(
+        Event,
+        on_delete=models.CASCADE,
+        related_name="exhibition_product_categories",
+    )
+    name = I18nCharField(max_length=255, verbose_name=_("Category name"))
+    internal_name = models.CharField(
+        max_length=255,
+        blank=True,
+        verbose_name=_("Internal name"),
+        help_text=_("If you set this, it will be used instead of the public name in the backend."),
+    )
+    description = I18nTextField(
+        verbose_name=_("Category description"),
+        null=True,
+        blank=True,
+    )
+    position = models.IntegerField(default=0)
+
+    class Meta:
+        verbose_name = _("Exhibition product category")
+        verbose_name_plural = _("Exhibition product categories")
+        ordering = ("position", "id")
+
+    @property
+    def localized_name(self):
+        return localize_event_text(self.name) or ""
+
+    @property
+    def backend_name(self):
+        return self.internal_name or self.localized_name
+
+    def save(self, *args, **kwargs):
+        if self._state.adding and not self.position:
+            self.position = get_next_product_category_position(self.event)
+        return super().save(*args, **kwargs)
+
+    def __str__(self):
+        return self.localized_name or str(self.name)
+
 
 def get_next_product_position(event):
     max_position = ExhibitionProduct.objects.filter(event=event).aggregate(value=Max("position")).get("value")
@@ -1148,6 +1204,14 @@ class ExhibitionProduct(LoggedModel):
         Event,
         on_delete=models.CASCADE,
         related_name="exhibition_products",
+    )
+    category = models.ForeignKey(
+        ExhibitionProductCategory,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="products",
+        verbose_name=_("Category"),
     )
     name = I18nCharField(max_length=255, verbose_name=_("Product name"))
     description = I18nTextField(
