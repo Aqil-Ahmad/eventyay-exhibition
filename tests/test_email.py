@@ -1324,3 +1324,21 @@ def test_compose_fills_the_organization_name_for_organizer_created_profiles(mail
 
     assert created[0].subject == "Hello Added Co"
 
+
+@pytest.mark.django_db
+def test_compose_view_emails_only_the_chosen_organizations(mail_event):
+    _request(mail_event, "Accepted", ExhibitionRequestState.ACCEPTED, email="a@example.com")
+    rejected = _request(mail_event, "Rejected", ExhibitionRequestState.REJECTED, email="r@example.com")
+    with scopes_disabled():
+        added = ExhibitorInfo.objects.create(event=mail_event, name="Added", email="added@example.com")
+    form = _compose_form(mail_event, organizations=[f"request-{rejected.pk}", f"profile-{added.pk}"])
+
+    view = EmailComposeView()
+    view.request = _organiser_request(mail_event)
+    with scopes_disabled():
+        assert form.is_valid(), form.errors
+        response = view.form_valid(form)
+        queued = set(ExhibitionEmailQueue.objects.filter(event=mail_event).values_list("to_email", flat=True))
+
+    assert response.status_code == 302
+    assert queued == {"r@example.com", "added@example.com"}
