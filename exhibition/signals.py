@@ -46,6 +46,9 @@ from .models import (
     LOG_ORGANIZATION_UNPUBLISHED,
     LOG_PREFIX,
     LOG_PRODUCT_ADDED,
+    LOG_PRODUCT_CATEGORY_ADDED,
+    LOG_PRODUCT_CATEGORY_CHANGED,
+    LOG_PRODUCT_CATEGORY_DELETED,
     LOG_PRODUCT_CHANGED,
     LOG_PRODUCT_DELETED,
     LOG_QUESTION_ADDED,
@@ -383,6 +386,9 @@ LOG_ENTRY_LABELS = {
     LOG_PRODUCT_ADDED: _("Exhibition product created."),
     LOG_PRODUCT_CHANGED: _("Exhibition product changed."),
     LOG_PRODUCT_DELETED: _("Exhibition product deleted."),
+    LOG_PRODUCT_CATEGORY_ADDED: _("Exhibition product category created."),
+    LOG_PRODUCT_CATEGORY_CHANGED: _("Exhibition product category changed."),
+    LOG_PRODUCT_CATEGORY_DELETED: _("Exhibition product category deleted."),
 }
 
 

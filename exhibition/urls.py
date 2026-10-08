@@ -28,6 +28,11 @@ from .views import (
     EmailTemplatesView,
     ExhibitionDefaultFieldEditView,
     ExhibitionDefaultFieldResetView,
+    ExhibitionProductCategoryCreateView,
+    ExhibitionProductCategoryDeleteView,
+    ExhibitionProductCategoryEditView,
+    ExhibitionProductCategoryListView,
+    ExhibitionProductCategoryReorderView,
     ExhibitionProductCreateView,
     ExhibitionProductDeleteView,
     ExhibitionProductEditView,
@@ -199,6 +204,31 @@ urlpatterns = [
         "exhibitors/event/<orgslug:organizer>/<slug:event>/products/<int:pk>/delete",
         ExhibitionProductDeleteView.as_view(),
         name="products.delete",
+    ),
+    path(
+        "exhibitors/event/<orgslug:organizer>/<slug:event>/products/categories",
+        ExhibitionProductCategoryListView.as_view(),
+        name="products.categories",
+    ),
+    path(
+        "exhibitors/event/<orgslug:organizer>/<slug:event>/products/categories/add",
+        ExhibitionProductCategoryCreateView.as_view(),
+        name="products.categories.add",
+    ),
+    path(
+        "exhibitors/event/<orgslug:organizer>/<slug:event>/products/categories/reorder",
+        ExhibitionProductCategoryReorderView.as_view(),
+        name="products.categories.reorder",
+    ),
+    path(
+        "exhibitors/event/<orgslug:organizer>/<slug:event>/products/categories/<int:pk>/edit",
+        ExhibitionProductCategoryEditView.as_view(),
+        name="products.categories.edit",
+    ),
+    path(
+        "exhibitors/event/<orgslug:organizer>/<slug:event>/products/categories/<int:pk>/delete",
+        ExhibitionProductCategoryDeleteView.as_view(),
+        name="products.categories.delete",
     ),
     path(
         "exhibitors/event/<orgslug:organizer>/<slug:event>/exhibitors",

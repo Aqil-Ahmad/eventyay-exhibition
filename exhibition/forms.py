@@ -52,6 +52,7 @@ from .models import (
     ExhibitionCustomEmailTemplate,
     ExhibitionEmailQueue,
     ExhibitionProduct,
+    ExhibitionProductCategory,
     ExhibitionQuestion,
     ExhibitionQuestionOption,
     ExhibitionQuestionVariant,
@@ -2242,6 +2243,15 @@ class ExhibitionCustomEmailTemplateForm(I18nModelForm):
         )
         if self.event:
             self.fields["body"].widget.enabled_locales = self.event.settings.get("locales")
+
+
+class ExhibitionProductCategoryForm(I18nModelForm):
+    """A grouping for exhibition products, laid out like the Tickets category form."""
+
+    class Meta:
+        model = ExhibitionProductCategory
+        localized_fields = "__all__"
+        fields = ["name", "internal_name", "description"]
 
 
 class ExhibitionProductForm(I18nModelForm):
