@@ -57,6 +57,8 @@ from .models import (
     LOG_REQUEST_CHANGED,
     LOG_SETTINGS_CHANGED,
     REQUEST_LOG_ACTIONS,
+    ExhibitionProduct,
+    ExhibitionProductCategory,
     ExhibitionQuestion,
     ExhibitionQuestionOption,
     ExhibitionRequest,
@@ -477,6 +479,24 @@ def exhibition_logentry_object_link(sender, logentry, **kwargs):
                 kwargs={"organizer": sender.organizer.slug, "event": sender.slug, "pk": target.pk},
             ),
             "val": escape(target.localized_question),
+        }
+    elif isinstance(target, ExhibitionProduct):
+        a_text = _("Exhibition product {val}")
+        a_map = {
+            "href": reverse(
+                "plugins:exhibition:products.edit",
+                kwargs={"organizer": sender.organizer.slug, "event": sender.slug, "pk": target.pk},
+            ),
+            "val": escape(str(target)),
+        }
+    elif isinstance(target, ExhibitionProductCategory):
+        a_text = _("Exhibition product category {val}")
+        a_map = {
+            "href": reverse(
+                "plugins:exhibition:products.categories.edit",
+                kwargs={"organizer": sender.organizer.slug, "event": sender.slug, "pk": target.pk},
+            ),
+            "val": escape(target.backend_name),
         }
     elif isinstance(target, SponsorGroup):
         return _("Sponsor group {val}").format(val=escape(target.localized_name))
