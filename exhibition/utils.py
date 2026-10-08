@@ -607,11 +607,19 @@ def attendee_field_values(position, settings):
 
 def exhibitor_unredeemed_vouchers(exhibitor):
     """This exhibitor's vouchers that nobody has redeemed yet, newest first."""
+    from eventyay.base.models import Voucher
+
     from .models import ExhibitorVoucher
 
-    redeemed_ids = {position.voucher_id for position in exhibitor_voucher_redemptions(exhibitor)}
-    links = ExhibitorVoucher.objects.filter(exhibitor=exhibitor).select_related("voucher").order_by("-voucher__id")
-    return [link.voucher for link in links if link.voucher_id not in redeemed_ids]
+    redeemed_ids = exhibitor_voucher_redemptions(exhibitor).order_by().values("voucher_id")
+    voucher_ids = ExhibitorVoucher.objects.filter(exhibitor=exhibitor).values("voucher_id")
+    with scope(organizer=exhibitor.event.organizer):
+        return (
+            Voucher.objects.filter(pk__in=voucher_ids)
+            .exclude(pk__in=redeemed_ids)
+            .select_related("product")
+            .order_by("-pk")
+        )
 
 
 def build_voucher_redemption_csv(event, positions, settings) -> str:
