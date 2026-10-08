@@ -3,12 +3,15 @@ import re
 from types import SimpleNamespace
 
 import pytest
+from django.contrib.messages import get_messages
 from django.contrib.messages.storage.fallback import FallbackStorage
 from django.core.files.uploadedfile import SimpleUploadedFile
+from django.db import transaction
+from django.db.models import QuerySet
 from django.test import RequestFactory
 from django.urls import reverse
 from django_scopes import scopes_disabled
-from eventyay.base.models import Question, Team
+from eventyay.base.models import LogEntry, Question, Team
 from eventyay.base.models.auth import User
 from rest_framework import serializers
 
@@ -20,6 +23,7 @@ from exhibition.forms import (
     SponsorGroupForm,
 )
 from exhibition.models import (
+    LOG_GROUP_DELETED,
     REQUEST_DEFAULT_FIELD_KEYS,
     ExhibitorInfo,
     ExhibitorSettings,
@@ -41,6 +45,34 @@ def make_exhibitor_settings(event):
         event=event,
         exhibitors_access_mail_subject="",
         exhibitors_access_mail_body="",
+    )
+
+
+def login_settings_user(client, event, settings):
+    settings.DEBUG = True
+    settings.COMPRESS_ENABLED = False
+    settings.COMPRESS_PRECOMPILERS = ()
+    event.plugins = "exhibition"
+    event.save(update_fields=["plugins"])
+    make_exhibitor_settings(event)
+    user = User.objects.create_superuser("admin@dummy.dummy", "dummy")
+    team = Team.objects.create(
+        organizer=event.organizer,
+        all_events=True,
+        can_change_event_settings=True,
+    )
+    team.members.add(user)
+    client.force_login(user)
+
+
+def sponsor_group_delete_url(event, group):
+    return reverse(
+        "plugins:exhibition:settings.sponsors.delete_group",
+        kwargs={
+            "organizer": event.organizer.slug,
+            "event": event.slug,
+            "pk": group.pk,
+        },
     )
 
 
@@ -234,6 +266,95 @@ def test_sponsor_group_reorder_requires_complete_unique_group_ids(event):
 
 
 @pytest.mark.django_db
+def test_sponsor_group_delete_requires_confirmation(client, event, settings):
+    login_settings_user(client, event, settings)
+    group = SponsorGroup.objects.create(event=event, name="Gold", level=1)
+
+    response = client.get(sponsor_group_delete_url(event, group))
+    delete_response = client.delete(sponsor_group_delete_url(event, group))
+
+    assert response.status_code == 200
+    assert delete_response.status_code == 405
+    assert SponsorGroup.objects.filter(pk=group.pk).exists()
+    assert not LogEntry.objects.filter(event=event, action_type=LOG_GROUP_DELETED).exists()
+    assert 'Are you sure you want to delete the sponsor group "Gold"?' in response.content.decode()
+
+
+@pytest.mark.django_db
+def test_sponsor_group_delete_removes_empty_group(client, event, settings):
+    login_settings_user(client, event, settings)
+    group = SponsorGroup.objects.create(event=event, name="Gold", level=1)
+
+    response = client.post(sponsor_group_delete_url(event, group))
+
+    assert response.status_code == 302
+    assert response.url == reverse(
+        "plugins:exhibition:settings.sponsors",
+        kwargs={"organizer": event.organizer.slug, "event": event.slug},
+    )
+    assert not SponsorGroup.objects.filter(pk=group.pk).exists()
+    assert LogEntry.objects.filter(event=event, action_type=LOG_GROUP_DELETED).exists()
+
+
+@pytest.mark.django_db
+def test_sponsor_group_delete_locks_group_before_checking_assignments(client, event, settings, monkeypatch):
+    login_settings_user(client, event, settings)
+    group = SponsorGroup.objects.create(event=event, name="Gold", level=1)
+    connection = transaction.get_connection()
+    base_atomic_depth = len(connection.atomic_blocks)
+    lock_states = []
+    delete_states = []
+    select_for_update = QuerySet.select_for_update
+    delete = SponsorGroup.delete
+
+    def track_sponsor_group_lock(queryset, *args, **kwargs):
+        if queryset.model is SponsorGroup:
+            lock_states.append((connection.in_atomic_block, len(connection.atomic_blocks)))
+        return select_for_update(queryset, *args, **kwargs)
+
+    def track_sponsor_group_delete(group, *args, **kwargs):
+        delete_states.append((connection.in_atomic_block, len(connection.atomic_blocks)))
+        return delete(group, *args, **kwargs)
+
+    monkeypatch.setattr(QuerySet, "select_for_update", track_sponsor_group_lock)
+    monkeypatch.setattr(SponsorGroup, "delete", track_sponsor_group_delete)
+
+    response = client.post(sponsor_group_delete_url(event, group))
+
+    assert response.status_code == 302
+    assert lock_states == [(True, base_atomic_depth + 1)]
+    assert delete_states == [(True, base_atomic_depth + 1)]
+
+
+@pytest.mark.django_db
+def test_sponsor_group_delete_is_unavailable_when_assigned(client, event, settings):
+    login_settings_user(client, event, settings)
+    group = SponsorGroup.objects.create(event=event, name="Gold", level=1)
+    ExhibitorInfo.objects.create(
+        event=event,
+        name="Assigned sponsor",
+        is_sponsor=True,
+        sponsor_group=group,
+    )
+    delete_url = sponsor_group_delete_url(event, group)
+
+    settings_response = client.get(
+        reverse(
+            "plugins:exhibition:settings.sponsors",
+            kwargs={"organizer": event.organizer.slug, "event": event.slug},
+        )
+    )
+    delete_response = client.post(delete_url)
+
+    assert delete_url not in settings_response.content.decode()
+    assert delete_response.status_code == 302
+    response_messages = [str(message) for message in get_messages(delete_response.wsgi_request)]
+    assert "This sponsor group cannot be deleted while it is assigned to organizations." in response_messages
+    assert SponsorGroup.objects.filter(pk=group.pk).exists()
+    assert not LogEntry.objects.filter(event=event, action_type=LOG_GROUP_DELETED).exists()
+
+
+@pytest.mark.django_db
 def test_call_settings_form_renders_call_text_without_preview(client, event, settings):
     settings.DEBUG = True
     settings.COMPRESS_ENABLED = False
@@ -362,6 +483,36 @@ def test_default_field_edit_overrides_label_and_help_text(event):
     request_form = ExhibitionRequestForm(event=event)
     assert str(request_form.fields["name"].label) == "University name"
     assert str(request_form.fields["name"].help_text) == "Use the official name."
+
+
+@pytest.mark.django_db
+def test_default_field_edit_prefills_saved_custom_values(event):
+    settings = make_exhibitor_settings(event)
+    stored = settings.request_field_settings
+    stored["name"]["label"] = "University name"
+    stored["name"]["help_text"] = "Use the official name."
+    settings.save(update_fields=["request_field_settings"])
+
+    view = ExhibitionDefaultFieldEditView()
+    view.request = _default_field_request(event, method="get")
+    view.kwargs = {"key": "name"}
+
+    form = view.get_form()
+
+    assert form.initial["label"] == "University name"
+    assert form.initial["help_text"] == "Use the official name."
+
+    view.request = _default_field_request(
+        event,
+        data={"label": form.initial["label"], "help_text": form.initial["help_text"]},
+    )
+    response = view.post(view.request, key="name")
+    assert response.status_code == 302
+
+    settings.refresh_from_db()
+    normalized = settings.normalized_request_field_settings
+    assert normalized["name"]["custom_label"] == "University name"
+    assert normalized["name"]["custom_help_text"] == "Use the official name."
 
 
 @pytest.mark.django_db
@@ -580,6 +731,32 @@ def test_invalid_lead_settings_render_the_form_instead_of_crashing(event):
 
     assert response.status_code == 200
     assert "device_default_count" in response.context_data["device_defaults_form"].errors
+
+
+@pytest.mark.django_db
+def test_invalid_voucher_settings_render_the_form_instead_of_crashing(event):
+    settings = make_exhibitor_settings(event)
+
+    with scopes_disabled():
+        response = _settings_post(event, {"action": "save_voucher_settings", "voucher_default_count": "3000000000"})
+        settings.refresh_from_db()
+
+    assert response.status_code == 200
+    assert "voucher_default_count" in response.context_data["voucher_defaults_form"].errors
+    assert settings.voucher_default_count != 3000000000
+
+
+@pytest.mark.django_db
+def test_invalid_call_settings_render_the_form_instead_of_crashing(event):
+    settings = make_exhibitor_settings(event)
+
+    with scopes_disabled():
+        response = _settings_post(event, {"action": "save_call_settings", "call_deadline": "2026-99-99T10:00"})
+        settings.refresh_from_db()
+
+    assert response.status_code == 200
+    assert "call_deadline" in response.context_data["call_settings_form"].errors
+    assert settings.call_deadline is None
 
 
 @pytest.mark.django_db
