@@ -1314,3 +1314,13 @@ def test_organization_options_show_email_and_state_unless_emails_are_hidden(mail
     assert shown[f"profile-{added.pk}"] == "added@example.com"
     assert hidden[f"request-{exhibition_request.pk}"] == "accepted"
     assert hidden[f"profile-{added.pk}"] == ""
+
+
+@pytest.mark.django_db
+def test_compose_fills_the_organization_name_for_organizer_created_profiles(mail_event):
+    with scopes_disabled():
+        added = ExhibitorInfo.objects.create(event=mail_event, name="Added Co", email="added@example.com")
+        created = mail_helpers.queue_compose_emails(mail_event, [], "Hello {request_name}", "Body", exhibitors=[added])
+
+    assert created[0].subject == "Hello Added Co"
+

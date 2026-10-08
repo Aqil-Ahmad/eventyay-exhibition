@@ -455,7 +455,10 @@ def queue_compose_emails(
             exhibition_request=exhibition_request,
         )
     for exhibitor in exhibitors:
-        queue(exhibitor.recipient_email, None, build_exhibitor_context(event, exhibitor), exhibitor=exhibitor)
+        context = build_exhibitor_context(event, exhibitor)
+        if not context.get("request_name"):
+            context["request_name"] = context.get("exhibitor_name") or str(exhibitor.name)
+        queue(exhibitor.recipient_email, None, context, exhibitor=exhibitor)
     return created
 
 
