@@ -4,12 +4,13 @@ import string
 
 from django.conf import settings
 from django.core.validators import MaxValueValidator
-from django.db import models
+from django.db import models, transaction
 from django.db.models import F, Max, Q
 from django.utils import timezone
 from django.utils.crypto import get_random_string
 from django.utils.translation import gettext_lazy as _
 from django_countries import Countries
+from eventyay.base.banlist import banned
 from eventyay.base.models import Device, Event, Voucher
 from eventyay.base.models.base import LoggedModel
 from eventyay.base.models.fields import MultiStringField
@@ -597,6 +598,10 @@ LOG_PRODUCT_DELETED = f"{LOG_PREFIX}.product.deleted"
 LOG_PRODUCT_CATEGORY_ADDED = f"{LOG_PREFIX}.product_category.added"
 LOG_PRODUCT_CATEGORY_CHANGED = f"{LOG_PREFIX}.product_category.changed"
 LOG_PRODUCT_CATEGORY_DELETED = f"{LOG_PREFIX}.product_category.deleted"
+LOG_ORDER_PLACED = f"{LOG_PREFIX}.order.placed"
+LOG_ORDER_PAID = f"{LOG_PREFIX}.order.paid"
+LOG_ORDER_CANCELLED = f"{LOG_PREFIX}.order.cancelled"
+LOG_ORDER_EXPIRED = f"{LOG_PREFIX}.order.expired"
 
 SUBMITTER_PROFILE_FIELD_LABELS = {
     "description": _("Organization Description"),
@@ -1302,6 +1307,139 @@ class ExhibitionProduct(LoggedModel):
 
     def __str__(self):
         return self.localized_name or str(self.name)
+
+
+class ExhibitionOrderStatus(models.TextChoices):
+    PENDING = "pending", _("Pending")
+    PAID = "paid", _("Paid")
+    CANCELLED = "cancelled", _("Cancelled")
+    EXPIRED = "expired", _("Expired")
+
+
+ORDER_CODE_CHARSET = "ABCDEFGHJKLMNPQRSTUVWXYZ379"
+
+
+class ExhibitionOrderStateError(Exception):
+    """An order was asked for a status it cannot reach from its current one."""
+
+
+def generate_exhibition_order_code(event):
+    while True:
+        code = get_random_string(length=settings.ENTROPY["order_code"], allowed_chars=ORDER_CODE_CHARSET)
+        if not banned(code) and not ExhibitionOrder.objects.filter(event=event, code=code).exists():
+            return code
+
+
+class ExhibitionOrder(LoggedModel):
+    """A purchase of exhibition products, kept apart from the ticket orders."""
+
+    event = models.ForeignKey(
+        Event,
+        on_delete=models.CASCADE,
+        related_name="exhibition_orders",
+    )
+    code = models.CharField(max_length=16, verbose_name=_("Order code"))
+    status = models.CharField(
+        max_length=16,
+        choices=ExhibitionOrderStatus.choices,
+        default=ExhibitionOrderStatus.PENDING,
+        db_index=True,
+        verbose_name=_("Status"),
+    )
+    name = models.CharField(max_length=255, verbose_name=_("Contact name"))
+    email = models.EmailField(verbose_name=_("Email"))
+    phone = models.CharField(max_length=64, blank=True, verbose_name=_("Phone number"))
+    total = models.DecimalField(max_digits=13, decimal_places=2, verbose_name=_("Total"))
+    currency = models.CharField(max_length=10, verbose_name=_("Currency"))
+    answers = models.JSONField(default=dict, blank=True, verbose_name=_("Order form answers"))
+    payment_provider = models.CharField(max_length=255, blank=True, verbose_name=_("Payment method"))
+    payment_reference = models.CharField(max_length=255, blank=True, verbose_name=_("Payment reference"))
+    payment_date = models.DateTimeField(null=True, blank=True, verbose_name=_("Payment date"))
+    expires = models.DateTimeField(null=True, blank=True, verbose_name=_("Expiration date"))
+    created = models.DateTimeField(auto_now_add=True, verbose_name=_("Order date"))
+
+    class Meta:
+        verbose_name = _("Exhibition order")
+        verbose_name_plural = _("Exhibition orders")
+        ordering = ("-created", "-id")
+        constraints = [
+            models.UniqueConstraint(fields=["event", "code"], name="exhibition_order_code_unique_per_event"),
+        ]
+
+    def save(self, *args, **kwargs):
+        if self._state.adding:
+            self.code = self.code or generate_exhibition_order_code(self.event)
+            self.currency = self.currency or self.event.currency
+        return super().save(*args, **kwargs)
+
+    def mark_paid(self, *, provider="", reference="", user=None):
+        """Record a received payment; an expired order can still be paid, as in Tickets."""
+        self._transition(
+            {ExhibitionOrderStatus.PENDING, ExhibitionOrderStatus.EXPIRED},
+            ExhibitionOrderStatus.PAID,
+            LOG_ORDER_PAID,
+            user,
+            payment_provider=provider or self.payment_provider,
+            payment_reference=reference,
+            payment_date=timezone.now(),
+        )
+
+    def cancel(self, *, user=None):
+        self._transition(
+            {ExhibitionOrderStatus.PENDING, ExhibitionOrderStatus.PAID, ExhibitionOrderStatus.EXPIRED},
+            ExhibitionOrderStatus.CANCELLED,
+            LOG_ORDER_CANCELLED,
+            user,
+        )
+
+    def expire(self):
+        self._transition(
+            {ExhibitionOrderStatus.PENDING},
+            ExhibitionOrderStatus.EXPIRED,
+            LOG_ORDER_EXPIRED,
+            None,
+        )
+
+    def _transition(self, allowed_from, status, action, user, **fields):
+        with transaction.atomic():
+            current = type(self).objects.select_for_update().get(pk=self.pk)
+            if current.status not in allowed_from:
+                raise ExhibitionOrderStateError(f"Order {self.code} cannot change from {current.status} to {status}.")
+            fields["status"] = status
+            for name, value in fields.items():
+                setattr(self, name, value)
+            self.save(update_fields=list(fields))
+            self.log_action(
+                action,
+                data={key: str(value) for key, value in fields.items() if key != "status"},
+                user=user,
+            )
+
+    def __str__(self):
+        return self.code
+
+
+class ExhibitionOrderPosition(models.Model):
+    """One product bought in an exhibition order, at the price it was sold for."""
+
+    order = models.ForeignKey(
+        ExhibitionOrder,
+        on_delete=models.CASCADE,
+        related_name="positions",
+    )
+    product = models.ForeignKey(
+        ExhibitionProduct,
+        on_delete=models.PROTECT,
+        related_name="order_positions",
+        verbose_name=_("Product"),
+    )
+    price = models.DecimalField(max_digits=13, decimal_places=2, verbose_name=_("Price"))
+
+    class Meta:
+        ordering = ("order", "id")
+
+    def __str__(self):
+        return f"{self.order.code}: {self.product}"
 
 
 class ExhibitorTag(models.Model):
