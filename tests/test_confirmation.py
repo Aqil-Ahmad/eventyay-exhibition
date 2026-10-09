@@ -254,3 +254,19 @@ def test_login_prompt_points_to_the_main_login_not_the_talks_one(event):
     view.request.event = event
 
     assert view.get_login_url() == reverse("auth.login")
+
+
+@pytest.mark.django_db
+def test_organizer_action_reports_a_stale_confirmation_as_not_applied(event):
+    with scopes_disabled():
+        exhibition_request = _request(event)
+        stale = ExhibitionRequest.objects.get(pk=exhibition_request.pk)
+        exhibition_request.withdraw()
+        view = RequestActionView()
+        view.request = RequestFactory().post("/")
+        view.request.user = User.objects.create_user(email="orga@example.com", password="pw")
+
+        assert view.apply_action(stale, "confirm") is False
+        exhibition_request.refresh_from_db()
+
+        assert exhibition_request.state == ExhibitionRequestState.WITHDRAWN
