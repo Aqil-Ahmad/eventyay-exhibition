@@ -1698,7 +1698,9 @@ class RequestActionView(EventPermissionRequiredMixin, View):
                 if not exhibition_request.can_transition_to(target_state):
                     skipped += 1
                     continue
-                self.apply_action(exhibition_request, action)
+                if not self.apply_action(exhibition_request, action):
+                    skipped += 1
+                    continue
                 changed += 1
                 if select_all:
                     continue
@@ -1721,16 +1723,18 @@ class RequestActionView(EventPermissionRequiredMixin, View):
         )
 
     def apply_action(self, exhibition_request, action):
+        """Apply the action; ``False`` when a confirmation lost a race with another state change."""
         if action == "approve":
             exhibition_request.approve(requestor=self.request.user)
         elif action == "reject":
             exhibition_request.reject(requestor=self.request.user)
         elif action == "confirm":
-            exhibition_request.confirm(requestor=self.request.user)
+            return exhibition_request.confirm(requestor=self.request.user)
         elif action == "withdraw":
             exhibition_request.withdraw(requestor=self.request.user)
         elif action == "reopen":
             exhibition_request.reopen(requestor=self.request.user)
+        return True
 
     def build_message(self, action, count, skipped):
         if count:
