@@ -102,6 +102,7 @@ from .models import (
     get_next_sponsor_group_level,
     storable_request_field_settings,
 )
+from .orders import paid_products_lack_payment_method
 from .social_links import serialize_social_link
 from .utils import (
     VOUCHER_CSV_FILENAME,
@@ -1749,6 +1750,10 @@ class ExhibitionProductListView(ExhibitionProductMixin, PaginationMixin, ListVie
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context["reorder_enabled"] = not context["is_paginated"]
+        context["payment_method_missing"] = paid_products_lack_payment_method(self.request.event)
+        context["payment_settings_url"] = reverse(
+            "control:event.settings.payment", kwargs=event_kwargs(self.request.event)
+        )
         return context
 
 
@@ -1809,7 +1814,18 @@ class ExhibitionProductDeleteView(ExhibitionProductMixin, DeleteView):
     model = ExhibitionProduct
     template_name = "exhibitors/product_delete.html"
 
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["has_orders"] = self.object.order_positions.exists()
+        return context
+
     def form_valid(self, form):
+        if self.object.order_positions.exists():
+            messages.error(
+                self.request,
+                _("This product has been ordered, so it cannot be deleted. You can deactivate it instead."),
+            )
+            return redirect(self.get_success_url())
         self.object.log_action(
             LOG_PRODUCT_DELETED,
             data={"name": self.object.localized_name},

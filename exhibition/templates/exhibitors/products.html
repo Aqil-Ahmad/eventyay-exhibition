@@ -22,6 +22,15 @@
             on a product name to inspect and change its details.
         {% endblocktrans %}
     </p>
+    {% if payment_method_missing %}
+        <div class="alert alert-warning">
+            {% blocktrans trimmed %}
+                Some active products have a price, but this event has no payment method that exhibition orders can
+                use. Enable manual payment or bank transfer for the event.
+            {% endblocktrans %}
+            <a href="{{ payment_settings_url }}">{% trans "Open payment settings" %}</a>
+        </div>
+    {% endif %}
     {% if not products %}
         <div class="empty-collection">
             <p>{% trans "You haven't created any products yet." %}</p>

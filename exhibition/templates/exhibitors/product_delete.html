@@ -10,13 +10,24 @@
 {% block exhibitors_content %}
     <form action="" method="post">
         {% csrf_token %}
-        <p>
-            {% blocktrans trimmed with name=object %}
-                Are you sure you want to delete the product <strong>{{ name }}</strong>?
-            {% endblocktrans %}
-        </p>
+        {% if has_orders %}
+            <p>
+                {% blocktrans trimmed with name=object %}
+                    The product <strong>{{ name }}</strong> has been ordered, so it cannot be deleted. You can
+                    deactivate it instead to stop selling it.
+                {% endblocktrans %}
+            </p>
+        {% else %}
+            <p>
+                {% blocktrans trimmed with name=object %}
+                    Are you sure you want to delete the product <strong>{{ name }}</strong>?
+                {% endblocktrans %}
+            </p>
+        {% endif %}
         <div class="form-group submit-group">
-            <button type="submit" class="btn btn-danger btn-lg">{% trans "Delete" %}</button>
+            {% if not has_orders %}
+                <button type="submit" class="btn btn-danger btn-lg">{% trans "Delete" %}</button>
+            {% endif %}
             <a class="btn btn-default btn-lg" href="{% url 'plugins:exhibition:products' organizer=request.event.organizer.slug event=request.event.slug %}">
                 {% trans "Cancel" %}
             </a>
