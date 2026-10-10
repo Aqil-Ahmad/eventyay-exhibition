@@ -2194,9 +2194,11 @@ class ExhibitionComposeForm(forms.Form):
     state = forms.ChoiceField(
         label=_("Application state"),
         choices=[
-            (state.value, state.label) for state in ExhibitionRequestState if state != ExhibitionRequestState.DRAFT
+            ("", _("Any state")),
+            *((state.value, state.label) for state in ExhibitionRequestState if state != ExhibitionRequestState.DRAFT),
         ],
         initial=ExhibitionRequestState.ACCEPTED,
+        required=False,
     )
     organization_type = forms.ChoiceField(
         label=_("Organization type"),
@@ -2315,7 +2317,7 @@ class ExhibitionComposeForm(forms.Form):
             return exhibition_requests, profiles
         exhibition_requests = mail_helpers.compose_recipients(
             self.event,
-            states=[self.cleaned_data["state"]],
+            states=[self.cleaned_data["state"]] if self.cleaned_data["state"] else None,
             organization_type=self.cleaned_data["organization_type"],
             sponsor_group=self.cleaned_data["sponsor_group"],
         )

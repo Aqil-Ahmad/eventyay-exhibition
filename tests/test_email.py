@@ -1235,7 +1235,8 @@ def _compose_form(event, **data):
 def test_compose_form_offers_the_application_state_as_a_single_choice(mail_event):
     field = ExhibitionComposeForm(event=mail_event).fields["state"]
 
-    assert [value for value, _label in field.choices] == ["submitted", "accepted", "rejected", "withdrawn"]
+    assert [value for value, _label in field.choices] == ["", "submitted", "accepted", "rejected", "withdrawn"]
+    assert field.required is False
     assert field.initial == ExhibitionRequestState.ACCEPTED
 
 
@@ -1342,3 +1343,16 @@ def test_compose_view_emails_only_the_chosen_organizations(mail_event):
 
     assert response.status_code == 302
     assert queued == {"r@example.com", "added@example.com"}
+
+
+@pytest.mark.django_db
+def test_compose_form_without_a_state_reaches_every_non_draft_application(mail_event):
+    accepted = _request(mail_event, "Accepted", ExhibitionRequestState.ACCEPTED, email="a@example.com")
+    withdrawn = _request(mail_event, "Withdrawn", ExhibitionRequestState.WITHDRAWN, email="w@example.com")
+    _request(mail_event, "Draft", ExhibitionRequestState.DRAFT, email="d@example.com")
+    form = _compose_form(mail_event, state="")
+
+    with scopes_disabled():
+        assert form.is_valid(), form.errors
+        exhibition_requests, _profiles = form.recipients()
+        assert set(exhibition_requests) == {accepted, withdrawn}
