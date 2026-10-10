@@ -411,7 +411,14 @@ def test_self_edit_form_leaves_out_organizer_only_fields(event):
 def test_self_edit_saves_content_without_touching_organizer_settings(event):
     with scopes_disabled():
         _settings(event)
-        exhibitor = _organizer_added(event, is_sponsor=True, is_exhibitor=False, booth_id="B-7")
+        exhibitor = _organizer_added(
+            event,
+            is_sponsor=True,
+            is_exhibitor=False,
+            booth_id="B-7",
+            logo="exhibitors/logos/Booth Co/logo.png",
+            banner="exhibitors/banners/Booth Co/banner.png",
+        )
         form = ExhibitorSelfEditForm(
             {"name_0": "Booth Co", "description_0": "About our booth"},
             instance=exhibitor,
@@ -456,14 +463,13 @@ def test_profile_email_is_skipped_without_an_address(event):
 
 
 @pytest.mark.django_db
-def test_creating_a_profile_queues_the_invitation_without_sending_it(event, django_capture_on_commit_callbacks):
+def test_creating_a_profile_queues_the_invitation_without_sending_it(event):
     with scopes_disabled():
         _settings(event)
         exhibitor = _organizer_added(event)
 
         with patch.object(ExhibitionEmailQueue, "send") as send:
-            with django_capture_on_commit_callbacks(execute=True):
-                queue_profile_invitation(event, exhibitor)
+            queue_profile_invitation(event, exhibitor)
 
         send.assert_not_called()
         queued = ExhibitionEmailQueue.objects.get(event=event, role=mail_helpers.EXHIBITOR_PROFILE)
