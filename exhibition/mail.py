@@ -116,7 +116,7 @@ DEFAULT_TEMPLATE_SOURCES = {
         ),
     ),
     EXHIBITOR_PROFILE: (
-        gettext_noop("You have been added as an exhibitor for {event_name}"),
+        gettext_noop("Your organization has been added to {event_name}"),
         gettext_noop(
             "Dear {exhibitor_name},\n\n"
             "A profile for {exhibitor_name} has been created for {event_name}.\n\n"
