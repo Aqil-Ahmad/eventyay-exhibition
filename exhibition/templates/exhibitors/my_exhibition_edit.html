@@ -8,6 +8,8 @@
 {% block custom_header %}
     {{ block.super }}
     <link rel="stylesheet" href="{% static 'exhibition/css/exhibitors-add.css' %}">
+    <link rel="stylesheet" href="{% static 'exhibition/css/i18n-language-switcher.css' %}">
+    <script defer src="{% static 'exhibition/js/i18n-language-switcher.js' %}"></script>
 {% endblock %}
 
 {% block content %}
@@ -20,6 +22,7 @@
 
         <fieldset>
             <legend>{% translate "Profile" %}</legend>
+            {% include "exhibitors/_i18n_language_switcher.html" %}
             {% include "exhibitors/_profile_fields.html" %}
         </fieldset>
 
