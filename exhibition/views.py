@@ -155,8 +155,8 @@ def send_request_confirmation(event, exhibition_request, requestor):
 
 
 def queue_profile_invitation(event, exhibitor):
-    """Queue the invitation to edit a created profile for the organizer to send, once the transaction commits."""
-    transaction.on_commit(lambda: mail_helpers.queue_exhibitor_profile_email(event, exhibitor))
+    """Queue the invitation to edit a created profile in the same transaction, for the organizer to send."""
+    return mail_helpers.queue_exhibitor_profile_email(event, exhibitor)
 
 
 def queue_exhibitor_access_mail(request, exhibitor):
