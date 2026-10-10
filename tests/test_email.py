@@ -1237,7 +1237,7 @@ def test_compose_form_offers_the_application_state_as_a_single_choice(mail_event
 
     assert [value for value, _label in field.choices] == ["", "submitted", "accepted", "rejected", "withdrawn"]
     assert field.required is False
-    assert field.initial == ExhibitionRequestState.ACCEPTED
+    assert not field.initial
 
 
 @pytest.mark.django_db

@@ -2197,7 +2197,6 @@ class ExhibitionComposeForm(forms.Form):
             ("", _("Any state")),
             *((state.value, state.label) for state in ExhibitionRequestState if state != ExhibitionRequestState.DRAFT),
         ],
-        initial=ExhibitionRequestState.ACCEPTED,
         required=False,
     )
     organization_type = forms.ChoiceField(
