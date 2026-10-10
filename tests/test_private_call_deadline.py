@@ -73,7 +73,9 @@ def test_private_link_allows_late_call_page(event, private_call, applicant, clie
 
 @pytest.mark.django_db
 @pytest.mark.parametrize("hide_after_deadline", [False, True])
-def test_private_link_allows_late_submission(event, private_call, applicant, client, hide_after_deadline):
+def test_private_link_allows_late_submission(
+    event, private_call, applicant, client, hide_after_deadline, image_uploads
+):
     with scopes_disabled():
         private_call.call_hide_after_deadline = hide_after_deadline
         private_call.save()
@@ -82,7 +84,7 @@ def test_private_link_allows_late_submission(event, private_call, applicant, cli
 
     form_response = client.get(call_url(event, "request.add"))
     assert form_response.status_code == 200
-    response = client.post(call_url(event, "request.add"), request_data())
+    response = client.post(call_url(event, "request.add"), {**request_data(), **image_uploads()})
     assert response.status_code == 302
     assert response.url == call_url(event, "request.user_list")
     with scopes_disabled():
@@ -96,7 +98,9 @@ def test_private_link_allows_late_submission(event, private_call, applicant, cli
 
 
 @pytest.mark.django_db
-def test_private_link_allows_submitting_saved_draft_after_deadline(event, private_call, applicant, client):
+def test_private_link_allows_submitting_saved_draft_after_deadline(
+    event, private_call, applicant, client, image_uploads
+):
     with scopes_disabled():
         draft = ExhibitionRequest.objects.create(
             event=event, user=applicant, name="Draft exhibitor", state=ExhibitionRequestState.DRAFT
@@ -105,7 +109,7 @@ def test_private_link_allows_submitting_saved_draft_after_deadline(event, privat
     client.get(call_url(event, "public_call_secret", secret=private_call.call_secret))
     edit_url = call_url(event, "request.user_edit", code=draft.code)
 
-    response = client.post(edit_url, request_data())
+    response = client.post(edit_url, {**request_data(), **image_uploads()})
 
     assert response.status_code == 302
     with scopes_disabled():
