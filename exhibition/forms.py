@@ -30,7 +30,14 @@ from eventyay.common.forms.mixins import (
     EventLocalizedModelChoiceField,
     EventLocalizedModelMultipleChoiceField,
 )
-from eventyay.common.forms.widgets import EmailEditorWidget, HtmlDateTimeInput, I18nEmailEditorWidget
+from eventyay.common.forms.widgets import (
+    EmailEditorWidget,
+    HtmlDateTimeInput,
+    I18nEmailEditorWidget,
+    I18nRichTextWidget,
+    RichTextWidget,
+)
+from eventyay.common.templatetags.filesize import filesize
 from eventyay.common.urls import normalize_url_scheme
 from eventyay.common.utils.language import localize_event_text
 from eventyay.consts import SizeKey
@@ -74,6 +81,18 @@ from .social_links import (
     get_social_link_value,
 )
 from .utils import localized_value_for, merge_localized_value, pool_tag_choices
+
+
+def flag_oversized_upload(form, field_name, submitted):
+    """Reject an upload past the limit the field advertises, which ImageField itself does not check."""
+    if not isinstance(submitted, UploadedFile):
+        return False
+    key = SizeKey.UPLOAD_SIZE_PDF if field_name == "slides" else SizeKey.UPLOAD_SIZE_IMAGE
+    max_size = django_settings.MAX_SIZE_CONFIG[key]
+    if submitted.size <= max_size:
+        return False
+    form.add_error(field_name, _("The upload limit is {size}.").format(size=filesize(max_size)))
+    return True
 
 
 def get_tz_help(event):
@@ -514,14 +533,15 @@ class ExhibitorInfoForm(ExhibitionQuestionFieldsMixin, I18nModelForm):
         self.fields["slides"].widget.attrs.setdefault("accept", ".pdf,application/pdf")
         if self.instance and self.instance.pk:
             self.initial["lead_scanning_scope_by_device"] = self.instance.lead_scanning_scope_by_device
-        description_field = self.fields.get("description")
-        if description_field:
-            widget = description_field.widget
-            if isinstance(widget, forms.MultiWidget):
-                for sub_widget in widget.widgets:
-                    sub_widget.attrs.setdefault("rows", 4)
-            else:
-                widget.attrs.setdefault("rows", 4)
+        if "description" in self.fields:
+            self.fields["description"] = I18nFormField(
+                label=self.fields["description"].label,
+                required=False,
+                widget=I18nRichTextWidget,
+                widget_kwargs={"attrs": {"rows": 4}},
+            )
+            if self.event:
+                self.fields["description"].widget.enabled_locales = self.event.settings.get("locales")
         self.profile_field_settings = {}
         self.ordered_profile_keys = []
         if self.event:
@@ -594,8 +614,8 @@ class ExhibitorInfoForm(ExhibitionQuestionFieldsMixin, I18nModelForm):
                 if index == 0:
                     if setting.get("custom_label"):
                         field.label = setting["custom_label"]
-                    if setting.get("custom_help_text"):
-                        field.help_text = setting["custom_help_text"]
+                    if setting.get("help_text"):
+                        field.help_text = setting["help_text"]
                 field._required = is_required
                 if key in self.PROFILE_COMPOSITE_KEYS or key == "booth_name":
                     continue
@@ -620,12 +640,18 @@ class ExhibitorInfoForm(ExhibitionQuestionFieldsMixin, I18nModelForm):
         setting = self.profile_field_settings.get(key)
         return bool(setting["active"] and setting["required"]) if setting else False
 
-    def _validate_required_file(self, field_name, has_new_upload):
-        """Flag a required file field when no upload or existing file is present."""
-        if not self.profile_key_is_required(field_name) or field_name not in self.fields:
+    def _validate_required_file(self, field_name, submitted):
+        """Flag a required file field when nothing is uploaded and nothing stored remains."""
+        if field_name not in self.fields:
             return
-        has_existing = bool(getattr(self.instance, f"visible_{field_name}_url", ""))
-        if not has_new_upload and not has_existing:
+        if flag_oversized_upload(self, field_name, submitted):
+            return
+        if not self.profile_key_is_required(field_name):
+            return
+        if isinstance(submitted, UploadedFile):
+            return
+        has_existing = submitted is not False and bool(getattr(self.instance, f"visible_{field_name}_url", ""))
+        if not has_existing:
             self.add_error(field_name, _("This field is required."))
 
     @property
@@ -678,7 +704,7 @@ class ExhibitorInfoForm(ExhibitionQuestionFieldsMixin, I18nModelForm):
             }:
                 self.add_error("slides", _("Slides upload must be a PDF file."))
 
-        self._validate_required_file("slides", has_new_slides_upload)
+        self._validate_required_file("slides", submitted_slides)
 
         for image_field in self.file_fields:
             if image_field == "slides" or image_field not in self.fields:
@@ -688,7 +714,7 @@ class ExhibitorInfoForm(ExhibitionQuestionFieldsMixin, I18nModelForm):
                 self.files,
                 self.add_prefix(image_field),
             )
-            self._validate_required_file(image_field, isinstance(submitted_image, UploadedFile))
+            self._validate_required_file(image_field, submitted_image)
 
         if self.organization_type == "sponsor":
             is_sponsor = True
@@ -907,8 +933,8 @@ class CallSettingsForm(I18nModelForm):
         self.fields["call_text"] = I18nFormField(
             label=self.fields["call_text"].label,
             required=False,
-            widget=I18nEmailEditorWidget,
-            widget_kwargs={"attrs": {"rows": 8, "data-tiptap-profile": "richtext"}},
+            widget=I18nRichTextWidget,
+            widget_kwargs={"attrs": {"rows": 8}},
         )
         if self.event:
             self.fields["call_text"].widget.enabled_locales = self.event.settings.get("locales")
@@ -1208,7 +1234,7 @@ class ExhibitionRequestForm(ExhibitionQuestionFieldsMixin, I18nModelForm):
     description = forms.CharField(
         required=False,
         label=_("Organization description"),
-        widget=forms.Textarea(attrs={"rows": 4}),
+        widget=RichTextWidget(attrs={"rows": 4}),
     )
     booth_name = forms.CharField(
         max_length=100,
@@ -1413,8 +1439,8 @@ class ExhibitionRequestForm(ExhibitionQuestionFieldsMixin, I18nModelForm):
                 if index == 0:
                     if setting.get("custom_label"):
                         field.label = setting["custom_label"]
-                    if setting.get("custom_help_text"):
-                        field.help_text = setting["custom_help_text"]
+                    if setting.get("help_text"):
+                        field.help_text = setting["help_text"]
                 field._required = is_required
                 if key in file_field_keys or key == "booth_name":
                     continue
@@ -1522,8 +1548,7 @@ class ExhibitionRequestForm(ExhibitionQuestionFieldsMixin, I18nModelForm):
                 self.files,
                 self.add_prefix("slides"),
             )
-        has_new_slides_upload = isinstance(submitted_slides, UploadedFile)
-        self.validate_required_file("slides", has_new_slides_upload)
+        self.validate_required_file("slides", submitted_slides)
         for image_field in ("logo", "banner"):
             if image_field not in self.fields:
                 continue
@@ -1532,7 +1557,7 @@ class ExhibitionRequestForm(ExhibitionQuestionFieldsMixin, I18nModelForm):
                 self.files,
                 self.add_prefix(image_field),
             )
-            self.validate_required_file(image_field, isinstance(submitted_image, UploadedFile))
+            self.validate_required_file(image_field, submitted_image)
 
         if not cleaned_data["is_exhibitor"]:
             cleaned_data["booth_name"] = ""
@@ -1546,16 +1571,20 @@ class ExhibitionRequestForm(ExhibitionQuestionFieldsMixin, I18nModelForm):
 
         return cleaned_data
 
-    def validate_required_file(self, field_name, has_new_upload):
-        """Flag a required file field when nothing is uploaded and nothing is stored."""
+    def validate_required_file(self, field_name, submitted):
+        """Flag a required file field when nothing is uploaded and nothing stored remains."""
+        if field_name not in self.fields:
+            return
+        if flag_oversized_upload(self, field_name, submitted):
+            return
         if self.draft_save:
             return
         if not self.field_setting_is_active(field_name) or not self.field_setting_is_required(field_name):
             return
-        if field_name not in self.fields:
+        if isinstance(submitted, UploadedFile):
             return
-        has_existing = bool(getattr(self.instance, f"visible_{field_name}_url", ""))
-        if not has_new_upload and not has_existing:
+        has_existing = submitted is not False and bool(getattr(self.instance, f"visible_{field_name}_url", ""))
+        if not has_existing:
             self.add_error(field_name, _("This field is required."))
 
     def save(self, commit=True):
