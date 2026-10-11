@@ -1112,7 +1112,7 @@ class UserRequestEditView(
 
     @transaction.atomic
     def form_valid(self, form):
-        previous_state = self.object.state
+        previous_state = self.object.lock_current_state()
         if not self.state_is_locked():
             if self.request.POST.get("action") == "draft":
                 form.instance.state = ExhibitionRequestState.DRAFT
