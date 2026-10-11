@@ -453,6 +453,34 @@ def test_profile_email_is_queued_for_the_exhibitor(mail_event):
 
 
 @pytest.mark.django_db
+def test_sponsor_only_profile_gets_no_invitation(event):
+    with scopes_disabled():
+        _settings(event)
+        sponsor = _organizer_added(event, is_sponsor=True, is_exhibitor=False)
+
+        assert queue_profile_invitation(event, sponsor) is None
+        assert not ExhibitionEmailQueue.objects.filter(event=event).exists()
+
+
+@pytest.mark.django_db
+def test_exhibitor_that_is_also_a_sponsor_gets_the_invitation(event):
+    with scopes_disabled():
+        _settings(event)
+        both = _organizer_added(event, is_sponsor=True, is_exhibitor=True)
+
+        assert queue_profile_invitation(event, both) is not None
+
+
+@pytest.mark.django_db
+def test_sponsor_only_profile_stays_editable(event):
+    with scopes_disabled():
+        sponsor = _organizer_added(event, is_sponsor=True, is_exhibitor=False)
+        owner = _user("booth@example.com")
+
+        assert user_can_edit_profile(owner, sponsor)
+
+
+@pytest.mark.django_db
 def test_profile_email_is_skipped_without_an_address(event):
     with scopes_disabled():
         _settings(event)
