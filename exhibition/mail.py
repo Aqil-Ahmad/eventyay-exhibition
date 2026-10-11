@@ -116,7 +116,7 @@ DEFAULT_TEMPLATE_SOURCES = {
         ),
     ),
     EXHIBITOR_PROFILE: (
-        gettext_noop("Your organization has been added to {event_name}"),
+        gettext_noop("You have been added as an exhibitor for {event_name}"),
         gettext_noop(
             "Dear {exhibitor_name},\n\n"
             "A profile for {exhibitor_name} has been created for {event_name}.\n\n"
@@ -515,9 +515,11 @@ def queue_exhibitor_access_email(event, exhibitor, *, requestor=None):
 
 
 def queue_exhibitor_profile_email(event, exhibitor, *, send_now=False, requestor=None):
-    """Queue the invitation to edit a profile created for the exhibitor; ``None`` without a recipient."""
+    """Queue the invitation to edit a profile created for an exhibitor; ``None`` for sponsor-only profiles."""
     from .models import ExhibitionEmailQueue
 
+    if not exhibitor.is_exhibitor:
+        return None
     to_email = exhibitor.recipient_email
     if not to_email:
         return None
