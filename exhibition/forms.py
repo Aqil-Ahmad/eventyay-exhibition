@@ -508,6 +508,8 @@ class ExhibitorInfoForm(ExhibitionQuestionFieldsMixin, I18nModelForm):
             super().__init__(*args, **kwargs)
         if self.organization_type == "sponsor":
             self._drop_fields(self.EXHIBITOR_ONLY_FIELDS + ("is_sponsor",))
+            if not (self.instance and self.instance.pk):
+                self.initial["is_exhibitor"] = False
         elif self.organization_type == "exhibitor":
             self._drop_fields(self.SPONSOR_ONLY_FIELDS + ("is_exhibitor",))
         if "sponsor_group" in self.fields:
