@@ -238,13 +238,21 @@ class PublicCallEnabledMixin:
     def has_private_call_access(self, settings):
         return self.request.session.get(call_access_session_key(self.request.event)) == settings.call_secret
 
+    def can_access_private_call(self, settings):
+        return self.has_private_call_access(settings)
+
+    def is_call_open(self, settings):
+        return settings.call_enabled and (
+            settings.call_is_open or (settings.call_private and self.has_private_call_access(settings))
+        )
+
     def dispatch(self, request, *args, **kwargs):
         settings = self.get_exhibition_settings()
         if self.require_call_enabled and not settings.call_enabled:
             raise Http404()
-        if self.hide_after_deadline and settings.call_hide_after_deadline and not settings.call_is_open:
+        if self.hide_after_deadline and settings.call_hide_after_deadline and not self.is_call_open(settings):
             raise Http404()
-        if self.enforce_private and settings.call_private and not self.has_private_call_access(settings):
+        if self.enforce_private and settings.call_private and not self.can_access_private_call(settings):
             raise Http404()
         return super().dispatch(request, *args, **kwargs)
 
@@ -739,7 +747,9 @@ class PublicExhibitorListView(PublicExhibitorBrowsingMixin, ListView):
 
     def get(self, request, *args, **kwargs):
         if "clear" in request.GET:
-            return redirect(request.path)
+            # Clearing the filters keeps an organizer in the preview they were looking at.
+            query = self.navigation_query(filtered=False)
+            return redirect(f"{request.path}?{query}" if query else request.path)
         return super().get(request, *args, **kwargs)
 
     def get_queryset(self):
@@ -823,7 +833,10 @@ class PublicCallView(PublicCallEnabledMixin, TemplateView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context["event"] = self.request.event
-        context["settings"] = self.get_exhibition_settings()
+        settings = self.get_exhibition_settings()
+        context["settings"] = settings
+        context["call_is_open"] = self.is_call_open(settings)
+        context["private_call_access"] = settings.call_private and self.has_private_call_access(settings)
         if self.request.user.is_authenticated:
             context["user_requests"] = ExhibitionRequest.objects.filter(
                 event=self.request.event,
@@ -856,8 +869,8 @@ class UserRequestListView(PublicCallEnabledMixin, PublicEventLoginRequiredMixin,
     enforce_private = True
     require_call_enabled = False
 
-    def has_private_call_access(self, settings):
-        if super().has_private_call_access(settings):
+    def can_access_private_call(self, settings):
+        if super().can_access_private_call(settings):
             return True
         user = self.request.user
         if not user.is_authenticated:
@@ -874,9 +887,10 @@ class UserRequestListView(PublicCallEnabledMixin, PublicEventLoginRequiredMixin,
         context = super().get_context_data(**kwargs)
         settings = self.get_exhibition_settings()
         context["settings"] = settings
+        context["call_is_open"] = self.is_call_open(settings)
         for exhibition_request in context["exhibition_requests"]:
             exhibition_request.submitter_can_edit = exhibition_request.editable and (
-                not exhibition_request.requires_open_call_to_edit or settings.call_is_open
+                not exhibition_request.requires_open_call_to_edit or context["call_is_open"]
             )
         return context
 
@@ -1012,7 +1026,7 @@ class UserRequestCreateView(
             raise Http404()
         if settings.call_private and not self.has_private_call_access(settings):
             raise Http404()
-        if not settings.call_is_open:
+        if not self.is_call_open(settings):
             if settings.call_hide_after_deadline:
                 raise Http404()
             messages.error(request, _("The call for exhibitors is closed."))
@@ -1077,7 +1091,7 @@ class UserRequestEditView(
             return False
         if not self.object.requires_open_call_to_edit:
             return True
-        return self.get_exhibition_settings().call_is_open
+        return self.is_call_open(self.get_exhibition_settings())
 
     def get_form_kwargs(self):
         kwargs = super().get_form_kwargs()
@@ -1801,6 +1815,7 @@ class ExhibitionQuestionListView(EventPermissionRequiredMixin, ListView):
                     "supports_required": definition.get("supports_required", True),
                     "active_locked": definition.get("active_locked", False),
                     "required_locked": definition.get("required_locked", False),
+                    "lock_notice": definition.get("lock_notice", ""),
                     "answer_count": answer_counts.get(key, 0),
                     "is_custom": False,
                 }
@@ -1818,6 +1833,7 @@ class ExhibitionQuestionListView(EventPermissionRequiredMixin, ListView):
                     "supports_required": True,
                     "active_locked": False,
                     "required_locked": False,
+                    "lock_notice": "",
                     "answer_count": question.answer_count,
                     "is_custom": True,
                     "pk": question.pk,
@@ -2824,6 +2840,9 @@ class EmailComposeView(EventPermissionRequiredMixin, FormView):
     def get_form_kwargs(self):
         kwargs = super().get_form_kwargs()
         kwargs["event"] = self.request.event
+        kwargs["show_emails"] = not should_hide_applicant_emails(
+            self.request.user, self.request.event, request=self.request
+        )
         return kwargs
 
     def get_initial(self):
@@ -2849,17 +2868,13 @@ class EmailComposeView(EventPermissionRequiredMixin, FormView):
         scheduled_at = form.cleaned_data.get("scheduled_at")
         send_now = "_send" in self.request.POST and not scheduled_at
 
-        recipients = mail_helpers.compose_recipients(
-            event,
-            states=form.cleaned_data["states"],
-            organization_type=form.cleaned_data["organization_type"],
-            sponsor_group=form.cleaned_data["sponsor_group"],
-        )
+        exhibition_requests, profiles = form.recipients()
         created = mail_helpers.queue_compose_emails(
             event,
-            recipients,
+            exhibition_requests,
             form.cleaned_data["subject"],
             form.cleaned_data["body"],
+            exhibitors=profiles,
             scheduled_at=scheduled_at,
             send_now=send_now,
             requestor=self.request.user,
