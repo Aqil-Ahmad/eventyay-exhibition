@@ -270,3 +270,17 @@ def test_organizer_action_reports_a_stale_confirmation_as_not_applied(event):
         exhibition_request.refresh_from_db()
 
         assert exhibition_request.state == ExhibitionRequestState.WITHDRAWN
+
+
+@pytest.mark.django_db
+def test_an_edit_takes_the_committed_state_instead_of_a_stale_one(event):
+    with scopes_disabled():
+        exhibition_request = _request(event)
+        stale = ExhibitionRequest.objects.get(pk=exhibition_request.pk)
+        exhibition_request.confirm(requestor=exhibition_request.user)
+
+        stale.lock_current_state()
+        stale.save()
+        exhibition_request.refresh_from_db()
+
+        assert exhibition_request.state == ExhibitionRequestState.CONFIRMED
