@@ -10,7 +10,11 @@
 {% block custom_header %}
     {{ block.super }}
     <link rel="stylesheet" href="{% static 'exhibition/css/exhibitors-settings.css' %}">
+    <link rel="stylesheet" href="{% static 'exhibition/css/session-select.css' %}">
+    <link rel="stylesheet" href="{% static 'exhibition/css/compose-recipients.css' %}">
     <script defer src="{% static 'exhibition/js/schedule-datetime.js' %}"></script>
+    <script defer src="{% static 'exhibition/js/session-select.js' %}"></script>
+    <script defer src="{% static 'exhibition/js/compose-recipients.js' %}"></script>
 {% endblock %}
 
 {% block exhibitors_header %}
@@ -60,9 +64,14 @@
                     </div>
                 </div>
             {% else %}
-                {% bootstrap_field form.states layout="control" %}
-                {% bootstrap_field form.organization_type layout="control" %}
-                {% bootstrap_field form.sponsor_group layout="control" %}
+                <div class="compose-recipient-filters" data-compose-filters>
+                    {% bootstrap_field form.state layout="control" %}
+                    {% bootstrap_field form.organization_type layout="control" %}
+                    {% bootstrap_field form.sponsor_group layout="control" %}
+                </div>
+                <div data-compose-organizations>
+                    {% bootstrap_field form.organizations layout="control" %}
+                </div>
             {% endif %}
         </fieldset>
         <fieldset>
