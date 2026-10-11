@@ -1235,7 +1235,14 @@ def _compose_form(event, **data):
 def test_compose_form_offers_the_application_state_as_a_single_choice(mail_event):
     field = ExhibitionComposeForm(event=mail_event).fields["state"]
 
-    assert [value for value, _label in field.choices] == ["", "submitted", "accepted", "rejected", "withdrawn"]
+    assert [value for value, _label in field.choices] == [
+        "",
+        "submitted",
+        "accepted",
+        "confirmed",
+        "rejected",
+        "withdrawn",
+    ]
     assert field.required is False
     assert not field.initial
 
