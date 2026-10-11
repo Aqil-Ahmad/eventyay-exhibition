@@ -2889,7 +2889,12 @@ class EmailComposeView(EventPermissionRequiredMixin, FormView):
         self.single_request.log_action(
             LOG_REQUEST_EMAILED,
             user=self.request.user,
-            data={"subject": queued.subject, "to": queued.to_email, "sent": bool(queued.sent_at)},
+            data={
+                "subject": queued.subject,
+                "to": queued.to_email,
+                "sent": bool(queued.sent_at),
+                "scheduled": bool(scheduled_at),
+            },
         )
         if scheduled_at:
             messages.success(self.request, _("The email has been scheduled."))

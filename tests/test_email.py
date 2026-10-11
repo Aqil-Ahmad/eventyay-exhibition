@@ -1453,3 +1453,19 @@ def test_compose_form_without_a_state_reaches_every_non_draft_application(mail_e
         assert form.is_valid(), form.errors
         exhibition_requests, _profiles = form.recipients()
         assert set(exhibition_requests) == {accepted, withdrawn}
+
+
+@pytest.mark.django_db
+def test_single_recipient_compose_logs_a_scheduled_email_as_scheduled(mail_event, exhibition_request):
+    view, request = _single_compose_view(mail_event, exhibition_request, {"_send": "send"})
+    form = _single_compose_form(mail_event)
+    form.cleaned_data["scheduled_at"] = timezone.now() + timedelta(days=1)
+
+    with patch("exhibition.tasks.send_scheduled_email.apply_async"):
+        with scopes_disabled():
+            view.form_valid(form)
+            logged = LogEntry.objects.get(action_type=LOG_REQUEST_EMAILED, object_id=exhibition_request.pk)
+
+    assert logged.parsed_data["scheduled"] is True
+    assert logged.parsed_data["sent"] is False
+    assert _message_texts(request) == ["The email has been scheduled."]

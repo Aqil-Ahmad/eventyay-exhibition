@@ -444,6 +444,8 @@ def exhibition_logentry_display(sender, logentry, **kwargs):
         data = logentry.parsed_data
         if data.get("sent"):
             return _("Email \u201c{subject}\u201d sent to the applicant.").format(subject=data.get("subject", ""))
+        if data.get("scheduled"):
+            return _("Email \u201c{subject}\u201d to the applicant scheduled.").format(subject=data.get("subject", ""))
         return _("Email \u201c{subject}\u201d to the applicant placed in the outbox.").format(
             subject=data.get("subject", "")
         )
