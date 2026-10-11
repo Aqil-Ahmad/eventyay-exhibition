@@ -4,7 +4,7 @@ import string
 
 from django.conf import settings
 from django.core.validators import MaxValueValidator
-from django.db import models
+from django.db import models, transaction
 from django.db.models import Max, Q
 from django.utils import timezone
 from django.utils.crypto import get_random_string
@@ -803,16 +803,22 @@ class ExhibitionRequest(LoggedModel):
 
     def confirm(self, requestor=None):
         """Confirm participation only while the request is still accepted; ``False`` if it changed meanwhile."""
-        updated = ExhibitionRequest.objects.filter(pk=self.pk, state=ExhibitionRequestState.ACCEPTED).update(
-            state=ExhibitionRequestState.CONFIRMED, updated=timezone.now()
-        )
-        if not updated:
-            self.refresh_from_db(fields=["state"])
-            return False
-        previous = self.state
-        self.state = ExhibitionRequestState.CONFIRMED
-        self.log_transition("confirm", previous, requestor=requestor)
+        with transaction.atomic():
+            updated = ExhibitionRequest.objects.filter(pk=self.pk, state=ExhibitionRequestState.ACCEPTED).update(
+                state=ExhibitionRequestState.CONFIRMED, updated=timezone.now()
+            )
+            if not updated:
+                self.refresh_from_db(fields=["state"])
+                return False
+            previous = self.state
+            self.state = ExhibitionRequestState.CONFIRMED
+            self.log_transition("confirm", previous, requestor=requestor)
         return True
+
+    def lock_current_state(self):
+        """Lock the row and take its committed state, so a full save cannot write back a stale one."""
+        self.state = ExhibitionRequest.objects.select_for_update().values_list("state", flat=True).get(pk=self.pk)
+        return self.state
 
     def reject(self, requestor=None):
         """Reject the request, hide any organization profile and queue the rejection email."""
