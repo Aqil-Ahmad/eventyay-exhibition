@@ -2834,7 +2834,6 @@ class EmailComposeView(EventPermissionRequiredMixin, FormView):
         context["locales"] = self.request.event.settings.locales
         if self.single_request is not None:
             context["single_request"] = self.single_request
-            context["single_request_url"] = self.single_request_url()
             context["single_recipient"] = request_email_recipient(self.request, self.single_request)
         return context
 

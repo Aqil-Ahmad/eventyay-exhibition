@@ -3,7 +3,6 @@
 {% load static %}
 {% load bootstrap3 %}
 {% load exhibition_email %}
-{% load event_tags %}
 
 {% block title %}{{ request.event.name }} - {% trans "Compose email" %}{% endblock %}
 
@@ -53,14 +52,11 @@
             <legend>{% trans "Recipients" %}</legend>
             {% if single_request %}
                 <div class="form-group">
-                    <label class="col-md-3 control-label">{% trans "To" %}</label>
+                    <label class="col-md-3 control-label" for="id_single_recipient">{% trans "To" %}</label>
                     <div class="col-md-9">
-                        <p class="form-control-static">
-                            <a href="{{ single_request_url }}">{{ single_request.name|event_localize }}</a>
-                            {% if single_recipient %}
-                                &lt;{{ single_recipient }}&gt;
-                            {% endif %}
-                        </p>
+                        {% trans "Hidden" as hidden_label %}
+                        <input type="text" id="id_single_recipient" class="form-control" disabled
+                               value="{{ single_recipient|default:hidden_label }}">
                     </div>
                 </div>
             {% else %}
