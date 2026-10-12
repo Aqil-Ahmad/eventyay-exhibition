@@ -87,7 +87,6 @@
                 var locale = chip.dataset.locale
                 var active = locale === current
                 chip.classList.toggle('is-active', active)
-                chip.classList.toggle('has-error', !!flagged[locale])
                 chip.setAttribute('aria-selected', active ? 'true' : 'false')
                 chip.tabIndex = active ? 0 : -1
             })
