@@ -23,8 +23,10 @@ REQUEST_REJECTED = "request_rejected"
 EXHIBITOR_ACCESS = "exhibitor_access"
 VOUCHERS = "vouchers"
 EXHIBITOR_PROFILE = "exhibitor_profile"
+REQUEST_MESSAGE = "request_message"
 
 LIFECYCLE_ROLES = (REQUEST_NEW, REQUEST_ACCEPTED, REQUEST_REJECTED, EXHIBITOR_ACCESS, VOUCHERS, EXHIBITOR_PROFILE)
+TEMPLATE_ROLES = (*LIFECYCLE_ROLES, REQUEST_MESSAGE)
 
 PLACEHOLDER_DOCS = (
     ("{event_name}", _lazy("The event's name")),
@@ -144,6 +146,18 @@ DEFAULT_TEMPLATE_SOURCES = {
             "The {event_name} Team"
         ),
     ),
+    REQUEST_MESSAGE: (
+        gettext_noop("Your request for {event_name}"),
+        gettext_noop(
+            "Hello,\n\n"
+            "thank you for submitting your request \u201c{request_name}\u201d to "
+            "{event_name}. To continue reviewing it, we need some more information "
+            "from you.\n\n"
+            "You can review or edit your request here:\n{request_url}\n\n"
+            "Best regards,\n"
+            "The {event_name} team"
+        ),
+    ),
 }
 
 DEFAULT_TEMPLATES = {
@@ -192,6 +206,7 @@ ROLE_PLACEHOLDER_CONTEXT = {
     EXHIBITOR_ACCESS: EXHIBITOR_PLACEHOLDER_CONTEXT,
     VOUCHERS: EXHIBITOR_PLACEHOLDER_CONTEXT,
     EXHIBITOR_PROFILE: EXHIBITOR_PLACEHOLDER_CONTEXT,
+    REQUEST_MESSAGE: REQUEST_PLACEHOLDER_CONTEXT,
 }
 
 
@@ -400,13 +415,19 @@ def sample_voucher_list(event=None):
     )
 
 
+def request_recipient(exhibition_request):
+    """Address an applicant is reached at: the request's contact email, else their login email."""
+    to_email = (exhibition_request.email or "").strip() or (
+        exhibition_request.user.email if exhibition_request.user_id else ""
+    )
+    return to_email.strip()
+
+
 def queue_request_email(event, exhibition_request, role, *, send_now=False, requestor=None):
     """Queue a lifecycle email; ``send_now`` sends it instead of leaving it in the outbox."""
     from .models import ExhibitionEmailQueue
 
-    to_email = (exhibition_request.email or "").strip() or (
-        exhibition_request.user.email if exhibition_request.user_id else ""
-    )
+    to_email = request_recipient(exhibition_request)
     if not to_email:
         return None
 
@@ -445,7 +466,7 @@ def compose_recipients(event, states=None, organization_type=None, sponsor_group
 
 
 def queue_compose_emails(
-    event, exhibition_requests, subject, body, *, scheduled_at=None, send_now=False, requestor=None
+    event, exhibition_requests, subject, body, *, exhibitors=(), scheduled_at=None, send_now=False, requestor=None
 ):
     """Fan a composed message out into per-recipient queued rows sharing a batch."""
     from .models import ExhibitionEmailQueue
@@ -453,32 +474,39 @@ def queue_compose_emails(
     batch = uuid.uuid4()
     created = []
     seen_emails = set()
-    for exhibition_request in exhibition_requests:
-        to_email = (exhibition_request.email or "").strip() or (
-            exhibition_request.user.email if exhibition_request.user_id else ""
-        )
+
+    def queue(to_email, user, context, **link):
         to_email = to_email.strip()
         if not to_email or to_email.lower() in seen_emails:
-            continue
+            return
         seen_emails.add(to_email.lower())
-
-        user = exhibition_request.user if exhibition_request.user_id else None
         locale = recipient_locale(event, user)
-        context = build_request_context(event, exhibition_request)
-
         queued = ExhibitionEmailQueue.objects.create(
             event=event,
-            exhibition_request=exhibition_request,
             batch=batch,
             to_email=to_email,
             subject=_render(subject, context, locale),
             body=_render(body, context, locale),
             locale=locale or "",
             scheduled_at=scheduled_at,
+            **link,
         )
         if send_now:
             queued.send(requestor=requestor)
         created.append(queued)
+
+    for exhibition_request in exhibition_requests:
+        queue(
+            request_recipient(exhibition_request),
+            exhibition_request.user if exhibition_request.user_id else None,
+            build_request_context(event, exhibition_request),
+            exhibition_request=exhibition_request,
+        )
+    for exhibitor in exhibitors:
+        context = build_exhibitor_context(event, exhibitor)
+        if not context.get("request_name"):
+            context["request_name"] = context.get("exhibitor_name") or str(exhibitor.name)
+        queue(exhibitor.recipient_email, None, context, exhibitor=exhibitor)
     return created
 
 
