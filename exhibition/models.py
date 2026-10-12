@@ -574,6 +574,7 @@ REQUEST_STATE_TRANSITIONS = {
     ),
     ExhibitionRequestState.CONFIRMED: frozenset(
         {
+            ExhibitionRequestState.ACCEPTED,
             ExhibitionRequestState.SUBMITTED,
             ExhibitionRequestState.REJECTED,
             ExhibitionRequestState.WITHDRAWN,
@@ -591,9 +592,15 @@ REQUEST_STATE_TRANSITIONS = {
 REQUEST_REVIEW_ACTIONS = {
     "approve": ExhibitionRequestState.ACCEPTED,
     "confirm": ExhibitionRequestState.CONFIRMED,
+    "unconfirm": ExhibitionRequestState.ACCEPTED,
     "reject": ExhibitionRequestState.REJECTED,
     "withdraw": ExhibitionRequestState.WITHDRAWN,
     "reopen": ExhibitionRequestState.SUBMITTED,
+}
+
+REQUEST_ACTION_SOURCE_STATES = {
+    "approve": frozenset({ExhibitionRequestState.SUBMITTED, ExhibitionRequestState.REJECTED}),
+    "unconfirm": frozenset({ExhibitionRequestState.CONFIRMED}),
 }
 
 REQUEST_BULK_ACTIONS = ("approve", "reject")
@@ -603,6 +610,7 @@ LOG_PREFIX = "eventyay.plugins.exhibition"
 REQUEST_LOG_ACTIONS = {
     "approve": f"{LOG_PREFIX}.request.approved",
     "confirm": f"{LOG_PREFIX}.request.confirmed",
+    "unconfirm": f"{LOG_PREFIX}.request.unconfirmed",
     "reject": f"{LOG_PREFIX}.request.rejected",
     "withdraw": f"{LOG_PREFIX}.request.withdrawn",
     "reopen": f"{LOG_PREFIX}.request.reopened",
@@ -750,11 +758,18 @@ class ExhibitionRequest(LoggedModel):
     def can_transition_to(self, target_state):
         return target_state in REQUEST_STATE_TRANSITIONS.get(self.state, frozenset())
 
+    def can_apply_action(self, action):
+        """Whether a review action may run from the current state; actions sharing a target state are told apart."""
+        sources = REQUEST_ACTION_SOURCE_STATES.get(action)
+        if sources is not None and self.state not in sources:
+            return False
+        return self.can_transition_to(REQUEST_REVIEW_ACTIONS[action])
+
     def available_review_actions(self):
-        return [action for action, target in REQUEST_REVIEW_ACTIONS.items() if self.can_transition_to(target)]
+        return [action for action in REQUEST_REVIEW_ACTIONS if self.can_apply_action(action)]
 
     def available_bulk_actions(self):
-        return [action for action in REQUEST_BULK_ACTIONS if self.can_transition_to(REQUEST_REVIEW_ACTIONS[action])]
+        return [action for action in REQUEST_BULK_ACTIONS if self.can_apply_action(action)]
 
     def set_organization_active(self, active, requestor=None):
         """Follow the request's state, and never leave a hidden profile marked as published.
@@ -814,6 +829,20 @@ class ExhibitionRequest(LoggedModel):
             previous = self.state
             self.state = ExhibitionRequestState.CONFIRMED
             self.log_transition("confirm", previous, requestor=requestor)
+        return True
+
+    def unconfirm(self, requestor=None):
+        """Move a confirmed request back to accepted; ``False`` if it is no longer confirmed."""
+        with transaction.atomic():
+            updated = ExhibitionRequest.objects.filter(pk=self.pk, state=ExhibitionRequestState.CONFIRMED).update(
+                state=ExhibitionRequestState.ACCEPTED, updated=timezone.now()
+            )
+            if not updated:
+                self.refresh_from_db(fields=["state"])
+                return False
+            previous = self.state
+            self.state = ExhibitionRequestState.ACCEPTED
+            self.log_transition("unconfirm", previous, requestor=requestor)
         return True
 
     def lock_current_state(self):
