@@ -539,7 +539,14 @@ def exhibition_logentry_object_link(sender, logentry, **kwargs):
     elif isinstance(target, SponsorGroup):
         return _("Sponsor group {val}").format(val=escape(target.localized_name))
     elif isinstance(target, ExhibitionOrder):
-        return _("Exhibition order {val}").format(val=escape(target.code))
+        a_text = _("Exhibition order {val}")
+        a_map = {
+            "href": reverse(
+                "plugins:exhibition:orders.detail",
+                kwargs={"organizer": sender.organizer.slug, "event": sender.slug, "code": target.code},
+            ),
+            "val": escape(target.code),
+        }
 
     if a_text and a_map:
         a_map["val"] = '<a href="{href}">{val}</a>'.format_map(a_map)
