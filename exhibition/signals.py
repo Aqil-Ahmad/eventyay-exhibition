@@ -427,6 +427,7 @@ def exhibition_user_menu_item(sender, request=None, icon_class="", **kwargs):
 LOG_ENTRY_LABELS = {
     REQUEST_LOG_ACTIONS["approve"]: _("Exhibition request approved."),
     REQUEST_LOG_ACTIONS["confirm"]: _("Exhibition request confirmed."),
+    REQUEST_LOG_ACTIONS["unconfirm"]: _("Exhibition request moved back to accepted."),
     REQUEST_LOG_ACTIONS["reject"]: _("Exhibition request rejected."),
     REQUEST_LOG_ACTIONS["withdraw"]: _("Exhibition request withdrawn."),
     REQUEST_LOG_ACTIONS["reopen"]: _("Exhibition request reopened for review."),

@@ -1665,7 +1665,7 @@ class RequestDetailView(EventPermissionRequiredMixin, UpdateView):
         if action in REQUEST_REVIEW_ACTIONS:
             if not self.can_manage():
                 raise PermissionDenied()
-            if not self.object.can_transition_to(REQUEST_REVIEW_ACTIONS[action]):
+            if not self.object.can_apply_action(action):
                 messages.error(self.request, _("This request can no longer be changed to that state."))
                 return redirect(self.get_success_url())
             return self.perform_review_action(action)
@@ -1693,6 +1693,11 @@ class RequestDetailView(EventPermissionRequiredMixin, UpdateView):
         elif action == "confirm":
             if self.object.confirm(requestor=requestor):
                 messages.success(self.request, _("Request confirmed on behalf of the applicant."))
+            else:
+                messages.error(self.request, _("This request can no longer be changed to that state."))
+        elif action == "unconfirm":
+            if self.object.unconfirm(requestor=requestor):
+                messages.success(self.request, _("Request moved back to accepted and awaits confirmation again."))
             else:
                 messages.error(self.request, _("This request can no longer be changed to that state."))
         elif action == "withdraw":
@@ -1734,14 +1739,13 @@ class RequestActionView(EventPermissionRequiredMixin, View):
         if action not in self.valid_actions or not (codes or select_all):
             return self.respond(request, False, _("No valid action was selected."), [], 0)
 
-        target_state = REQUEST_REVIEW_ACTIONS[action]
         exhibition_requests = self.get_requests(request, select_all, codes)
         results = []
         changed = 0
         skipped = 0
         with transaction.atomic():
             for exhibition_request in exhibition_requests:
-                if not exhibition_request.can_transition_to(target_state):
+                if not exhibition_request.can_apply_action(action):
                     skipped += 1
                     continue
                 if not self.apply_action(exhibition_request, action):
@@ -1776,6 +1780,8 @@ class RequestActionView(EventPermissionRequiredMixin, View):
             exhibition_request.reject(requestor=self.request.user)
         elif action == "confirm":
             return exhibition_request.confirm(requestor=self.request.user)
+        elif action == "unconfirm":
+            return exhibition_request.unconfirm(requestor=self.request.user)
         elif action == "withdraw":
             exhibition_request.withdraw(requestor=self.request.user)
         elif action == "reopen":
@@ -1787,6 +1793,11 @@ class RequestActionView(EventPermissionRequiredMixin, View):
             templates = {
                 "approve": ngettext("%(count)d request was approved.", "%(count)d requests were approved.", count),
                 "confirm": ngettext("%(count)d request was confirmed.", "%(count)d requests were confirmed.", count),
+                "unconfirm": ngettext(
+                    "%(count)d request was moved back to accepted.",
+                    "%(count)d requests were moved back to accepted.",
+                    count,
+                ),
                 "reject": ngettext("%(count)d request was rejected.", "%(count)d requests were rejected.", count),
                 "withdraw": ngettext("%(count)d request was withdrawn.", "%(count)d requests were withdrawn.", count),
                 "reopen": ngettext("%(count)d request was reopened.", "%(count)d requests were reopened.", count),
