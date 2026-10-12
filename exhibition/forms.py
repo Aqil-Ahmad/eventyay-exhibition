@@ -58,6 +58,10 @@ from .models import (
     ExhibitionAnswer,
     ExhibitionCustomEmailTemplate,
     ExhibitionEmailQueue,
+    ExhibitionOrderAnswer,
+    ExhibitionOrderForm,
+    ExhibitionOrderQuestion,
+    ExhibitionOrderQuestionOption,
     ExhibitionProduct,
     ExhibitionProductCategory,
     ExhibitionProductPurpose,
@@ -75,6 +79,7 @@ from .models import (
     ExhibitorSocialLink,
     SponsorGroup,
     get_next_sponsor_group_level,
+    order_form_questions,
 )
 from .social_links import (
     SOCIAL_LINK_CHOICES,
@@ -1194,6 +1199,9 @@ class ExhibitionQuestionFieldsMixin(ExhibitionQuestionDependencyMixin):
             required=question.required,
         )
 
+    def new_exhibition_answer(self, owner, question):
+        return ExhibitionAnswer(exhibition_request=owner, question=question)
+
     def save_exhibition_questions(self, exhibition_request):
         for key, value in self.cleaned_data.items():
             if not key.startswith("question_"):
@@ -1223,7 +1231,7 @@ class ExhibitionQuestionFieldsMixin(ExhibitionQuestionDependencyMixin):
                 continue
 
             if not answer:
-                answer = ExhibitionAnswer(exhibition_request=exhibition_request, question=question)
+                answer = self.new_exhibition_answer(exhibition_request, question)
 
             if isinstance(field, ExtFileField):
                 if value is False:
@@ -2399,6 +2407,7 @@ class ExhibitionProductForm(I18nModelForm):
             "name",
             "description",
             "category",
+            "order_form",
             "purpose",
             "includes_booth",
             "price",
@@ -2422,6 +2431,8 @@ class ExhibitionProductForm(I18nModelForm):
         change_decimal_field(self.fields["price"], self.event.currency)
         self.fields["category"].queryset = ExhibitionProductCategory.objects.filter(event=self.event)
         self.fields["category"].empty_label = _("No category")
+        self.fields["order_form"].queryset = ExhibitionOrderForm.objects.filter(event=self.event)
+        self.fields["order_form"].empty_label = _("No order form")
 
     def clean_price(self):
         price = self.cleaned_data.get("price")
@@ -2483,3 +2494,74 @@ class ExhibitionQuotaForm(I18nModelForm):
                     ),
                 )
         return cleaned_data
+
+
+class ExhibitionOrderFormModelForm(I18nModelForm):
+    class Meta:
+        model = ExhibitionOrderForm
+        fields = ["name"]
+
+
+class ExhibitionOrderQuestionForm(ExhibitionQuestionForm):
+    """An order form field; it can depend only on fields of the same order form."""
+
+    class Meta(ExhibitionQuestionForm.Meta):
+        model = ExhibitionOrderQuestion
+        fields = ExhibitionQuestionForm.Meta.fields[:-1] + ["booth_only", "active"]
+        labels = {**ExhibitionQuestionForm.Meta.labels, "booth_only": _("Only for booth products")}
+
+    def __init__(self, *args, order_form, **kwargs):
+        self.order_form = order_form
+        super().__init__(*args, **kwargs)
+
+    @cached_property
+    def dependency_candidates(self):
+        queryset = ExhibitionOrderQuestion.objects.filter(
+            order_form=self.order_form,
+            variant__in=DEPENDENCY_PARENT_VARIANTS,
+        ).prefetch_related("options")
+        if self.instance.pk:
+            queryset = queryset.exclude(pk=self.instance.pk)
+        return queryset
+
+    def save(self, commit=True):
+        instance = super(ExhibitionQuestionForm, self).save(commit=False)
+        instance.order_form = self.order_form
+        if not instance.pk:
+            max_position = self.order_form.questions.aggregate(Max("position"))["position__max"]
+            instance.position = (max_position if max_position is not None else -1) + 1
+        if commit:
+            instance.save()
+        return instance
+
+
+class ExhibitionOrderQuestionOptionForm(ExhibitionQuestionOptionForm):
+    class Meta(ExhibitionQuestionOptionForm.Meta):
+        model = ExhibitionOrderQuestionOption
+
+
+ExhibitionOrderQuestionOptionFormSet = inlineformset_factory(
+    ExhibitionOrderQuestion,
+    ExhibitionOrderQuestionOption,
+    form=ExhibitionOrderQuestionOptionForm,
+    formset=BaseExhibitionQuestionOptionFormSet,
+    can_order=True,
+    can_delete=True,
+    extra=0,
+)
+
+
+class ExhibitionOrderAnswersForm(ExhibitionQuestionFieldsMixin, forms.Form):
+    """The order form questions for a set of products, to be answered when they are ordered."""
+
+    def __init__(self, *args, products, **kwargs):
+        super().__init__(*args, **kwargs)
+        for question in order_form_questions(list(products)):
+            field = self.get_exhibition_question_field(question=question, answer=None, readonly=False)
+            field.question = question
+            field.answer = None
+            self.apply_question_dependency(field, question)
+            self.fields[f"question_{question.pk}"] = field
+
+    def new_exhibition_answer(self, owner, question):
+        return ExhibitionOrderAnswer(order=owner, question=question)
