@@ -5,7 +5,8 @@ import string
 from django.conf import settings
 from django.core.validators import MaxValueValidator
 from django.db import models, transaction
-from django.db.models import F, Max, Q
+from django.db.models import Count, F, Max, OuterRef, Q, Subquery
+from django.db.models.functions import Coalesce
 from django.utils import timezone
 from django.utils.crypto import get_random_string
 from django.utils.translation import gettext_lazy as _
@@ -626,6 +627,9 @@ LOG_ORDER_PLACED = f"{LOG_PREFIX}.order.placed"
 LOG_ORDER_PAID = f"{LOG_PREFIX}.order.paid"
 LOG_ORDER_CANCELLED = f"{LOG_PREFIX}.order.cancelled"
 LOG_ORDER_EXPIRED = f"{LOG_PREFIX}.order.expired"
+LOG_QUOTA_ADDED = f"{LOG_PREFIX}.quota.added"
+LOG_QUOTA_CHANGED = f"{LOG_PREFIX}.quota.changed"
+LOG_QUOTA_DELETED = f"{LOG_PREFIX}.quota.deleted"
 
 SUBMITTER_PROFILE_FIELD_LABELS = {
     "description": _("Organization Description"),
@@ -1318,6 +1322,11 @@ class ExhibitionProduct(LoggedModel):
         """Whether the product is on sale, going by its active flag and its availability window."""
         return self.active and self.is_available_by_time(now_dt)
 
+    def remaining_capacity(self):
+        """How many more can be sold going by the product's quotas, or None when nothing limits it."""
+        remaining = [quota.remaining for quota in self.quotas.with_usage() if quota.size is not None]
+        return min(remaining) if remaining else None
+
     def save(self, *args, **kwargs):
         """Saving settles the booth rule, so no caller can store another answer."""
         if self._state.adding and not self.position:
@@ -1340,11 +1349,21 @@ class ExhibitionOrderStatus(models.TextChoices):
     EXPIRED = "expired", _("Expired")
 
 
+RESERVING_ORDER_STATUSES = (ExhibitionOrderStatus.PENDING, ExhibitionOrderStatus.PAID)
+
 ORDER_CODE_CHARSET = "ABCDEFGHJKLMNPQRSTUVWXYZ379"
 
 
 class ExhibitionOrderStateError(Exception):
     """An order was asked for a status it cannot reach from its current one."""
+
+
+class ExhibitionOrderError(Exception):
+    """An exhibition order could not be placed as requested."""
+
+
+class ExhibitionQuotaExceeded(ExhibitionOrderError):
+    """A quota has no capacity left for the products asked for."""
 
 
 def generate_exhibition_order_code(event):
@@ -1406,12 +1425,13 @@ class ExhibitionOrder(LoggedModel):
         return self.status != ExhibitionOrderStatus.CANCELLED
 
     def mark_paid(self, *, provider="", reference="", user=None):
-        """Record a received payment; an expired order can still be paid, as in Tickets."""
+        """Record a received payment; an expired order can still be paid while its quotas have room."""
         self._transition(
             {ExhibitionOrderStatus.PENDING, ExhibitionOrderStatus.EXPIRED},
             ExhibitionOrderStatus.PAID,
             LOG_ORDER_PAID,
             user,
+            check=self._reclaim_quota_capacity,
             payment_provider=provider or self.payment_provider,
             payment_reference=reference,
             payment_date=timezone.now(),
@@ -1433,11 +1453,18 @@ class ExhibitionOrder(LoggedModel):
             None,
         )
 
-    def _transition(self, allowed_from, status, action, user, **fields):
+    def _reclaim_quota_capacity(self, current):
+        """An expired order released its quota capacity, so reviving it needs that capacity back."""
+        if current.status == ExhibitionOrderStatus.EXPIRED:
+            reserve_quota_capacity([position.product for position in self.positions.select_related("product")])
+
+    def _transition(self, allowed_from, status, action, user, check=None, **fields):
         with transaction.atomic():
             current = type(self).objects.select_for_update().get(pk=self.pk)
             if current.status not in allowed_from:
                 raise ExhibitionOrderStateError(f"Order {self.code} cannot change from {current.status} to {status}.")
+            if check:
+                check(current)
             fields["status"] = status
             for name, value in fields.items():
                 setattr(self, name, value)
@@ -1473,6 +1500,106 @@ class ExhibitionOrderPosition(models.Model):
 
     def __str__(self):
         return f"{self.order.code}: {self.product}"
+
+
+class ExhibitionQuotaQuerySet(models.QuerySet):
+    def with_usage(self):
+        """Annotate ``used``: the products sold against each quota by orders that still hold their place."""
+        sold = (
+            ExhibitionOrderPosition.objects.filter(
+                product__quotas=OuterRef("pk"),
+                order__status__in=RESERVING_ORDER_STATUSES,
+            )
+            .order_by()
+            .values("product__quotas")
+            .annotate(count=Count("pk"))
+            .values("count")
+        )
+        return self.annotate(used=Coalesce(Subquery(sold), 0))
+
+
+class ExhibitionQuota(LoggedModel):
+    """A limit on how many of its products can be sold, kept apart from the ticket quotas.
+
+    A booth capacity quota stands for the physical booths, so only products that include a
+    booth can be on it and digital packages never take a booth away.
+    """
+
+    objects = ExhibitionQuotaQuerySet.as_manager()
+
+    event = models.ForeignKey(
+        Event,
+        on_delete=models.CASCADE,
+        related_name="exhibition_quotas",
+    )
+    name = models.CharField(max_length=200, verbose_name=_("Name"))
+    size = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        verbose_name=_("Total capacity"),
+        help_text=_("Leave empty for an unlimited number of sales."),
+    )
+    booth_capacity = models.BooleanField(
+        default=False,
+        verbose_name=_("Booth capacity"),
+        help_text=_(
+            "This quota counts the physical exhibition booths, so only products that include a booth can be "
+            "added to it."
+        ),
+    )
+    products = models.ManyToManyField(
+        ExhibitionProduct,
+        related_name="quotas",
+        blank=True,
+        verbose_name=_("Products"),
+    )
+
+    class Meta:
+        verbose_name = _("Exhibition quota")
+        verbose_name_plural = _("Exhibition quotas")
+        ordering = ("name", "id")
+
+    def count_used(self):
+        return ExhibitionOrderPosition.objects.filter(
+            product__quotas=self,
+            order__status__in=RESERVING_ORDER_STATUSES,
+        ).count()
+
+    @property
+    def remaining(self):
+        """Places left, or None for an unlimited quota; reads the ``with_usage()`` annotation when present."""
+        if self.size is None:
+            return None
+        used = self.used if hasattr(self, "used") else self.count_used()
+        return max(self.size - used, 0)
+
+    def __str__(self):
+        return self.name
+
+
+def reserve_quota_capacity(products):
+    """Lock the quotas of the products and raise ``ExhibitionQuotaExceeded`` if any lacks room for them.
+
+    Call it inside the transaction that creates or revives the order positions, so two buyers
+    cannot both take the last place.
+    """
+    product_ids = [product.pk for product in products]
+    quota_ids = set(
+        ExhibitionQuota.products.through.objects.filter(exhibitionproduct_id__in=product_ids).values_list(
+            "exhibitionquota_id", flat=True
+        )
+    )
+    if not quota_ids:
+        return
+    quotas = ExhibitionQuota.objects.select_for_update().filter(pk__in=quota_ids).order_by("pk")
+    for quota in quotas:
+        if quota.size is None:
+            continue
+        quota_product_ids = set(quota.products.values_list("pk", flat=True))
+        needed = sum(1 for product_id in product_ids if product_id in quota_product_ids)
+        if quota.count_used() + needed > quota.size:
+            names = ", ".join(str(product) for product in products if product.pk in quota_product_ids)
+            raise ExhibitionQuotaExceeded(f"{names} is sold out.")
 
 
 class ExhibitorTag(models.Model):
