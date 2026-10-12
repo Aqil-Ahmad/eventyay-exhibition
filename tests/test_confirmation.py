@@ -284,3 +284,62 @@ def test_an_edit_takes_the_committed_state_instead_of_a_stale_one(event):
         exhibition_request.refresh_from_db()
 
         assert exhibition_request.state == ExhibitionRequestState.CONFIRMED
+
+
+@pytest.mark.django_db
+def test_unconfirm_moves_a_confirmed_request_back_to_accepted(event):
+    with scopes_disabled():
+        exhibition_request = _request(event, state=ExhibitionRequestState.CONFIRMED)
+
+        assert exhibition_request.unconfirm() is True
+        exhibition_request.refresh_from_db()
+
+        assert exhibition_request.state == ExhibitionRequestState.ACCEPTED
+        assert exhibition_request.can_be_confirmed
+        assert exhibition_request.approved_exhibitor.active
+        assert exhibition_request.all_logentries().filter(action_type=REQUEST_LOG_ACTIONS["unconfirm"]).exists()
+
+
+@pytest.mark.django_db
+def test_unconfirm_does_not_overwrite_a_state_changed_in_the_meantime(event):
+    with scopes_disabled():
+        exhibition_request = _request(event, state=ExhibitionRequestState.CONFIRMED)
+        stale = ExhibitionRequest.objects.get(pk=exhibition_request.pk)
+        exhibition_request.withdraw()
+
+        assert stale.unconfirm() is False
+        exhibition_request.refresh_from_db()
+
+        assert exhibition_request.state == ExhibitionRequestState.WITHDRAWN
+
+
+@pytest.mark.django_db
+def test_confirmed_requests_offer_unconfirm_but_not_approve(event):
+    with scopes_disabled():
+        confirmed = _request(event, state=ExhibitionRequestState.CONFIRMED)
+        accepted = _request(event, "b@example.com")
+
+        assert "unconfirm" in confirmed.available_review_actions()
+        assert "approve" not in confirmed.available_review_actions()
+        assert not confirmed.can_apply_action("approve")
+        assert "unconfirm" not in accepted.available_review_actions()
+
+
+@pytest.mark.django_db
+def test_rejected_requests_can_still_be_approved(event):
+    with scopes_disabled():
+        assert _request(event, state=ExhibitionRequestState.REJECTED).can_apply_action("approve")
+
+
+@pytest.mark.django_db
+def test_organizer_action_moves_a_confirmed_request_back_to_accepted(event):
+    with scopes_disabled():
+        exhibition_request = _request(event, state=ExhibitionRequestState.CONFIRMED)
+        view = RequestActionView()
+        view.request = RequestFactory().post("/")
+        view.request.user = User.objects.create_user(email="orga@example.com", password="pw")
+
+        assert view.apply_action(exhibition_request, "unconfirm") is True
+        exhibition_request.refresh_from_db()
+
+        assert exhibition_request.state == ExhibitionRequestState.ACCEPTED
