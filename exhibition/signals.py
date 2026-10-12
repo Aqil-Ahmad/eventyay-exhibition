@@ -27,6 +27,7 @@ from .mail import (
     my_exhibitions_url,
     render_device_tokens,
     render_voucher_list,
+    request_admin_url,
     request_confirmation_url,
     request_public_url,
     sample_device_tokens,
@@ -52,6 +53,7 @@ from .models import (
     LOG_QUESTION_CHANGED,
     LOG_QUESTION_DELETED,
     LOG_REQUEST_CHANGED,
+    LOG_REQUEST_EMAILED,
     LOG_SETTINGS_CHANGED,
     REQUEST_LOG_ACTIONS,
     ExhibitionQuestion,
@@ -255,6 +257,54 @@ def exhibition_mail_placeholders(sender, **kwargs):
             "ABCD1234EFGH",
         ),
         SimpleFunctionalMailTextPlaceholder(
+            "request_type",
+            ["exhibition_request"],
+            lambda exhibition_request: _("Sponsor") if exhibition_request.is_sponsor else _("Exhibitor"),
+            _("Exhibitor"),
+        ),
+        SimpleFunctionalMailTextPlaceholder(
+            "request_action",
+            ["exhibition_request"],
+            lambda exhibition_request: _("submitted"),
+            _("submitted"),
+        ),
+        SimpleFunctionalMailTextPlaceholder(
+            "contact_name",
+            ["exhibition_request"],
+            lambda exhibition_request: (
+                exhibition_request.user.get_full_name() or exhibition_request.user.email
+                if exhibition_request.user_id
+                else ""
+            ),
+            _("Jane Doe"),
+        ),
+        SimpleFunctionalMailTextPlaceholder(
+            "contact_email",
+            ["exhibition_request"],
+            lambda exhibition_request: (
+                exhibition_request.email or (exhibition_request.user.email if exhibition_request.user_id else "")
+            ),
+            "jane@example.com",
+        ),
+        SimpleFunctionalMailTextPlaceholder(
+            "request_date",
+            ["exhibition_request"],
+            lambda exhibition_request: str(exhibition_request.updated),
+            "2026-10-10 10:00",
+        ),
+        SimpleFunctionalMailTextPlaceholder(
+            "request_admin_url",
+            ["exhibition_request"],
+            request_admin_url,
+            "https://example.com/orga/event/exhibition/call/requests/ABCD1234EFGH/",
+        ),
+        SimpleFunctionalMailTextPlaceholder(
+            "pending_request_count",
+            ["event"],
+            lambda event: "1",
+            "1",
+        ),
+        SimpleFunctionalMailTextPlaceholder(
             "request_url",
             ["exhibition_request"],
             request_public_url,
@@ -381,6 +431,7 @@ LOG_ENTRY_LABELS = {
     REQUEST_LOG_ACTIONS["withdraw"]: _("Exhibition request withdrawn."),
     REQUEST_LOG_ACTIONS["reopen"]: _("Exhibition request reopened for review."),
     LOG_REQUEST_CHANGED: _("Exhibition request changed."),
+    LOG_REQUEST_EMAILED: _("Email to the applicant"),
     LOG_ORGANIZATION_CREATED: _("Organization profile created from an approved request."),
     LOG_ORGANIZATION_REACTIVATED: _("Organization profile reactivated after re-approval."),
     LOG_ORGANIZATION_SYNCED: _("Organization profile updated from the submitter's changes."),
@@ -445,6 +496,16 @@ def exhibition_logentry_display(sender, logentry, **kwargs):
                 new=request_state_label(data["to"]),
             )
             return f"{label} {transition}"
+
+    if logentry.action_type == LOG_REQUEST_EMAILED:
+        data = logentry.parsed_data
+        if data.get("sent"):
+            return _("Email \u201c{subject}\u201d sent to the applicant.").format(subject=data.get("subject", ""))
+        if data.get("scheduled"):
+            return _("Email \u201c{subject}\u201d to the applicant scheduled.").format(subject=data.get("subject", ""))
+        return _("Email \u201c{subject}\u201d to the applicant placed in the outbox.").format(
+            subject=data.get("subject", "")
+        )
 
     changed = changed_field_labels(logentry)
     if changed:
