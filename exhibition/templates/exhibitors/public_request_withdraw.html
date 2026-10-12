@@ -8,7 +8,7 @@
             Are you sure you want to withdraw your request “{{ name }}”?
         {% endblocktrans %}
     </p>
-    {% if exhibition_request.state == "accepted" %}
+    {% if exhibition_request.is_accepted %}
         <div class="alert alert-warning" role="alert">
             {% trans "This request has already been approved. Withdrawing it will hide the exhibitor or sponsor profile created from it from public listings." %}
         </div>

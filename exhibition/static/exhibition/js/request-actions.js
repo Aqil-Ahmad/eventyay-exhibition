@@ -57,6 +57,8 @@
 
         var actionConfig = {
             approve: { icon: 'fa-check', cls: 'request-action-approve', variant: 'btn-success', label: i18n.labelApprove },
+            confirm: { icon: 'fa-check-circle', cls: 'request-action-confirm', variant: 'btn-success', label: i18n.labelConfirm },
+            unconfirm: { icon: 'fa-circle-o', cls: 'request-action-unconfirm', variant: '', label: i18n.labelUnconfirm },
             reject: { icon: 'fa-times', cls: 'request-action-reject', variant: 'btn-danger', label: i18n.labelReject },
             withdraw: { icon: 'fa-undo', cls: 'request-action-withdraw', variant: '', label: i18n.labelWithdraw },
             reopen: { icon: 'fa-inbox', cls: 'request-action-reopen', variant: '', label: i18n.labelReopen },
@@ -300,6 +302,12 @@
             if (action === 'reject') {
                 return i18n.confirmRejectOne
             }
+            if (action === 'confirm') {
+                return i18n.confirmConfirmOne
+            }
+            if (action === 'unconfirm') {
+                return i18n.confirmUnconfirmOne
+            }
             if (action === 'withdraw') {
                 return i18n.confirmWithdrawOne
             }
@@ -310,10 +318,10 @@
         }
 
         function confirmClassFor(action) {
-            if (action === 'approve') {
+            if (action === 'approve' || action === 'confirm') {
                 return 'btn-success'
             }
-            if (action === 'reopen') {
+            if (action === 'reopen' || action === 'unconfirm') {
                 return 'btn-primary'
             }
             return 'btn-danger'
