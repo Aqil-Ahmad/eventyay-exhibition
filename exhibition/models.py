@@ -1489,7 +1489,7 @@ class ExhibitionOrderPosition(models.Model):
     )
     product = models.ForeignKey(
         ExhibitionProduct,
-        on_delete=models.PROTECT,
+        on_delete=models.RESTRICT,
         related_name="order_positions",
         verbose_name=_("Product"),
     )
