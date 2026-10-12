@@ -1,0 +1,64 @@
+{% extends "exhibitors/base.html" %}
+{% load i18n %}
+
+{% block title %}{{ request.event.name }} - {% trans "Order forms" %}{% endblock %}
+
+{% block exhibitors_header %}
+    <h1>{% trans "Order forms" %}</h1>
+{% endblock %}
+
+{% block exhibitors_content %}
+    <p>
+        {% blocktrans trimmed %}
+            Order forms hold the questions buyers answer when they order exhibition and sponsorship products, such
+            as billing details, booth requirements or marketing assets. Assign a form to products on the product
+            page; one form can serve several products. When an order contains products with different forms, the
+            buyer answers all of them.
+        {% endblocktrans %}
+    </p>
+    {% if not order_forms %}
+        <div class="empty-collection">
+            <p>{% trans "You haven't created any order forms yet." %}</p>
+            <a href="{% url 'plugins:exhibition:products.order_forms.add' organizer=request.event.organizer.slug event=request.event.slug %}"
+               class="btn btn-primary btn-lg"><i class="fa fa-plus"></i> {% trans "Create a new order form" %}</a>
+        </div>
+    {% else %}
+        <p class="list-toolbar">
+            <a href="{% url 'plugins:exhibition:products.order_forms.add' organizer=request.event.organizer.slug event=request.event.slug %}"
+               class="btn btn-default"><i class="fa fa-plus"></i> {% trans "Create a new order form" %}</a>
+        </p>
+        <div class="table-responsive">
+            <table class="table table-condensed table-hover">
+                <thead>
+                <tr>
+                    <th>{% trans "Name" %}</th>
+                    <th>{% trans "Products" %}</th>
+                    <th class="text-right">{% trans "Fields" %}</th>
+                    <th class="action-col-2"></th>
+                </tr>
+                </thead>
+                <tbody>
+                {% for order_form in order_forms %}
+                    <tr>
+                        <td>
+                            <strong>
+                                <a href="{% url 'plugins:exhibition:products.order_forms.fields' organizer=request.event.organizer.slug event=request.event.slug pk=order_form.pk %}">{{ order_form.name }}</a>
+                            </strong>
+                        </td>
+                        <td>
+                            {% for product in order_form.products.all %}{{ product }}{% if not forloop.last %}, {% endif %}{% empty %}<span class="text-muted">{% trans "Not assigned to a product" %}</span>{% endfor %}
+                        </td>
+                        <td class="text-right">{{ order_form.question_count }}</td>
+                        <td class="text-right flip">
+                            <a href="{% url 'plugins:exhibition:products.order_forms.edit' organizer=request.event.organizer.slug event=request.event.slug pk=order_form.pk %}"
+                               class="btn btn-default btn-sm" title="{% trans 'Rename' %}" data-toggle="tooltip"><i class="fa fa-edit"></i></a>
+                            <a href="{% url 'plugins:exhibition:products.order_forms.delete' organizer=request.event.organizer.slug event=request.event.slug pk=order_form.pk %}"
+                               class="btn btn-delete btn-danger btn-sm" title="{% trans 'Delete' %}" data-toggle="tooltip"><i class="fa fa-trash"></i></a>
+                        </td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    {% endif %}
+{% endblock %}

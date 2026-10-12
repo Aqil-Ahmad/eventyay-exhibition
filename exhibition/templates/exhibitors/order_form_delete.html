@@ -1,0 +1,46 @@
+{% extends "exhibitors/base.html" %}
+{% load i18n %}
+
+{% block title %}{{ request.event.name }} - {% trans "Delete order form" %}{% endblock %}
+
+{% block exhibitors_header %}
+    <h1>{% trans "Delete order form" %}</h1>
+{% endblock %}
+
+{% block exhibitors_content %}
+    <form action="" method="post">
+        {% csrf_token %}
+        {% if has_answers %}
+            <p>
+                {% blocktrans trimmed with name=object.name %}
+                    Buyers have answered the order form <strong>{{ name }}</strong>, so it cannot be deleted. You can
+                    deactivate its fields instead, or assign another form to its products.
+                {% endblocktrans %}
+            </p>
+        {% else %}
+            <p>
+                {% blocktrans trimmed with name=object.name %}
+                    Are you sure you want to delete the order form <strong>{{ name }}</strong> and its fields?
+                {% endblocktrans %}
+            </p>
+            {% if products %}
+                <div class="alert alert-warning">
+                    {% trans "These products will no longer ask buyers any questions:" %}
+                    <ul>
+                        {% for product in products %}
+                            <li>{{ product }}</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            {% endif %}
+        {% endif %}
+        <div class="form-group submit-group">
+            {% if not has_answers %}
+                <button type="submit" class="btn btn-danger btn-lg">{% trans "Delete" %}</button>
+            {% endif %}
+            <a class="btn btn-default btn-lg" href="{% url 'plugins:exhibition:products.order_forms' organizer=request.event.organizer.slug event=request.event.slug %}">
+                {% trans "Cancel" %}
+            </a>
+        </div>
+    </form>
+{% endblock %}

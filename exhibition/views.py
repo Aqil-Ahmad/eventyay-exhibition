@@ -42,7 +42,10 @@ from .forms import (
     ExhibitionDefaultFieldForm,
     ExhibitionEmailQueueForm,
     ExhibitionMailTemplatesForm,
+    ExhibitionOrderFormModelForm,
     ExhibitionOrderMarkPaidForm,
+    ExhibitionOrderQuestionForm,
+    ExhibitionOrderQuestionOptionFormSet,
     ExhibitionProductCategoryForm,
     ExhibitionProductForm,
     ExhibitionQuestionForm,
@@ -68,6 +71,12 @@ from .models import (
     LOG_GROUP_ADDED,
     LOG_GROUP_CHANGED,
     LOG_GROUP_DELETED,
+    LOG_ORDER_FORM_ADDED,
+    LOG_ORDER_FORM_CHANGED,
+    LOG_ORDER_FORM_DELETED,
+    LOG_ORDER_QUESTION_ADDED,
+    LOG_ORDER_QUESTION_CHANGED,
+    LOG_ORDER_QUESTION_DELETED,
     LOG_ORGANIZATION_ADDED,
     LOG_ORGANIZATION_CHANGED,
     LOG_ORGANIZATION_DELETED,
@@ -95,7 +104,11 @@ from .models import (
     ExhibitionCustomEmailTemplate,
     ExhibitionEmailQueue,
     ExhibitionOrder,
+    ExhibitionOrderAnswer,
+    ExhibitionOrderForm,
     ExhibitionOrderPosition,
+    ExhibitionOrderQuestion,
+    ExhibitionOrderQuestionOption,
     ExhibitionOrderStateError,
     ExhibitionProduct,
     ExhibitionProductCategory,
@@ -2078,6 +2091,11 @@ class ExhibitionOrderDetailView(ExhibitionOrderMixin, TemplateView):
         context["payment_method_name"] = payment_method_names(self.request.event).get(
             self.order.payment_provider, self.order.payment_provider
         )
+        context["answers"] = (
+            self.order.answers.select_related("question__order_form")
+            .prefetch_related("options")
+            .order_by("question__order_form__name", "question__order_form_id", "question__position", "question_id")
+        )
         return context
 
 
@@ -2306,6 +2324,8 @@ class ExhibitionQuestionListView(EventPermissionRequiredMixin, ListView):
 
 class ExhibitionQuestionOptionFormSetMixin:
     option_formset_prefix = "options"
+    option_formset_class = ExhibitionQuestionOptionFormSet
+    option_model = ExhibitionQuestionOption
 
     @cached_property
     def option_formset(self):
@@ -2314,9 +2334,9 @@ class ExhibitionQuestionOptionFormSetMixin:
             if self.request.method == "POST"
             else self.object is not None and self.object.variant in QUESTION_OPTION_VARIANTS
         )
-        return ExhibitionQuestionOptionFormSet(
+        return self.option_formset_class(
             self.request.POST if self.request.method == "POST" else None,
-            queryset=self.object.options.all() if self.object else ExhibitionQuestionOption.objects.none(),
+            queryset=self.object.options.all() if self.object else self.option_model.objects.none(),
             event=self.request.event,
             prefix=self.option_formset_prefix,
             requires_option=requires_option,
@@ -2450,6 +2470,217 @@ class ExhibitionQuestionDeleteView(EventPermissionRequiredMixin, DeleteView):
             "plugins:exhibition:call.questions",
             kwargs=event_kwargs(self.request.event),
         )
+
+
+class ExhibitionOrderFormMixin(EventPermissionRequiredMixin):
+    """Order forms belong to the exhibition setup, like the products they are assigned to."""
+
+    permission = "can_change_event_settings"
+
+    def get_queryset(self):
+        return ExhibitionOrderForm.objects.filter(event=self.request.event)
+
+    def get_success_url(self):
+        return reverse("plugins:exhibition:products.order_forms", kwargs=event_kwargs(self.request.event))
+
+
+class ExhibitionOrderFormListView(ExhibitionOrderFormMixin, ListView):
+    template_name = "exhibitors/order_forms.html"
+    context_object_name = "order_forms"
+
+    def get_queryset(self):
+        return (
+            super()
+            .get_queryset()
+            .annotate(question_count=Count("questions", distinct=True))
+            .prefetch_related(Prefetch("products", queryset=ExhibitionProduct.objects.in_sales_order()))
+        )
+
+
+class ExhibitionOrderFormEditMixin(ExhibitionOrderFormMixin):
+    model = ExhibitionOrderForm
+    form_class = ExhibitionOrderFormModelForm
+    template_name = "exhibitors/order_form_form.html"
+
+    def get_success_url(self):
+        return reverse(
+            "plugins:exhibition:products.order_forms.fields",
+            kwargs={**event_kwargs(self.request.event), "pk": self.object.pk},
+        )
+
+    def form_invalid(self, form):
+        messages.error(self.request, _("We could not save your changes. See below for details."))
+        return super().form_invalid(form)
+
+
+class ExhibitionOrderFormCreateView(ExhibitionOrderFormEditMixin, CreateView):
+    def form_valid(self, form):
+        form.instance.event = self.request.event
+        with transaction.atomic():
+            response = super().form_valid(form)
+            self.object.log_action(LOG_ORDER_FORM_ADDED, data={"name": self.object.name}, user=self.request.user)
+        messages.success(self.request, _("Your changes have been saved."))
+        return response
+
+
+class ExhibitionOrderFormEditView(ExhibitionOrderFormEditMixin, UpdateView):
+    def form_valid(self, form):
+        with transaction.atomic():
+            response = super().form_valid(form)
+            if form.has_changed():
+                self.object.log_action(
+                    LOG_ORDER_FORM_CHANGED,
+                    data={"changed": form.changed_data},
+                    user=self.request.user,
+                )
+        messages.success(self.request, _("Your changes have been saved."))
+        return response
+
+
+class ExhibitionOrderFormDeleteView(ExhibitionOrderFormMixin, DeleteView):
+    model = ExhibitionOrderForm
+    template_name = "exhibitors/order_form_delete.html"
+
+    def has_answers(self):
+        return ExhibitionOrderAnswer.objects.filter(question__order_form=self.object).exists()
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["has_answers"] = self.has_answers()
+        context["products"] = list(self.object.products.all())
+        return context
+
+    def form_valid(self, form):
+        if self.has_answers():
+            messages.error(
+                self.request,
+                _(
+                    "Buyers have answered this order form, so it cannot be deleted. You can deactivate its fields "
+                    "instead."
+                ),
+            )
+            return redirect(self.get_success_url())
+        self.object.log_action(LOG_ORDER_FORM_DELETED, data={"name": self.object.name}, user=self.request.user)
+        return super().form_valid(form)
+
+
+class ExhibitionOrderQuestionMixin(EventPermissionRequiredMixin):
+    permission = "can_change_event_settings"
+    pk_url_kwarg = "question"
+
+    @cached_property
+    def order_form(self):
+        return get_object_or_404(ExhibitionOrderForm, event=self.request.event, pk=self.kwargs["pk"])
+
+    def get_queryset(self):
+        return ExhibitionOrderQuestion.objects.filter(order_form=self.order_form)
+
+    def get_fields_url(self):
+        return reverse(
+            "plugins:exhibition:products.order_forms.fields",
+            kwargs={**event_kwargs(self.request.event), "pk": self.order_form.pk},
+        )
+
+    def get_success_url(self):
+        return self.get_fields_url()
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["order_form"] = self.order_form
+        context["cancel_url"] = self.get_fields_url()
+        return context
+
+
+class ExhibitionOrderFormFieldsView(ExhibitionOrderQuestionMixin, ListView):
+    template_name = "exhibitors/order_form_fields.html"
+    context_object_name = "questions"
+
+    def get_queryset(self):
+        return super().get_queryset().annotate(answer_count=Count("answers"))
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["products"] = list(self.order_form.products.in_sales_order())
+        return context
+
+
+class ExhibitionOrderQuestionFormMixin(ExhibitionOrderQuestionMixin, ExhibitionQuestionOptionFormSetMixin):
+    model = ExhibitionOrderQuestion
+    form_class = ExhibitionOrderQuestionForm
+    template_name = "exhibitors/call_question_form.html"
+    option_formset_class = ExhibitionOrderQuestionOptionFormSet
+    option_model = ExhibitionOrderQuestionOption
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs["order_form"] = self.order_form
+        return kwargs
+
+    def form_invalid(self, form):
+        messages.error(self.request, _("We could not save your changes. See below for details."))
+        return super().form_invalid(form)
+
+
+class ExhibitionOrderQuestionCreateView(ExhibitionOrderQuestionFormMixin, CreateView):
+    def form_valid(self, form):
+        if not self.option_formset.is_valid():
+            return self.form_invalid(form)
+        with transaction.atomic():
+            response = super().form_valid(form)
+            self.save_option_formset()
+            self.object.log_action(
+                LOG_ORDER_QUESTION_ADDED,
+                data={"question": self.object.localized_question},
+                user=self.request.user,
+            )
+        return response
+
+
+class ExhibitionOrderQuestionEditView(ExhibitionOrderQuestionFormMixin, UpdateView):
+    def form_valid(self, form):
+        if not self.option_formset.is_valid():
+            return self.form_invalid(form)
+        with transaction.atomic():
+            response = super().form_valid(form)
+            self.save_option_formset()
+            self.object.log_action(
+                LOG_ORDER_QUESTION_CHANGED,
+                data={"changed": form.changed_data},
+                user=self.request.user,
+            )
+        return response
+
+
+class ExhibitionOrderQuestionDeleteView(ExhibitionOrderQuestionMixin, DeleteView):
+    model = ExhibitionOrderQuestion
+    template_name = "exhibitors/order_question_delete.html"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["has_answers"] = self.object.answers.exists()
+        context["dependent_questions"] = list(self.object.dependent_questions.all())
+        return context
+
+    def form_valid(self, form):
+        if self.object.answers.exists():
+            messages.error(
+                self.request,
+                _("Buyers have answered this field, so it cannot be deleted. You can deactivate it instead."),
+            )
+            return redirect(self.get_success_url())
+        self.object.log_action(
+            LOG_ORDER_QUESTION_DELETED,
+            data={"question": self.object.localized_question},
+            user=self.request.user,
+        )
+        return super().form_valid(form)
+
+
+class ExhibitionOrderQuestionReorderView(PositionReorderMixin):
+    position_field = "position"
+
+    def get_scope_queryset(self, request):
+        return ExhibitionOrderQuestion.objects.filter(order_form__event=request.event, order_form_id=self.kwargs["pk"])
 
 
 class DefaultFieldMixin(EventPermissionRequiredMixin):

@@ -1,0 +1,86 @@
+{% extends "exhibitors/base.html" %}
+{% load i18n %}
+{% load static %}
+
+{% block title %}{{ request.event.name }} - {{ order_form.name }}{% endblock %}
+
+{% block custom_header %}
+    {{ block.super }}
+    <link rel="stylesheet" href="{% static 'exhibition/css/dragsort-table.css' %}">
+    <script defer src="{% static 'orga/js/dragsort.js' %}"></script>
+{% endblock %}
+
+{% block exhibitors_header %}
+    <h1>{% blocktrans trimmed with name=order_form.name %}Order form: {{ name }}{% endblocktrans %}</h1>
+{% endblock %}
+
+{% block exhibitors_content %}
+    <p>
+        {% if products %}
+            {% trans "Buyers answer this form when they order:" %}
+            {% for product in products %}<strong>{{ product }}</strong>{% if not forloop.last %}, {% endif %}{% endfor %}
+        {% else %}
+            {% trans "This form is not assigned to a product yet. Choose it as the order form on a product to use it." %}
+        {% endif %}
+    </p>
+    <p class="list-toolbar">
+        <a href="{% url 'plugins:exhibition:products.order_forms' organizer=request.event.organizer.slug event=request.event.slug %}" class="btn btn-default">
+            <i class="fa fa-arrow-left"></i> {% trans "All order forms" %}
+        </a>
+        <a href="{% url 'plugins:exhibition:products.order_forms.fields.add' organizer=request.event.organizer.slug event=request.event.slug pk=order_form.pk %}" class="btn btn-default">
+            <i class="fa fa-plus"></i> {% trans "Add a field" %}
+        </a>
+        <a href="{% url 'plugins:exhibition:products.order_forms.edit' organizer=request.event.organizer.slug event=request.event.slug pk=order_form.pk %}" class="btn btn-default">
+            <i class="fa fa-edit"></i> {% trans "Rename" %}
+        </a>
+    </p>
+    {% if not questions %}
+        <div class="empty-collection">
+            <p>{% trans "This order form has no fields yet." %}</p>
+        </div>
+    {% else %}
+        <div class="table-responsive">
+            <table class="table table-condensed table-hover dragsort-table">
+                <thead>
+                <tr>
+                    <th>{% trans "Field" %}</th>
+                    <th>{% trans "Type" %}</th>
+                    <th>{% trans "Required" %}</th>
+                    <th>{% trans "Only for booth products" %}</th>
+                    <th class="text-right">{% trans "Answers" %}</th>
+                    <th class="action-col-2"></th>
+                </tr>
+                </thead>
+                <tbody dragsort-url="{% url 'plugins:exhibition:products.order_forms.fields.reorder' organizer=request.event.organizer.slug event=request.event.slug pk=order_form.pk %}">
+                {% for question in questions %}
+                    <tr dragsort-id="{{ question.pk }}">
+                        <td>
+                            <strong>
+                                {% if not question.active %}<strike>{% endif %}
+                                <a href="{% url 'plugins:exhibition:products.order_forms.fields.edit' organizer=request.event.organizer.slug event=request.event.slug pk=order_form.pk question=question.pk %}">{{ question.localized_question }}</a>
+                                {% if not question.active %}</strike>{% endif %}
+                            </strong>
+                            {% if question.dependency_question_id %}
+                                <span class="fa fa-code-fork text-muted" data-toggle="tooltip" title="{% trans 'Only shown depending on another field' %}" aria-hidden="true"></span>
+                            {% endif %}
+                        </td>
+                        <td>{{ question.get_variant_display }}</td>
+                        <td>{% if question.required %}{% trans "Yes" %}{% else %}{% trans "No" %}{% endif %}</td>
+                        <td>{% if question.booth_only %}{% trans "Yes" %}{% else %}{% trans "No" %}{% endif %}</td>
+                        <td class="text-right">{{ question.answer_count }}</td>
+                        <td class="text-right flip">
+                            <a href="{% url 'plugins:exhibition:products.order_forms.fields.edit' organizer=request.event.organizer.slug event=request.event.slug pk=order_form.pk question=question.pk %}"
+                               class="btn btn-default btn-sm" title="{% trans 'Edit' %}" data-toggle="tooltip"><i class="fa fa-edit"></i></a>
+                            <a href="{% url 'plugins:exhibition:products.order_forms.fields.delete' organizer=request.event.organizer.slug event=request.event.slug pk=order_form.pk question=question.pk %}"
+                               class="btn btn-delete btn-danger btn-sm" title="{% trans 'Delete' %}" data-toggle="tooltip"><i class="fa fa-trash"></i></a>
+                            <button type="button" draggable="true" class="btn btn-primary btn-sm dragsort-button" title="{% trans 'Move' %}" aria-label="{% trans 'Move' %}" data-toggle="tooltip">
+                                <i class="fa fa-arrows"></i>
+                            </button>
+                        </td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    {% endif %}
+{% endblock %}
