@@ -38,7 +38,18 @@ def paid_products_lack_payment_method(event):
     )
 
 
-def place_exhibition_order(event, products, *, name, email, phone="", answers=None, payment_provider="", user=None):
+def place_exhibition_order(
+    event,
+    products,
+    *,
+    name,
+    email,
+    organization_name="",
+    phone="",
+    answers=None,
+    payment_provider="",
+    user=None,
+):
     """Place an order for the products at their current prices; a free order is marked paid at once."""
     products = list(products)
     if not products:
@@ -56,6 +67,7 @@ def place_exhibition_order(event, products, *, name, email, phone="", answers=No
     with transaction.atomic():
         order = ExhibitionOrder.objects.create(
             event=event,
+            organization_name=organization_name,
             name=name,
             email=email,
             phone=phone,

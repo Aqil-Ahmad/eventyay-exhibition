@@ -1370,6 +1370,7 @@ class ExhibitionOrder(LoggedModel):
         db_index=True,
         verbose_name=_("Status"),
     )
+    organization_name = models.CharField(max_length=255, blank=True, verbose_name=_("Organization"))
     name = models.CharField(max_length=255, verbose_name=_("Contact name"))
     email = models.EmailField(verbose_name=_("Email"))
     phone = models.CharField(max_length=64, blank=True, verbose_name=_("Phone number"))
