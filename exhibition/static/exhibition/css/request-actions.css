@@ -52,6 +52,17 @@
     border-color: #21ba45;
 }
 
+.request-action-unconfirm {
+    color: #767676;
+    border-color: #767676;
+}
+
+.request-action-unconfirm:hover,
+.request-action-unconfirm:focus {
+    background: #767676;
+    color: #fff;
+}
+
 .request-action-reject {
     color: #db2828;
     border-color: #db2828;
