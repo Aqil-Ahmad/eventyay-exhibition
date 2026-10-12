@@ -1,5 +1,6 @@
 import io
 import json
+import logging
 from urllib.parse import quote, urlencode
 
 from defusedcsv import csv
@@ -112,6 +113,8 @@ from .utils import (
     sync_exhibitor_from_request,
 )
 
+logger = logging.getLogger(__name__)
+
 
 def event_kwargs(event):
     return {
@@ -151,8 +154,14 @@ def send_request_confirmation(event, exhibition_request, requestor):
             mail_helpers.REQUEST_NEW,
             send_now=True,
             requestor=requestor,
-        )
+        ),
+        robust=True,
     )
+
+
+def send_request_organizer_notification(event, exhibition_request, action):
+    """Notify eligible organizers once the applicant action commits."""
+    transaction.on_commit(lambda: mail_helpers.send_request_organizer_emails(event, exhibition_request, action))
 
 
 def queue_exhibitor_access_mail(request, exhibitor):
@@ -1058,6 +1067,11 @@ class UserRequestCreateView(
         self.save_link_formsets()
         if form.instance.state == ExhibitionRequestState.SUBMITTED:
             send_request_confirmation(self.request.event, self.object, self.request.user)
+            send_request_organizer_notification(
+                self.request.event,
+                self.object,
+                "submitted",
+            )
         messages.success(self.request, _("Your request has been saved."))
         return response
 
@@ -1133,6 +1147,11 @@ class UserRequestEditView(
             and previous_state != ExhibitionRequestState.SUBMITTED
         ):
             send_request_confirmation(self.request.event, self.object, self.request.user)
+            send_request_organizer_notification(
+                self.request.event,
+                self.object,
+                "submitted",
+            )
         if form.changed_data:
             self.object.log_action(
                 LOG_REQUEST_CHANGED,
@@ -1182,6 +1201,11 @@ class UserRequestWithdrawView(PublicCallEnabledMixin, PublicEventLoginRequiredMi
         self.object = self.get_object()
         if self.object.can_be_withdrawn:
             self.object.withdraw(requestor=request.user)
+            send_request_organizer_notification(
+                request.event,
+                self.object,
+                "withdrawn",
+            )
             messages.success(request, _("Your request has been withdrawn."))
         else:
             messages.error(request, _("This request can no longer be withdrawn."))
@@ -1218,6 +1242,11 @@ class UserRequestReinstateView(PublicCallEnabledMixin, PublicEventLoginRequiredM
         self.object = self.get_object()
         if self.object.can_be_reinstated:
             self.object.reopen(requestor=request.user)
+            send_request_organizer_notification(
+                request.event,
+                self.object,
+                "reinstated",
+            )
             messages.success(request, _("Your request has been reinstated and is pending review again."))
         else:
             messages.error(request, _("This request can no longer be reinstated."))
@@ -3343,6 +3372,7 @@ class EmailTemplatesView(EventPermissionRequiredMixin, TemplateView):
                 (mail_helpers.REQUEST_NEW, _("Request received (confirmation)")),
                 (mail_helpers.REQUEST_ACCEPTED, _("Request accepted")),
                 (mail_helpers.REQUEST_REJECTED, _("Request rejected")),
+                (mail_helpers.REQUEST_ORGANIZER, _("Request notification (organizer)")),
                 (mail_helpers.EXHIBITOR_ACCESS, _("Exhibitor lead scanning key")),
                 (mail_helpers.VOUCHERS, _("Vouchers")),
                 (mail_helpers.REQUEST_MESSAGE, _("Request more information")),
