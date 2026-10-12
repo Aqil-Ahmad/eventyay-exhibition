@@ -561,6 +561,13 @@ def test_sponsor_form_hides_exhibitor_fields(event):
 
 
 @pytest.mark.django_db
+def test_new_sponsor_form_does_not_preselect_exhibitor(event):
+    form = ExhibitorInfoForm(event=event, organization_type="sponsor")
+
+    assert form["is_exhibitor"].value() is False
+
+
+@pytest.mark.django_db
 def test_exhibitor_form_hides_sponsor_fields(event):
     form = ExhibitorInfoForm(event=event, organization_type="exhibitor")
     assert "booth_id" in form.fields

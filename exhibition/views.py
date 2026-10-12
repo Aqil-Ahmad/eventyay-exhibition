@@ -159,6 +159,11 @@ def send_request_confirmation(event, exhibition_request, requestor):
     )
 
 
+def queue_profile_invitation(event, exhibitor):
+    """Queue the invitation to edit a created profile in the same transaction, for the organizer to send."""
+    return mail_helpers.queue_exhibitor_profile_email(event, exhibitor)
+
+
 def send_request_organizer_notification(event, exhibition_request, action):
     """Notify eligible organizers once the applicant action commits."""
     transaction.on_commit(lambda: mail_helpers.send_request_organizer_emails(event, exhibition_request, action))
@@ -1263,8 +1268,12 @@ class ExhibitorLinkFormsetMixin:
     social_formset_prefix = "social_links"
     extra_formset_prefix = "extra_links"
 
+    @property
+    def exhibition_event(self):
+        return self.request.event
+
     def get_request_field_settings(self):
-        settings = ExhibitorSettings.objects.get_or_create(event=self.request.event)[0]
+        settings = ExhibitorSettings.objects.get_or_create(event=self.exhibition_event)[0]
         return settings.normalized_request_field_settings
 
     def request_field_is_active(self, key):
@@ -1275,7 +1284,7 @@ class ExhibitorLinkFormsetMixin:
 
     def get_formset_instance(self):
         obj = getattr(self, "object", None)
-        return obj if obj is not None else ExhibitorInfo(event=self.request.event)
+        return obj if obj is not None else ExhibitorInfo(event=self.exhibition_event)
 
     def get_social_formset(self):
         return ExhibitorSocialLinkFormSet(
@@ -2179,6 +2188,7 @@ class ExhibitorCreateView(ExhibitorLinkFormsetMixin, EventPermissionRequiredMixi
         )
         if access_newly_granted(form.instance):
             grant_lead_scanning_access(self.request, self.object)
+        queue_profile_invitation(self.request.event, self.object)
         return response
 
     def get_context_data(self, **kwargs):
@@ -3375,6 +3385,7 @@ class EmailTemplatesView(EventPermissionRequiredMixin, TemplateView):
                 (mail_helpers.REQUEST_ORGANIZER, _("Request notification (organizer)")),
                 (mail_helpers.EXHIBITOR_ACCESS, _("Exhibitor lead scanning key")),
                 (mail_helpers.VOUCHERS, _("Vouchers")),
+                (mail_helpers.EXHIBITOR_PROFILE, _("Profile created for the exhibitor")),
                 (mail_helpers.REQUEST_MESSAGE, _("Request more information")),
             )
         ]
