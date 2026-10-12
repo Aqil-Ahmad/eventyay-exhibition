@@ -31,6 +31,31 @@
             <a href="{{ payment_settings_url }}">{% trans "Open payment settings" %}</a>
         </div>
     {% endif %}
+    {% for quota in booth_quotas %}
+        <div class="alert alert-info">
+            {% if quota.size is None %}
+                {% blocktrans trimmed with name=quota.name used=quota.used %}
+                    Booth capacity <strong>{{ name }}</strong>: {{ used }} booths sold, no limit set.
+                {% endblocktrans %}
+            {% else %}
+                {% blocktrans trimmed with name=quota.name remaining=quota.remaining size=quota.size %}
+                    Booth capacity <strong>{{ name }}</strong>: {{ remaining }} of {{ size }} booths left.
+                {% endblocktrans %}
+            {% endif %}
+        </div>
+    {% endfor %}
+    {% if booth_products_without_quota %}
+        <div class="alert alert-warning">
+            {% blocktrans trimmed count count=booth_products_without_quota %}
+                One active product includes a booth but is not on a booth capacity quota, so it can be sold
+                without a limit on booths.
+            {% plural %}
+                {{ count }} active products include a booth but are not on a booth capacity quota, so they can be
+                sold without a limit on booths.
+            {% endblocktrans %}
+            <a href="{% url 'plugins:exhibition:products.quotas' organizer=request.event.organizer.slug event=request.event.slug %}">{% trans "Manage quotas" %}</a>
+        </div>
+    {% endif %}
     {% if not products %}
         <div class="empty-collection">
             <p>{% trans "You haven't created any products yet." %}</p>
