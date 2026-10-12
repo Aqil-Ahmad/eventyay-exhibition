@@ -136,6 +136,10 @@ def exhibition_answer_path(instance, filename):
     return os.path.join("exhibition-requests", str(code), "answers", str(instance.question_id), filename)
 
 
+def exhibition_order_answer_path(instance, filename):
+    return os.path.join("exhibition-orders", str(instance.order.code), "answers", str(instance.question_id), filename)
+
+
 def request_slides_path(instance, filename):
     return request_file_path(instance, filename, "slides")
 
@@ -630,6 +634,12 @@ LOG_ORDER_EXPIRED = f"{LOG_PREFIX}.order.expired"
 LOG_QUOTA_ADDED = f"{LOG_PREFIX}.quota.added"
 LOG_QUOTA_CHANGED = f"{LOG_PREFIX}.quota.changed"
 LOG_QUOTA_DELETED = f"{LOG_PREFIX}.quota.deleted"
+LOG_ORDER_FORM_ADDED = f"{LOG_PREFIX}.order_form.added"
+LOG_ORDER_FORM_CHANGED = f"{LOG_PREFIX}.order_form.changed"
+LOG_ORDER_FORM_DELETED = f"{LOG_PREFIX}.order_form.deleted"
+LOG_ORDER_QUESTION_ADDED = f"{LOG_PREFIX}.order_question.added"
+LOG_ORDER_QUESTION_CHANGED = f"{LOG_PREFIX}.order_question.changed"
+LOG_ORDER_QUESTION_DELETED = f"{LOG_PREFIX}.order_question.deleted"
 
 SUBMITTER_PROFILE_FIELD_LABELS = {
     "description": _("Organization Description"),
@@ -996,12 +1006,9 @@ QUESTION_OPTION_VARIANTS = frozenset(
 DEPENDENCY_PARENT_VARIANTS = frozenset({ExhibitionQuestionVariant.BOOLEAN}) | QUESTION_OPTION_VARIANTS
 
 
-class ExhibitionQuestion(LoggedModel):
-    event = models.ForeignKey(
-        Event,
-        on_delete=models.CASCADE,
-        related_name="exhibition_questions",
-    )
+class BaseExhibitionQuestion(LoggedModel):
+    """The custom field definition shared by the exhibitor form and the order forms."""
+
     variant = models.CharField(
         max_length=32,
         choices=ExhibitionQuestionVariant.choices,
@@ -1029,6 +1036,7 @@ class ExhibitionQuestion(LoggedModel):
     dependency_values = MultiStringField(default=list, verbose_name=_("Dependency values"))
 
     class Meta:
+        abstract = True
         ordering = ("position", "id")
 
     @property
@@ -1045,6 +1053,17 @@ class ExhibitionQuestion(LoggedModel):
 
     def __str__(self):
         return self.localized_question or str(self.question)
+
+
+class ExhibitionQuestion(BaseExhibitionQuestion):
+    event = models.ForeignKey(
+        Event,
+        on_delete=models.CASCADE,
+        related_name="exhibition_questions",
+    )
+
+    class Meta(BaseExhibitionQuestion.Meta):
+        pass
 
 
 class ExhibitionQuestionOption(models.Model):
@@ -1070,7 +1089,8 @@ def prune_dependency_option(option):
     becoming permanently invisible.
     """
     value = str(option.pk)
-    for dependent in ExhibitionQuestion.objects.filter(dependency_question_id=option.question_id):
+    question_model = option._meta.get_field("question").related_model
+    for dependent in question_model.objects.filter(dependency_question_id=option.question_id):
         remaining = [item for item in dependent.dependency_values if item != value]
         if remaining == list(dependent.dependency_values):
             continue
@@ -1085,23 +1105,8 @@ def clear_dependencies_on(question):
     question.dependent_questions.update(dependency_question=None, dependency_values=[])
 
 
-class ExhibitionAnswer(models.Model):
-    question = models.ForeignKey(
-        ExhibitionQuestion,
-        on_delete=models.CASCADE,
-        related_name="answers",
-    )
-    exhibition_request = models.ForeignKey(
-        ExhibitionRequest,
-        on_delete=models.CASCADE,
-        related_name="answers",
-    )
-    answer = models.TextField(blank=True)
-    file = models.FileField(upload_to=exhibition_answer_path, null=True, blank=True)
-    options = models.ManyToManyField(ExhibitionQuestionOption, related_name="answers")
-
-    class Meta:
-        unique_together = ("question", "exhibition_request")
+class AnswerDisplayMixin:
+    """How a stored answer reads back, whatever form it was given on."""
 
     @property
     def answer_string(self):
@@ -1122,6 +1127,25 @@ class ExhibitionAnswer(models.Model):
     @property
     def file_url(self):
         return self.file.url if self.file else ""
+
+
+class ExhibitionAnswer(AnswerDisplayMixin, models.Model):
+    question = models.ForeignKey(
+        ExhibitionQuestion,
+        on_delete=models.CASCADE,
+        related_name="answers",
+    )
+    exhibition_request = models.ForeignKey(
+        ExhibitionRequest,
+        on_delete=models.CASCADE,
+        related_name="answers",
+    )
+    answer = models.TextField(blank=True)
+    file = models.FileField(upload_to=exhibition_answer_path, null=True, blank=True)
+    options = models.ManyToManyField(ExhibitionQuestionOption, related_name="answers")
+
+    class Meta:
+        unique_together = ("question", "exhibition_request")
 
 
 class Lead(models.Model):
@@ -1273,6 +1297,15 @@ class ExhibitionProduct(LoggedModel):
         help_text=_("This product will not be sold after the given date."),
     )
     position = models.IntegerField(default=0)
+    order_form = models.ForeignKey(
+        "ExhibitionOrderForm",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="products",
+        verbose_name=_("Order form"),
+        help_text=_("The questions buyers of this product answer when they order it."),
+    )
     purpose = models.CharField(
         max_length=16,
         choices=ExhibitionProductPurpose.choices,
@@ -1395,7 +1428,6 @@ class ExhibitionOrder(LoggedModel):
     phone = models.CharField(max_length=64, blank=True, verbose_name=_("Phone number"))
     total = models.DecimalField(max_digits=13, decimal_places=2, verbose_name=_("Total"))
     currency = models.CharField(max_length=10, verbose_name=_("Currency"))
-    answers = models.JSONField(default=dict, blank=True, verbose_name=_("Order form answers"))
     payment_provider = models.CharField(max_length=255, blank=True, verbose_name=_("Payment method"))
     payment_reference = models.CharField(max_length=255, blank=True, verbose_name=_("Payment reference"))
     payment_date = models.DateTimeField(null=True, blank=True, verbose_name=_("Payment date"))
@@ -1502,6 +1534,101 @@ class ExhibitionOrderPosition(models.Model):
         return f"{self.order.code}: {self.product}"
 
 
+class ExhibitionOrderForm(LoggedModel):
+    """A set of questions buyers answer when they order the products it is assigned to."""
+
+    event = models.ForeignKey(
+        Event,
+        on_delete=models.CASCADE,
+        related_name="exhibition_order_forms",
+    )
+    name = models.CharField(
+        max_length=255,
+        verbose_name=_("Name"),
+        help_text=_("Only shown to you, to tell your order forms apart."),
+    )
+
+    class Meta:
+        verbose_name = _("Exhibition order form")
+        verbose_name_plural = _("Exhibition order forms")
+        ordering = ("name", "id")
+
+    def __str__(self):
+        return self.name
+
+
+class ExhibitionOrderQuestion(BaseExhibitionQuestion):
+    order_form = models.ForeignKey(
+        ExhibitionOrderForm,
+        on_delete=models.CASCADE,
+        related_name="questions",
+    )
+    booth_only = models.BooleanField(
+        default=False,
+        verbose_name=_("Only for booth products"),
+        help_text=_(
+            "Ask this only when the order includes a product with an exhibition booth, for example for booth "
+            "requirements, furniture or electricity."
+        ),
+    )
+
+    class Meta(BaseExhibitionQuestion.Meta):
+        pass
+
+    @property
+    def event(self):
+        return self.order_form.event
+
+
+class ExhibitionOrderQuestionOption(models.Model):
+    question = models.ForeignKey(
+        ExhibitionOrderQuestion,
+        on_delete=models.CASCADE,
+        related_name="options",
+    )
+    answer = I18nCharField(verbose_name=_("Response"))
+    position = models.IntegerField(default=0)
+
+    class Meta:
+        ordering = ("position", "id")
+
+    def __str__(self):
+        return localize_event_text(self.answer) or str(self.answer)
+
+
+class ExhibitionOrderAnswer(AnswerDisplayMixin, models.Model):
+    order = models.ForeignKey(
+        ExhibitionOrder,
+        on_delete=models.CASCADE,
+        related_name="answers",
+    )
+    question = models.ForeignKey(
+        ExhibitionOrderQuestion,
+        on_delete=models.RESTRICT,
+        related_name="answers",
+    )
+    answer = models.TextField(blank=True)
+    file = models.FileField(upload_to=exhibition_order_answer_path, null=True, blank=True)
+    options = models.ManyToManyField(ExhibitionOrderQuestionOption, related_name="answers")
+
+    class Meta:
+        unique_together = ("question", "order")
+
+
+def order_form_questions(products):
+    """The active questions of the order forms of the products, booth questions only if a product has a booth."""
+    form_ids = {product.order_form_id for product in products if product.order_form_id}
+    questions = (
+        ExhibitionOrderQuestion.objects.filter(order_form_id__in=form_ids, active=True)
+        .select_related("order_form")
+        .prefetch_related("options")
+        .order_by("order_form__name", "order_form_id", "position", "pk")
+    )
+    if not any(product.includes_booth for product in products):
+        questions = questions.filter(booth_only=False)
+    return questions
+
+
 class ExhibitionQuotaQuerySet(models.QuerySet):
     def with_usage(self):
         """Annotate ``used``: the products sold against each quota by orders that still hold their place."""
@@ -1519,11 +1646,7 @@ class ExhibitionQuotaQuerySet(models.QuerySet):
 
 
 class ExhibitionQuota(LoggedModel):
-    """A limit on how many of its products can be sold, kept apart from the ticket quotas.
-
-    A booth capacity quota stands for the physical booths, so only products that include a
-    booth can be on it and digital packages never take a booth away.
-    """
+    """A limit on how many of its products can be sold; a booth capacity quota only holds booth products."""
 
     objects = ExhibitionQuotaQuerySet.as_manager()
 
@@ -1578,11 +1701,7 @@ class ExhibitionQuota(LoggedModel):
 
 
 def reserve_quota_capacity(products):
-    """Lock the quotas of the products and raise ``ExhibitionQuotaExceeded`` if any lacks room for them.
-
-    Call it inside the transaction that creates or revives the order positions, so two buyers
-    cannot both take the last place.
-    """
+    """Lock the products' quotas inside the caller's transaction and raise if one lacks room for them."""
     product_ids = [product.pk for product in products]
     quota_ids = set(
         ExhibitionQuota.products.through.objects.filter(exhibitionproduct_id__in=product_ids).values_list(
