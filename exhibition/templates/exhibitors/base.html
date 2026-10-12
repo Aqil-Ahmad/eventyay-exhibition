@@ -71,6 +71,11 @@
             <span class="sidebar-text">{% trans "Categories" %}</span>
           </a>
         </li>
+        <li>
+          <a href="{% url 'plugins:exhibition:products.quotas' organizer=request.event.organizer.slug event=request.event.slug %}" {% if url_name == 'products.quotas' or url_name == 'products.quotas.add' or url_name == 'products.quotas.edit' or url_name == 'products.quotas.delete' %}class="active"{% endif %}>
+            <span class="sidebar-text">{% trans "Quotas" %}</span>
+          </a>
+        </li>
       </ul>
     </li>
     <li>

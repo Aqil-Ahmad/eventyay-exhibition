@@ -47,6 +47,7 @@ from .forms import (
     ExhibitionProductForm,
     ExhibitionQuestionForm,
     ExhibitionQuestionOptionFormSet,
+    ExhibitionQuotaForm,
     ExhibitionRequestExtraLinkFormSet,
     ExhibitionRequestForm,
     ExhibitionRequestReviewForm,
@@ -81,6 +82,9 @@ from .models import (
     LOG_QUESTION_ADDED,
     LOG_QUESTION_CHANGED,
     LOG_QUESTION_DELETED,
+    LOG_QUOTA_ADDED,
+    LOG_QUOTA_CHANGED,
+    LOG_QUOTA_DELETED,
     LOG_REQUEST_CHANGED,
     LOG_REQUEST_EMAILED,
     LOG_SETTINGS_CHANGED,
@@ -97,6 +101,8 @@ from .models import (
     ExhibitionProductCategory,
     ExhibitionQuestion,
     ExhibitionQuestionOption,
+    ExhibitionQuota,
+    ExhibitionQuotaExceeded,
     ExhibitionRequest,
     ExhibitionRequestState,
     ExhibitorDevice,
@@ -1773,6 +1779,14 @@ class ExhibitionProductListView(ExhibitionProductMixin, PaginationMixin, ListVie
         context = super().get_context_data(**kwargs)
         context["reorder_enabled"] = not context["is_paginated"]
         context["payment_method_missing"] = paid_products_lack_payment_method(self.request.event)
+        context["booth_quotas"] = ExhibitionQuota.objects.filter(
+            event=self.request.event, booth_capacity=True
+        ).with_usage()
+        context["booth_products_without_quota"] = (
+            ExhibitionProduct.objects.filter(event=self.request.event, active=True, includes_booth=True)
+            .exclude(quotas__booth_capacity=True)
+            .count()
+        )
         context["payment_settings_url"] = reverse(
             "control:event.settings.payment", kwargs=event_kwargs(self.request.event)
         )
@@ -1939,6 +1953,74 @@ class ExhibitionProductCategoryReorderView(PositionReorderMixin):
         return ExhibitionProductCategory.objects.filter(event=request.event)
 
 
+class ExhibitionQuotaMixin(EventPermissionRequiredMixin):
+    """Quotas belong to the exhibition setup, like the products they limit."""
+
+    permission = "can_change_event_settings"
+
+    def get_queryset(self):
+        return ExhibitionQuota.objects.filter(event=self.request.event)
+
+    def get_success_url(self):
+        return reverse("plugins:exhibition:products.quotas", kwargs=event_kwargs(self.request.event))
+
+
+class ExhibitionQuotaListView(ExhibitionQuotaMixin, ListView):
+    template_name = "exhibitors/quotas.html"
+    context_object_name = "quotas"
+
+    def get_queryset(self):
+        return (
+            super()
+            .get_queryset()
+            .with_usage()
+            .prefetch_related(Prefetch("products", queryset=ExhibitionProduct.objects.in_sales_order()))
+        )
+
+
+class ExhibitionQuotaFormMixin(ExhibitionQuotaMixin):
+    model = ExhibitionQuota
+    form_class = ExhibitionQuotaForm
+    template_name = "exhibitors/quota_form.html"
+
+    def form_invalid(self, form):
+        messages.error(self.request, _("We could not save your changes. See below for details."))
+        return super().form_invalid(form)
+
+
+class ExhibitionQuotaCreateView(ExhibitionQuotaFormMixin, CreateView):
+    def form_valid(self, form):
+        form.instance.event = self.request.event
+        with transaction.atomic():
+            response = super().form_valid(form)
+            self.object.log_action(LOG_QUOTA_ADDED, data={"name": self.object.name}, user=self.request.user)
+        messages.success(self.request, _("Your changes have been saved."))
+        return response
+
+
+class ExhibitionQuotaEditView(ExhibitionQuotaFormMixin, UpdateView):
+    def form_valid(self, form):
+        with transaction.atomic():
+            response = super().form_valid(form)
+            if form.has_changed():
+                self.object.log_action(
+                    LOG_QUOTA_CHANGED,
+                    data={"changed": form.changed_data},
+                    user=self.request.user,
+                )
+        messages.success(self.request, _("Your changes have been saved."))
+        return response
+
+
+class ExhibitionQuotaDeleteView(ExhibitionQuotaMixin, DeleteView):
+    model = ExhibitionQuota
+    template_name = "exhibitors/quota_delete.html"
+
+    def form_valid(self, form):
+        self.object.log_action(LOG_QUOTA_DELETED, data={"name": self.object.name}, user=self.request.user)
+        return super().form_valid(form)
+
+
 class ExhibitionOrderMixin(EventPermissionRequiredMixin):
     """Exhibition orders are visible to the same teams that can see the ticket orders."""
 
@@ -2023,6 +2105,14 @@ class ExhibitionOrderMarkPaidView(ExhibitionOrderActionMixin, FormView):
             self.order.mark_paid(reference=form.cleaned_data["payment_reference"], user=self.request.user)
         except ExhibitionOrderStateError:
             messages.error(self.request, _("This order cannot be marked as paid in its current state."))
+        except ExhibitionQuotaExceeded:
+            messages.error(
+                self.request,
+                _(
+                    "This order has expired and its products have sold out since. Free up room in their quotas "
+                    "before marking it as paid."
+                ),
+            )
         else:
             messages.success(self.request, _("The order has been marked as paid."))
         return redirect(self.get_order_url())

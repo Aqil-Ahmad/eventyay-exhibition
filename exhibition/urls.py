@@ -48,6 +48,10 @@ from .views import (
     ExhibitionQuestionDeleteView,
     ExhibitionQuestionEditView,
     ExhibitionQuestionListView,
+    ExhibitionQuotaCreateView,
+    ExhibitionQuotaDeleteView,
+    ExhibitionQuotaEditView,
+    ExhibitionQuotaListView,
     ExhibitorCopyKeyView,
     ExhibitorCreateView,
     ExhibitorDeleteView,
@@ -242,6 +246,26 @@ urlpatterns = [
         "exhibitors/event/<orgslug:organizer>/<slug:event>/products/<int:pk>/delete",
         ExhibitionProductDeleteView.as_view(),
         name="products.delete",
+    ),
+    path(
+        "exhibitors/event/<orgslug:organizer>/<slug:event>/products/quotas",
+        ExhibitionQuotaListView.as_view(),
+        name="products.quotas",
+    ),
+    path(
+        "exhibitors/event/<orgslug:organizer>/<slug:event>/products/quotas/add",
+        ExhibitionQuotaCreateView.as_view(),
+        name="products.quotas.add",
+    ),
+    path(
+        "exhibitors/event/<orgslug:organizer>/<slug:event>/products/quotas/<int:pk>/edit",
+        ExhibitionQuotaEditView.as_view(),
+        name="products.quotas.edit",
+    ),
+    path(
+        "exhibitors/event/<orgslug:organizer>/<slug:event>/products/quotas/<int:pk>/delete",
+        ExhibitionQuotaDeleteView.as_view(),
+        name="products.quotas.delete",
     ),
     path(
         "exhibitors/event/<orgslug:organizer>/<slug:event>/products/categories",

@@ -1,0 +1,84 @@
+{% extends "exhibitors/base.html" %}
+{% load i18n %}
+
+{% block title %}{{ request.event.name }} - {% trans "Quotas" %}{% endblock %}
+
+{% block exhibitors_header %}
+    <h1>{% trans "Quotas" %}</h1>
+{% endblock %}
+
+{% block exhibitors_content %}
+    <p>
+        {% blocktrans trimmed %}
+            Quotas limit how many of their products can be sold. A product on several quotas can be sold while all
+            of them have room, and a product on no quota can be sold without a limit. Pending and paid orders take
+            up capacity; cancelled and expired orders release it.
+        {% endblocktrans %}
+    </p>
+    <p>
+        {% blocktrans trimmed %}
+            Mark a quota as booth capacity to count the physical booths. Only products that include a booth can be
+            on it, so digital sponsorship packages never take a booth away.
+        {% endblocktrans %}
+    </p>
+    {% if not quotas %}
+        <div class="empty-collection">
+            <p>{% trans "You haven't created any quotas yet." %}</p>
+            <a href="{% url 'plugins:exhibition:products.quotas.add' organizer=request.event.organizer.slug event=request.event.slug %}"
+               class="btn btn-primary btn-lg"><i class="fa fa-plus"></i> {% trans "Create a new quota" %}</a>
+        </div>
+    {% else %}
+        <p class="list-toolbar">
+            <a href="{% url 'plugins:exhibition:products.quotas.add' organizer=request.event.organizer.slug event=request.event.slug %}"
+               class="btn btn-default"><i class="fa fa-plus"></i> {% trans "Create a new quota" %}</a>
+        </p>
+        <div class="table-responsive">
+            <table class="table table-condensed table-hover">
+                <thead>
+                <tr>
+                    <th>{% trans "Name" %}</th>
+                    <th>{% trans "Products" %}</th>
+                    <th class="text-right">{% trans "Sold" %}</th>
+                    <th class="text-right">{% trans "Total capacity" %}</th>
+                    <th class="text-right">{% trans "Left" %}</th>
+                    <th class="action-col-2"></th>
+                </tr>
+                </thead>
+                <tbody>
+                {% for quota in quotas %}
+                    <tr>
+                        <td>
+                            <strong>
+                                <a href="{% url 'plugins:exhibition:products.quotas.edit' organizer=request.event.organizer.slug event=request.event.slug pk=quota.pk %}">{{ quota.name }}</a>
+                            </strong>
+                            {% if quota.booth_capacity %}
+                                <span class="label label-info">{% trans "Booth capacity" %}</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% for product in quota.products.all %}{{ product }}{% if not forloop.last %}, {% endif %}{% empty %}<span class="text-muted">{% trans "No products" %}</span>{% endfor %}
+                        </td>
+                        <td class="text-right">{{ quota.used }}</td>
+                        <td class="text-right">{% if quota.size is None %}{% trans "Unlimited" %}{% else %}{{ quota.size }}{% endif %}</td>
+                        <td class="text-right">
+                            {% if quota.size is None %}
+                                {% trans "Unlimited" %}
+                            {% elif quota.remaining %}
+                                {{ quota.remaining }}
+                            {% else %}
+                                <span class="label label-danger">{% trans "Sold out" %}</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-right flip">
+                            <a href="{% url 'plugins:exhibition:products.quotas.edit' organizer=request.event.organizer.slug event=request.event.slug pk=quota.pk %}"
+                               class="btn btn-default btn-sm" title="{% trans 'Edit' %}" data-toggle="tooltip"><i class="fa fa-edit"></i></a>
+                            <a href="{% url 'plugins:exhibition:products.quotas.delete' organizer=request.event.organizer.slug event=request.event.slug pk=quota.pk %}"
+                               class="btn btn-delete btn-danger btn-sm" title="{% trans 'Delete' %}" data-toggle="tooltip"><i class="fa fa-trash"></i></a>
+                        </td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    {% endif %}
+{% endblock %}

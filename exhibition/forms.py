@@ -60,9 +60,11 @@ from .models import (
     ExhibitionEmailQueue,
     ExhibitionProduct,
     ExhibitionProductCategory,
+    ExhibitionProductPurpose,
     ExhibitionQuestion,
     ExhibitionQuestionOption,
     ExhibitionQuestionVariant,
+    ExhibitionQuota,
     ExhibitionRequest,
     ExhibitionRequestExtraLink,
     ExhibitionRequestSocialLink,
@@ -2433,6 +2435,18 @@ class ExhibitionProductForm(I18nModelForm):
         available_until = cleaned_data.get("available_until")
         if available_from and available_until and available_until < available_from:
             self.add_error("available_until", _("The end of the sales period must be after its start."))
+        drops_booth = cleaned_data.get("purpose") == ExhibitionProductPurpose.SPONSORSHIP and not cleaned_data.get(
+            "includes_booth"
+        )
+        if drops_booth and self.instance.pk:
+            booth_quotas = list(self.instance.quotas.filter(booth_capacity=True))
+            if booth_quotas:
+                self.add_error(
+                    "includes_booth",
+                    _("This product is on the booth capacity quota {quotas}. Remove it from there first.").format(
+                        quotas=", ".join(quota.name for quota in booth_quotas)
+                    ),
+                )
         return cleaned_data
 
 
@@ -2443,3 +2457,29 @@ class ExhibitionOrderMarkPaidForm(forms.Form):
         max_length=255,
         required=False,
     )
+
+
+class ExhibitionQuotaForm(I18nModelForm):
+    class Meta:
+        model = ExhibitionQuota
+        fields = ["name", "size", "booth_capacity", "products"]
+        widgets = {
+            "products": forms.CheckboxSelectMultiple,
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["products"].queryset = ExhibitionProduct.objects.filter(event=self.event).in_sales_order()
+
+    def clean(self):
+        cleaned_data = super().clean()
+        if cleaned_data.get("booth_capacity"):
+            without_booth = [product for product in cleaned_data.get("products") or [] if not product.includes_booth]
+            if without_booth:
+                self.add_error(
+                    "products",
+                    _("A booth capacity quota can only hold products that include a booth. Remove {products}.").format(
+                        products=", ".join(str(product) for product in without_booth)
+                    ),
+                )
+        return cleaned_data
