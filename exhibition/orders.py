@@ -8,18 +8,16 @@ from django.utils.translation import gettext as _
 from .models import (
     LOG_ORDER_PLACED,
     ExhibitionOrder,
+    ExhibitionOrderError,
     ExhibitionOrderPosition,
     ExhibitionOrderStateError,
     ExhibitionOrderStatus,
     ExhibitionProduct,
+    reserve_quota_capacity,
 )
 
 SUPPORTED_PAYMENT_PROVIDERS = ("manual", "banktransfer")
 FREE_PAYMENT_PROVIDER = "free"
-
-
-class ExhibitionOrderError(Exception):
-    """An exhibition order could not be placed as requested."""
 
 
 def usable_payment_providers(event):
@@ -73,6 +71,7 @@ def place_exhibition_order(
         raise ExhibitionOrderError("The payment method is not available for this event.")
 
     with transaction.atomic():
+        reserve_quota_capacity(products)
         order = ExhibitionOrder.objects.create(
             event=event,
             organization_name=organization_name,
