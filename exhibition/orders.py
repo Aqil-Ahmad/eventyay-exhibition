@@ -52,14 +52,16 @@ def place_exhibition_order(
     email,
     organization_name="",
     phone="",
-    answers=None,
+    answers_form=None,
     payment_provider="",
     user=None,
 ):
-    """Place an order for the products at their current prices; a free order is marked paid at once."""
+    """Place an order at current prices with the answers of ``answers_form``; a free order is paid at once."""
     products = list(products)
     if not products:
         raise ExhibitionOrderError("An order needs at least one product.")
+    if answers_form is not None and not answers_form.is_valid():
+        raise ExhibitionOrderError("The order form has errors.")
 
     now = timezone.now()
     for product in products:
@@ -78,7 +80,6 @@ def place_exhibition_order(
             name=name,
             email=email,
             phone=phone,
-            answers=answers or {},
             total=total,
             payment_provider=payment_provider if total else "",
             expires=now + timedelta(days=event.settings.get("payment_term_days", as_type=int)) if total else None,
@@ -86,6 +87,8 @@ def place_exhibition_order(
         ExhibitionOrderPosition.objects.bulk_create(
             ExhibitionOrderPosition(order=order, product=product, price=product.price) for product in products
         )
+        if answers_form is not None:
+            answers_form.save_exhibition_questions(order)
         order.log_action(
             LOG_ORDER_PLACED,
             data={"total": str(total), "products": [product.pk for product in products]},

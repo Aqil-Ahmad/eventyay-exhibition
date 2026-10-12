@@ -110,13 +110,13 @@ def test_an_order_records_its_products_prices_total_and_contact(event):
         gold = _product(event, "Gold Sponsor", price="1500.00")
         booth = _product(event, "Standard Booth", price="250.50", purpose="exhibition")
 
-        order = _order(event, gold, booth, phone="+44 20 7946 0000", answers={"vat_id": "GB123"})
+        order = _order(event, gold, booth, phone="+44 20 7946 0000", organization_name="Acme Inc")
 
         assert order.status == ExhibitionOrderStatus.PENDING
         assert order.total == Decimal("1750.50")
         assert order.currency == event.currency
         assert (order.name, order.email, order.phone) == ("Ada Lovelace", "ada@example.com", "+44 20 7946 0000")
-        assert order.answers == {"vat_id": "GB123"}
+        assert order.organization_name == "Acme Inc"
         assert order.payment_provider == "manual"
         assert [(position.product, position.price) for position in order.positions.all()] == [
             (gold, Decimal("1500.00")),
