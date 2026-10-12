@@ -1397,6 +1397,14 @@ class ExhibitionOrder(LoggedModel):
             self.currency = self.currency or self.event.currency
         return super().save(*args, **kwargs)
 
+    @property
+    def can_be_marked_paid(self):
+        return self.status in (ExhibitionOrderStatus.PENDING, ExhibitionOrderStatus.EXPIRED)
+
+    @property
+    def can_be_cancelled(self):
+        return self.status != ExhibitionOrderStatus.CANCELLED
+
     def mark_paid(self, *, provider="", reference="", user=None):
         """Record a received payment; an expired order can still be paid, as in Tickets."""
         self._transition(

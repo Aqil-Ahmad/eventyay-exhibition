@@ -2434,3 +2434,12 @@ class ExhibitionProductForm(I18nModelForm):
         if available_from and available_until and available_until < available_from:
             self.add_error("available_until", _("The end of the sales period must be after its start."))
         return cleaned_data
+
+
+class ExhibitionOrderMarkPaidForm(forms.Form):
+    payment_reference = forms.CharField(
+        label=_("Payment reference"),
+        help_text=_("For example the reference of the bank transfer you received."),
+        max_length=255,
+        required=False,
+    )

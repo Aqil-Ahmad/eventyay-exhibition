@@ -3,6 +3,7 @@ from decimal import Decimal
 
 from django.db import transaction
 from django.utils import timezone
+from django.utils.translation import gettext as _
 
 from .models import (
     LOG_ORDER_PLACED,
@@ -28,6 +29,13 @@ def usable_payment_providers(event):
         for identifier, provider in event.get_payment_providers().items()
         if identifier in SUPPORTED_PAYMENT_PROVIDERS and provider.is_enabled
     }
+
+
+def payment_method_names(event):
+    """The display name of every payment method an exhibition order can carry, keyed by identifier."""
+    names = {identifier: str(provider.verbose_name) for identifier, provider in event.get_payment_providers().items()}
+    names[FREE_PAYMENT_PROVIDER] = _("Free")
+    return names
 
 
 def paid_products_lack_payment_method(event):

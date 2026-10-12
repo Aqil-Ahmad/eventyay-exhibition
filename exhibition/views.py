@@ -8,7 +8,7 @@ from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.exceptions import PermissionDenied
 from django.db import transaction
-from django.db.models import Count, Max, Min, Q
+from django.db.models import Count, Max, Min, Prefetch, Q
 from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.template.response import TemplateResponse
@@ -31,6 +31,7 @@ from . import mail as mail_helpers
 from .filters import (
     EmailFilterForm,
     ExhibitorFilterForm,
+    OrderFilterForm,
     PublicExhibitorFilterForm,
     RequestFilterForm,
 )
@@ -41,6 +42,7 @@ from .forms import (
     ExhibitionDefaultFieldForm,
     ExhibitionEmailQueueForm,
     ExhibitionMailTemplatesForm,
+    ExhibitionOrderMarkPaidForm,
     ExhibitionProductCategoryForm,
     ExhibitionProductForm,
     ExhibitionQuestionForm,
@@ -88,6 +90,9 @@ from .models import (
     REQUEST_REVIEW_ACTIONS,
     ExhibitionCustomEmailTemplate,
     ExhibitionEmailQueue,
+    ExhibitionOrder,
+    ExhibitionOrderPosition,
+    ExhibitionOrderStateError,
     ExhibitionProduct,
     ExhibitionProductCategory,
     ExhibitionQuestion,
@@ -103,7 +108,7 @@ from .models import (
     get_next_sponsor_group_level,
     storable_request_field_settings,
 )
-from .orders import paid_products_lack_payment_method
+from .orders import paid_products_lack_payment_method, payment_method_names
 from .social_links import serialize_social_link
 from .utils import (
     VOUCHER_CSV_FILENAME,
@@ -1932,6 +1937,119 @@ class ExhibitionProductCategoryReorderView(PositionReorderMixin):
 
     def get_scope_queryset(self, request):
         return ExhibitionProductCategory.objects.filter(event=request.event)
+
+
+class ExhibitionOrderMixin(EventPermissionRequiredMixin):
+    """Exhibition orders are visible to the same teams that can see the ticket orders."""
+
+    permission = ("can_change_event_settings", "can_view_orders")
+
+    def get_queryset(self):
+        return ExhibitionOrder.objects.filter(event=self.request.event).prefetch_related(
+            Prefetch("positions", queryset=ExhibitionOrderPosition.objects.select_related("product"))
+        )
+
+    @cached_property
+    def order(self):
+        return get_object_or_404(self.get_queryset(), code=self.kwargs["code"])
+
+    def get_order_url(self):
+        return reverse(
+            "plugins:exhibition:orders.detail",
+            kwargs={**event_kwargs(self.request.event), "code": self.order.code},
+        )
+
+    def can_change_orders(self):
+        return self.request.user.has_event_permission(
+            self.request.event.organizer,
+            self.request.event,
+            ("can_change_event_settings", "can_change_orders"),
+            request=self.request,
+        )
+
+
+class ExhibitionOrderListView(ExhibitionOrderMixin, FilteredListMixin, ListView):
+    template_name = "exhibitors/orders.html"
+    context_object_name = "orders"
+
+    def build_filter_form(self):
+        return OrderFilterForm(data=self.request.GET, event=self.request.event)
+
+    def get_queryset(self):
+        return self.apply_filters(super().get_queryset())
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        names = payment_method_names(self.request.event)
+        for order in context["orders"]:
+            order.payment_method_name = names.get(order.payment_provider, order.payment_provider)
+        return context
+
+
+class ExhibitionOrderDetailView(ExhibitionOrderMixin, TemplateView):
+    template_name = "exhibitors/order_detail.html"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["order"] = self.order
+        context["can_change_orders"] = self.can_change_orders()
+        context["payment_method_name"] = payment_method_names(self.request.event).get(
+            self.order.payment_provider, self.order.payment_provider
+        )
+        return context
+
+
+class ExhibitionOrderActionMixin(ExhibitionOrderMixin):
+    permission = ("can_change_event_settings", "can_change_orders")
+
+
+class ExhibitionOrderMarkPaidView(ExhibitionOrderActionMixin, FormView):
+    form_class = ExhibitionOrderMarkPaidForm
+    template_name = "exhibitors/order_mark_paid.html"
+
+    def get(self, request, *args, **kwargs):
+        if not self.order.can_be_marked_paid:
+            messages.error(request, _("This order cannot be marked as paid in its current state."))
+            return redirect(self.get_order_url())
+        return super().get(request, *args, **kwargs)
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["order"] = self.order
+        return context
+
+    def form_valid(self, form):
+        try:
+            self.order.mark_paid(reference=form.cleaned_data["payment_reference"], user=self.request.user)
+        except ExhibitionOrderStateError:
+            messages.error(self.request, _("This order cannot be marked as paid in its current state."))
+        else:
+            messages.success(self.request, _("The order has been marked as paid."))
+        return redirect(self.get_order_url())
+
+
+class ExhibitionOrderCancelView(ExhibitionOrderActionMixin, TemplateView):
+    template_name = "exhibitors/order_cancel.html"
+
+    def get(self, request, *args, **kwargs):
+        if not self.order.can_be_cancelled:
+            messages.error(request, _("This order has already been cancelled."))
+            return redirect(self.get_order_url())
+        return super().get(request, *args, **kwargs)
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["order"] = self.order
+        return context
+
+    def post(self, request, *args, **kwargs):
+        try:
+            self.order.cancel(user=request.user)
+        except ExhibitionOrderStateError:
+            messages.error(request, _("This order has already been cancelled."))
+        else:
+            messages.success(request, _("The order has been cancelled."))
+        return redirect(self.get_order_url())
 
 
 class ExhibitionQuestionListView(EventPermissionRequiredMixin, ListView):

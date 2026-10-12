@@ -30,6 +30,10 @@ from .views import (
     EmailTemplatesView,
     ExhibitionDefaultFieldEditView,
     ExhibitionDefaultFieldResetView,
+    ExhibitionOrderCancelView,
+    ExhibitionOrderDetailView,
+    ExhibitionOrderListView,
+    ExhibitionOrderMarkPaidView,
     ExhibitionProductCategoryCreateView,
     ExhibitionProductCategoryDeleteView,
     ExhibitionProductCategoryEditView,
@@ -193,6 +197,26 @@ urlpatterns = [
         "exhibitors/event/<orgslug:organizer>/<slug:event>",
         DashboardView.as_view(),
         name="dashboard",
+    ),
+    path(
+        "exhibitors/event/<orgslug:organizer>/<slug:event>/orders",
+        ExhibitionOrderListView.as_view(),
+        name="orders",
+    ),
+    path(
+        "exhibitors/event/<orgslug:organizer>/<slug:event>/orders/<str:code>",
+        ExhibitionOrderDetailView.as_view(),
+        name="orders.detail",
+    ),
+    path(
+        "exhibitors/event/<orgslug:organizer>/<slug:event>/orders/<str:code>/mark_paid",
+        ExhibitionOrderMarkPaidView.as_view(),
+        name="orders.mark_paid",
+    ),
+    path(
+        "exhibitors/event/<orgslug:organizer>/<slug:event>/orders/<str:code>/cancel",
+        ExhibitionOrderCancelView.as_view(),
+        name="orders.cancel",
     ),
     path(
         "exhibitors/event/<orgslug:organizer>/<slug:event>/products",

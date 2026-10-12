@@ -1,0 +1,117 @@
+{% extends "exhibitors/base.html" %}
+{% load i18n %}
+{% load money %}
+
+{% block title %}{{ request.event.name }} - {% blocktrans with code=order.code %}Exhibition order {{ code }}{% endblocktrans %}{% endblock %}
+
+{% block exhibitors_header %}
+    <h1>
+        {% blocktrans with code=order.code %}Exhibition order {{ code }}{% endblocktrans %}
+        {% include "exhibitors/_order_status.html" %}
+    </h1>
+{% endblock %}
+
+{% block exhibitors_content %}
+    <p class="list-toolbar">
+        <a href="{% url 'plugins:exhibition:orders' organizer=request.event.organizer.slug event=request.event.slug %}" class="btn btn-default">
+            <i class="fa fa-arrow-left"></i> {% trans "All orders" %}
+        </a>
+        {% if can_change_orders %}
+            {% if order.can_be_marked_paid %}
+                <a href="{% url 'plugins:exhibition:orders.mark_paid' organizer=request.event.organizer.slug event=request.event.slug code=order.code %}" class="btn btn-success">
+                    <i class="fa fa-check"></i> {% trans "Mark as paid" %}
+                </a>
+            {% endif %}
+            {% if order.can_be_cancelled %}
+                <a href="{% url 'plugins:exhibition:orders.cancel' organizer=request.event.organizer.slug event=request.event.slug code=order.code %}" class="btn btn-danger">
+                    <i class="fa fa-ban"></i> {% trans "Cancel order" %}
+                </a>
+            {% endif %}
+        {% endif %}
+    </p>
+    <div class="row">
+        <div class="col-md-6">
+            <div class="panel panel-default">
+                <div class="panel-heading"><h3 class="panel-title">{% trans "Order details" %}</h3></div>
+                <div class="panel-body">
+                    <dl class="dl-horizontal">
+                        <dt>{% trans "Order code" %}</dt>
+                        <dd>{{ order.code }}</dd>
+                        <dt>{% trans "Order date" %}</dt>
+                        <dd>{{ order.created|date:"SHORT_DATETIME_FORMAT" }}</dd>
+                        {% if order.status == "pending" or order.status == "expired" %}
+                            {% if order.expires %}
+                                <dt>{% trans "Expiration date" %}</dt>
+                                <dd>{{ order.expires|date:"SHORT_DATETIME_FORMAT" }}</dd>
+                            {% endif %}
+                        {% endif %}
+                        <dt>{% trans "Payment method" %}</dt>
+                        <dd>{{ payment_method_name|default:"—" }}</dd>
+                        {% if order.payment_date %}
+                            <dt>{% trans "Payment date" %}</dt>
+                            <dd>{{ order.payment_date|date:"SHORT_DATETIME_FORMAT" }}</dd>
+                        {% endif %}
+                        {% if order.payment_reference %}
+                            <dt>{% trans "Payment reference" %}</dt>
+                            <dd>{{ order.payment_reference }}</dd>
+                        {% endif %}
+                    </dl>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="panel panel-default">
+                <div class="panel-heading"><h3 class="panel-title">{% trans "Contact" %}</h3></div>
+                <div class="panel-body">
+                    <dl class="dl-horizontal">
+                        <dt>{% trans "Organization" %}</dt>
+                        <dd>{{ order.organization_name|default:"—" }}</dd>
+                        <dt>{% trans "Contact name" %}</dt>
+                        <dd>{{ order.name }}</dd>
+                        <dt>{% trans "Email" %}</dt>
+                        <dd><a href="mailto:{{ order.email }}">{{ order.email }}</a></dd>
+                        {% if order.phone %}
+                            <dt>{% trans "Phone number" %}</dt>
+                            <dd>{{ order.phone }}</dd>
+                        {% endif %}
+                    </dl>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="panel panel-default">
+        <div class="panel-heading"><h3 class="panel-title">{% trans "Products" %}</h3></div>
+        <div class="table-responsive">
+            <table class="table">
+                <thead>
+                <tr>
+                    <th>{% trans "Product" %}</th>
+                    <th>{% trans "Product purpose" %}</th>
+                    <th>{% trans "Includes exhibition booth" %}</th>
+                    <th class="text-right">{% trans "Price" %}</th>
+                </tr>
+                </thead>
+                <tbody>
+                {% for position in order.positions.all %}
+                    <tr>
+                        <td>{{ position.product }}</td>
+                        <td>{{ position.product.get_purpose_display }}</td>
+                        <td>{% if position.product.includes_booth %}{% trans "Yes" %}{% else %}{% trans "No" %}{% endif %}</td>
+                        <td class="text-right">{{ position.price|money:order.currency }}</td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+                <tfoot>
+                <tr>
+                    <th colspan="3">{% trans "Total" %}</th>
+                    <th class="text-right">{{ order.total|money:order.currency }}</th>
+                </tr>
+                </tfoot>
+            </table>
+        </div>
+    </div>
+    <div class="panel panel-default">
+        <div class="panel-heading"><h3 class="panel-title">{% trans "Order history" %}</h3></div>
+        {% include "pretixcontrol/includes/logs.html" with obj=order %}
+    </div>
+{% endblock %}
