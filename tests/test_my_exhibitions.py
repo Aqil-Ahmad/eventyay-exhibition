@@ -5,6 +5,7 @@ from unittest.mock import patch
 import pytest
 from allauth.account.models import EmailAddress
 from django.http import Http404
+from django.template.loader import render_to_string
 from django.test import RequestFactory
 from django.utils.timezone import now
 from django_scopes import scopes_disabled
@@ -502,3 +503,15 @@ def test_creating_a_profile_queues_the_invitation_without_sending_it(event):
         send.assert_not_called()
         queued = ExhibitionEmailQueue.objects.get(event=event, role=mail_helpers.EXHIBITOR_PROFILE)
         assert queued.sent_at is None
+
+
+def test_language_switcher_renders_on_pages_without_an_event():
+    request = RequestFactory().get("/common/exhibitions/1/edit/")
+
+    assert "data-i18n-switcher" not in render_to_string("exhibitors/_i18n_language_switcher.html", {"request": request})
+
+
+def test_language_chips_use_the_locales_they_are_given():
+    html = render_to_string("exhibitors/_i18n_language_chips.html", {"locales": ["en", "de"]})
+
+    assert 'data-locale="de"' in html
