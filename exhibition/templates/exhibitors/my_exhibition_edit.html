@@ -22,7 +22,7 @@
 
         <fieldset>
             <legend>{% translate "Profile" %}</legend>
-            {% include "exhibitors/_i18n_language_switcher.html" %}
+            {% include "exhibitors/_i18n_language_chips.html" with locales=event.settings.locales %}
             {% include "exhibitors/_profile_fields.html" %}
         </fieldset>
 
