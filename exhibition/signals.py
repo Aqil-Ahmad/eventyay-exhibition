@@ -62,6 +62,9 @@ from .models import (
     LOG_QUESTION_ADDED,
     LOG_QUESTION_CHANGED,
     LOG_QUESTION_DELETED,
+    LOG_QUOTA_ADDED,
+    LOG_QUOTA_CHANGED,
+    LOG_QUOTA_DELETED,
     LOG_REQUEST_CHANGED,
     LOG_REQUEST_EMAILED,
     LOG_SETTINGS_CHANGED,
@@ -71,6 +74,7 @@ from .models import (
     ExhibitionProductCategory,
     ExhibitionQuestion,
     ExhibitionQuestionOption,
+    ExhibitionQuota,
     ExhibitionRequest,
     ExhibitionRequestState,
     ExhibitorDevice,
@@ -419,6 +423,9 @@ LOG_ENTRY_LABELS = {
     LOG_ORDER_PAID: _("Exhibition order marked as paid."),
     LOG_ORDER_CANCELLED: _("Exhibition order cancelled."),
     LOG_ORDER_EXPIRED: _("Exhibition order expired."),
+    LOG_QUOTA_ADDED: _("Exhibition quota created."),
+    LOG_QUOTA_CHANGED: _("Exhibition quota changed."),
+    LOG_QUOTA_DELETED: _("Exhibition quota deleted."),
 }
 
 
@@ -535,6 +542,15 @@ def exhibition_logentry_object_link(sender, logentry, **kwargs):
                 kwargs={"organizer": sender.organizer.slug, "event": sender.slug, "pk": target.pk},
             ),
             "val": escape(target.backend_name),
+        }
+    elif isinstance(target, ExhibitionQuota):
+        a_text = _("Exhibition quota {val}")
+        a_map = {
+            "href": reverse(
+                "plugins:exhibition:products.quotas.edit",
+                kwargs={"organizer": sender.organizer.slug, "event": sender.slug, "pk": target.pk},
+            ),
+            "val": escape(target.name),
         }
     elif isinstance(target, SponsorGroup):
         return _("Sponsor group {val}").format(val=escape(target.localized_name))
