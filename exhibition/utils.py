@@ -653,6 +653,51 @@ def build_voucher_redemption_csv(event, positions, settings) -> str:
     return output.getvalue()
 
 
+def invitation_pending(user) -> bool:
+    """An account created by an invitation whose set-password link is still unused and unexpired."""
+    if not user.pw_reset_token or not user.pw_reset_time or user.last_login:
+        return False
+    return user.pw_reset_time >= timezone.now()
+
+
+def invitation_account(email):
+    """``(user, needs_password)`` for an invited exhibitor, creating the account when the address has none."""
+    from eventyay.base.models.auth import User
+    from eventyay.person.services import create_user
+
+    user = User.objects.filter(email__iexact=email).first()
+    if user is None:
+        return create_user(email=email), True
+    return user, invitation_pending(user)
+
+
+def invited_user_for_token(token, *, lock=False):
+    """The account a set-password link belongs to; ``None`` when unknown, used or expired."""
+    from eventyay.base.models.auth import User
+
+    if not token:
+        return None
+    queryset = User.objects.select_for_update() if lock else User.objects.all()
+    return queryset.filter(pw_reset_token=token, pw_reset_time__gte=timezone.now(), auth_backend="native").first()
+
+
+def accept_invitation(user, password):
+    """Set the password, spend the link and verify the address the link was sent to."""
+    from allauth.account.models import EmailAddress
+
+    user.set_password(password)
+    user.pw_reset_token = None
+    user.pw_reset_time = None
+    user.save(update_fields=["password", "pw_reset_token", "pw_reset_time"])
+    address = EmailAddress.objects.filter(user=user, email__iexact=user.email).first()
+    if address is None:
+        has_primary = EmailAddress.objects.filter(user=user, primary=True).exists()
+        EmailAddress.objects.create(user=user, email=user.email, verified=True, primary=not has_primary)
+    elif not address.verified:
+        address.verified = True
+        address.save(update_fields=["verified"])
+
+
 def verified_emails(user) -> set[str]:
     """Addresses this account has proven it controls, lower-cased."""
     from allauth.account.models import EmailAddress
