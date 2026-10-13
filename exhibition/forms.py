@@ -52,6 +52,7 @@ from phonenumber_field.formfields import PhoneNumberField
 from . import mail as mail_helpers
 from .models import (
     DEPENDENCY_PARENT_VARIANTS,
+    ORDER_DEFAULT_FIELD_KEYS,
     QUESTION_OPTION_VARIANTS,
     REQUEST_DEFAULT_FIELD_KEYS,
     REQUEST_FORMSET_FIELD_KEYS,
@@ -59,7 +60,6 @@ from .models import (
     ExhibitionCustomEmailTemplate,
     ExhibitionEmailQueue,
     ExhibitionOrderAnswer,
-    ExhibitionOrderForm,
     ExhibitionOrderQuestion,
     ExhibitionOrderQuestionOption,
     ExhibitionProduct,
@@ -79,7 +79,7 @@ from .models import (
     ExhibitorSocialLink,
     SponsorGroup,
     get_next_sponsor_group_level,
-    order_form_questions,
+    order_questions_for,
 )
 from .social_links import (
     SOCIAL_LINK_CHOICES,
@@ -2407,7 +2407,6 @@ class ExhibitionProductForm(I18nModelForm):
             "name",
             "description",
             "category",
-            "order_form",
             "purpose",
             "includes_booth",
             "price",
@@ -2431,8 +2430,6 @@ class ExhibitionProductForm(I18nModelForm):
         change_decimal_field(self.fields["price"], self.event.currency)
         self.fields["category"].queryset = ExhibitionProductCategory.objects.filter(event=self.event)
         self.fields["category"].empty_label = _("No category")
-        self.fields["order_form"].queryset = ExhibitionOrderForm.objects.filter(event=self.event)
-        self.fields["order_form"].empty_label = _("No order form")
 
     def clean_price(self):
         price = self.cleaned_data.get("price")
@@ -2496,28 +2493,23 @@ class ExhibitionQuotaForm(I18nModelForm):
         return cleaned_data
 
 
-class ExhibitionOrderFormModelForm(I18nModelForm):
-    class Meta:
-        model = ExhibitionOrderForm
-        fields = ["name"]
-
-
 class ExhibitionOrderQuestionForm(ExhibitionQuestionForm):
-    """An order form field; it can depend only on fields of the same order form."""
+    """A custom order form field, asked to buyers of the products it is assigned to."""
 
     class Meta(ExhibitionQuestionForm.Meta):
         model = ExhibitionOrderQuestion
-        fields = ExhibitionQuestionForm.Meta.fields[:-1] + ["booth_only", "active"]
-        labels = {**ExhibitionQuestionForm.Meta.labels, "booth_only": _("Only for booth products")}
+        fields = ExhibitionQuestionForm.Meta.fields[:-1] + ["products", "active"]
+        labels = {**ExhibitionQuestionForm.Meta.labels, "products": _("Products")}
+        widgets = {**ExhibitionQuestionForm.Meta.widgets, "products": forms.CheckboxSelectMultiple}
 
-    def __init__(self, *args, order_form, **kwargs):
-        self.order_form = order_form
+    def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.fields["products"].queryset = ExhibitionProduct.objects.filter(event=self.event).in_sales_order()
 
     @cached_property
     def dependency_candidates(self):
         queryset = ExhibitionOrderQuestion.objects.filter(
-            order_form=self.order_form,
+            event=self.event,
             variant__in=DEPENDENCY_PARENT_VARIANTS,
         ).prefetch_related("options")
         if self.instance.pk:
@@ -2526,12 +2518,15 @@ class ExhibitionOrderQuestionForm(ExhibitionQuestionForm):
 
     def save(self, commit=True):
         instance = super(ExhibitionQuestionForm, self).save(commit=False)
-        instance.order_form = self.order_form
+        instance.event = self.event
         if not instance.pk:
-            max_position = self.order_form.questions.aggregate(Max("position"))["position__max"]
+            max_position = ExhibitionOrderQuestion.objects.filter(event=self.event).aggregate(Max("position"))[
+                "position__max"
+            ]
             instance.position = (max_position if max_position is not None else -1) + 1
         if commit:
             instance.save()
+            self.save_m2m()
         return instance
 
 
@@ -2551,17 +2546,38 @@ ExhibitionOrderQuestionOptionFormSet = inlineformset_factory(
 )
 
 
-class ExhibitionOrderAnswersForm(ExhibitionQuestionFieldsMixin, forms.Form):
-    """The order form questions for a set of products, to be answered when they are ordered."""
+class ExhibitionOrderForm(ExhibitionQuestionFieldsMixin, forms.Form):
+    """What buyers fill in when they order: the active customer fields and the custom fields of their products."""
 
-    def __init__(self, *args, products, **kwargs):
+    def __init__(self, *args, event, products, **kwargs):
         super().__init__(*args, **kwargs)
-        for question in order_form_questions(list(products)):
+        settings = ExhibitorSettings.objects.filter(event=event).first() or ExhibitorSettings(event=event)
+        for field in settings.normalized_order_field_settings:
+            if field["active"]:
+                self.fields[field["key"]] = self.customer_field(field)
+        for question in order_questions_for(list(products)):
             field = self.get_exhibition_question_field(question=question, answer=None, readonly=False)
             field.question = question
             field.answer = None
             self.apply_question_dependency(field, question)
             self.fields[f"question_{question.pk}"] = field
+
+    @staticmethod
+    def customer_field(field):
+        options = {"label": field["label"], "required": field["required"]}
+        if field["key"] == "email":
+            return forms.EmailField(**options)
+        if field["key"] == "website":
+            return forms.URLField(max_length=500, **options)
+        if field["key"] == "billing_address":
+            return forms.CharField(widget=forms.Textarea(attrs={"rows": 3}), **options)
+        if field["key"] in ("phone", "vat_id"):
+            return forms.CharField(max_length=64, **options)
+        return forms.CharField(max_length=255, **options)
+
+    def order_details(self):
+        """The customer field answers, ready to pass to ``place_exhibition_order``."""
+        return {key: self.cleaned_data.get(key) or "" for key in ORDER_DEFAULT_FIELD_KEYS if key in self.fields}
 
     def new_exhibition_answer(self, owner, question):
         return ExhibitionOrderAnswer(order=owner, question=question)
