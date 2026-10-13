@@ -248,6 +248,45 @@ def get_default_request_field_definition(key):
     return next(field for field in REQUEST_DEFAULT_FIELDS if field["key"] == key)
 
 
+ORDER_FIELD_LOCK_NOTICE = _("Every order needs this to tell who placed it and where to send the confirmation.")
+
+ORDER_DEFAULT_FIELDS = (
+    {
+        "key": "organization_name",
+        "label": _("Organization name"),
+        "active": True,
+        "required": True,
+        "active_locked": True,
+        "required_locked": True,
+        "lock_notice": ORDER_FIELD_LOCK_NOTICE,
+    },
+    {
+        "key": "name",
+        "label": _("Contact person"),
+        "active": True,
+        "required": True,
+        "active_locked": True,
+        "required_locked": True,
+        "lock_notice": ORDER_FIELD_LOCK_NOTICE,
+    },
+    {
+        "key": "email",
+        "label": _("Email"),
+        "active": True,
+        "required": True,
+        "active_locked": True,
+        "required_locked": True,
+        "lock_notice": ORDER_FIELD_LOCK_NOTICE,
+    },
+    {"key": "phone", "label": _("Phone number"), "active": True},
+    {"key": "website", "label": _("Website"), "active": True},
+    {"key": "billing_address", "label": _("Billing address"), "active": False},
+    {"key": "vat_id", "label": _("VAT ID"), "active": False},
+)
+
+ORDER_DEFAULT_FIELD_KEYS = tuple(field["key"] for field in ORDER_DEFAULT_FIELDS)
+
+
 def default_allowed_fields():
     return ["attendee_name", "attendee_email"]
 
@@ -316,6 +355,7 @@ class ExhibitorSettings(VoucherDefaultsMixin, LoggedModel):
     call_private = models.BooleanField(default=False)
     call_secret = models.CharField(max_length=64, default=generate_call_secret)
     request_field_settings = models.JSONField(default=default_request_field_settings)
+    order_field_settings = models.JSONField(default=dict, blank=True)
 
     def is_field_allowed(self, identifier):
         return identifier in (self.allowed_fields or [])
@@ -330,6 +370,30 @@ class ExhibitorSettings(VoucherDefaultsMixin, LoggedModel):
         self.call_secret = generate_call_secret()
         self.save(update_fields=["call_secret"])
         self.log_action(LOG_CALL_SECRET_REGENERATED, user=requestor)
+
+    @property
+    def normalized_order_field_settings(self):
+        """The built-in order form fields in their configured order, with the locks of each applied."""
+        stored = self.order_field_settings or {}
+        fields = []
+        for index, field in enumerate(ORDER_DEFAULT_FIELDS):
+            saved = stored.get(field["key"], {})
+            active = field.get("active_locked") or bool(saved.get("active", field.get("active", True)))
+            required = field.get("required_locked") or bool(saved.get("required", field.get("required", False)))
+            required = active and required
+            fields.append(
+                {
+                    "key": field["key"],
+                    "label": field["label"],
+                    "active": active,
+                    "required": required,
+                    "position": saved.get("position", index),
+                    "active_locked": field.get("active_locked", False),
+                    "required_locked": field.get("required_locked", False),
+                    "lock_notice": field.get("lock_notice", ""),
+                }
+            )
+        return sorted(fields, key=lambda item: item["position"])
 
     @property
     def normalized_request_field_settings(self):
@@ -634,9 +698,7 @@ LOG_ORDER_EXPIRED = f"{LOG_PREFIX}.order.expired"
 LOG_QUOTA_ADDED = f"{LOG_PREFIX}.quota.added"
 LOG_QUOTA_CHANGED = f"{LOG_PREFIX}.quota.changed"
 LOG_QUOTA_DELETED = f"{LOG_PREFIX}.quota.deleted"
-LOG_ORDER_FORM_ADDED = f"{LOG_PREFIX}.order_form.added"
 LOG_ORDER_FORM_CHANGED = f"{LOG_PREFIX}.order_form.changed"
-LOG_ORDER_FORM_DELETED = f"{LOG_PREFIX}.order_form.deleted"
 LOG_ORDER_QUESTION_ADDED = f"{LOG_PREFIX}.order_question.added"
 LOG_ORDER_QUESTION_CHANGED = f"{LOG_PREFIX}.order_question.changed"
 LOG_ORDER_QUESTION_DELETED = f"{LOG_PREFIX}.order_question.deleted"
@@ -1297,15 +1359,6 @@ class ExhibitionProduct(LoggedModel):
         help_text=_("This product will not be sold after the given date."),
     )
     position = models.IntegerField(default=0)
-    order_form = models.ForeignKey(
-        "ExhibitionOrderForm",
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name="products",
-        verbose_name=_("Order form"),
-        help_text=_("The questions buyers of this product answer when they order it."),
-    )
     purpose = models.CharField(
         max_length=16,
         choices=ExhibitionProductPurpose.choices,
@@ -1426,6 +1479,9 @@ class ExhibitionOrder(LoggedModel):
     name = models.CharField(max_length=255, verbose_name=_("Contact name"))
     email = models.EmailField(verbose_name=_("Email"))
     phone = models.CharField(max_length=64, blank=True, verbose_name=_("Phone number"))
+    website = models.URLField(max_length=500, blank=True, verbose_name=_("Website"))
+    billing_address = models.TextField(blank=True, verbose_name=_("Billing address"))
+    vat_id = models.CharField(max_length=64, blank=True, verbose_name=_("VAT ID"))
     total = models.DecimalField(max_digits=13, decimal_places=2, verbose_name=_("Total"))
     currency = models.CharField(max_length=10, verbose_name=_("Currency"))
     payment_provider = models.CharField(max_length=255, blank=True, verbose_name=_("Payment method"))
@@ -1534,50 +1590,24 @@ class ExhibitionOrderPosition(models.Model):
         return f"{self.order.code}: {self.product}"
 
 
-class ExhibitionOrderForm(LoggedModel):
-    """A set of questions buyers answer when they order the products it is assigned to."""
+class ExhibitionOrderQuestion(BaseExhibitionQuestion):
+    """A custom order form field, asked to buyers of the products it is assigned to, as in Tickets."""
 
     event = models.ForeignKey(
         Event,
         on_delete=models.CASCADE,
-        related_name="exhibition_order_forms",
+        related_name="exhibition_order_questions",
     )
-    name = models.CharField(
-        max_length=255,
-        verbose_name=_("Name"),
-        help_text=_("Only shown to you, to tell your order forms apart."),
-    )
-
-    class Meta:
-        verbose_name = _("Exhibition order form")
-        verbose_name_plural = _("Exhibition order forms")
-        ordering = ("name", "id")
-
-    def __str__(self):
-        return self.name
-
-
-class ExhibitionOrderQuestion(BaseExhibitionQuestion):
-    order_form = models.ForeignKey(
-        ExhibitionOrderForm,
-        on_delete=models.CASCADE,
-        related_name="questions",
-    )
-    booth_only = models.BooleanField(
-        default=False,
-        verbose_name=_("Only for booth products"),
-        help_text=_(
-            "Ask this only when the order includes a product with an exhibition booth, for example for booth "
-            "requirements, furniture or electricity."
-        ),
+    products = models.ManyToManyField(
+        ExhibitionProduct,
+        related_name="order_questions",
+        blank=True,
+        verbose_name=_("Products"),
+        help_text=_("This field will be asked to buyers of the selected products."),
     )
 
     class Meta(BaseExhibitionQuestion.Meta):
         pass
-
-    @property
-    def event(self):
-        return self.order_form.event
 
 
 class ExhibitionOrderQuestionOption(models.Model):
@@ -1615,18 +1645,15 @@ class ExhibitionOrderAnswer(AnswerDisplayMixin, models.Model):
         unique_together = ("question", "order")
 
 
-def order_form_questions(products):
-    """The active questions of the order forms of the products, booth questions only if a product has a booth."""
-    form_ids = {product.order_form_id for product in products if product.order_form_id}
-    questions = (
-        ExhibitionOrderQuestion.objects.filter(order_form_id__in=form_ids, active=True)
-        .select_related("order_form")
+def order_questions_for(products):
+    """The active custom fields assigned to any of the products, each once, in form order."""
+    product_ids = [product.pk for product in products]
+    asked = ExhibitionOrderQuestion.products.through.objects.filter(exhibitionproduct_id__in=product_ids)
+    return (
+        ExhibitionOrderQuestion.objects.filter(active=True, pk__in=asked.values("exhibitionorderquestion_id"))
         .prefetch_related("options")
-        .order_by("order_form__name", "order_form_id", "position", "pk")
+        .order_by("position", "pk")
     )
-    if not any(product.includes_booth for product in products):
-        questions = questions.filter(booth_only=False)
-    return questions
 
 
 class ExhibitionQuotaQuerySet(models.QuerySet):
