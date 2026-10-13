@@ -10,7 +10,7 @@ from django.test import RequestFactory
 from django.utils import timezone
 from django.utils.translation import get_language
 from django_scopes import scopes_disabled
-from eventyay.base.models import LogEntry
+from eventyay.base.models import LogEntry, Team
 from eventyay.base.models.auth import User
 from i18nfield.strings import LazyI18nString
 
@@ -1223,6 +1223,113 @@ def test_no_credentials_go_out_while_lead_scanning_is_off(mail_event):
 
 
 @pytest.mark.django_db
+def test_send_request_organizer_email_submitted(mail_event, exhibition_request):
+    from exhibition.models import ExhibitionEmailQueue
+
+    team = Team.objects.create(
+        organizer=mail_event.organizer,
+        all_events=True,
+        is_exhibition_reviewer=True,
+    )
+    member = User.objects.create_user(
+        email="reviewer@example.com",
+        password="pw",
+        fullname="Reviewer",
+    )
+    team.members.add(member)
+
+    with patch.object(mail_helpers, "mail") as send_mail:
+        mail_helpers.send_request_organizer_emails(mail_event, exhibition_request, "submitted")
+
+    send_mail.assert_called_once()
+    kwargs = send_mail.call_args.kwargs
+    assert kwargs["email"] == "reviewer@example.com"
+    assert kwargs["event"] == mail_event
+    assert kwargs["auto_email"] is False
+
+    body = str(kwargs["template"])
+    assert "Exhibitor" in body
+    assert "submitted" in body
+    assert "Acme Corp" in body
+    assert "Jane Applicant" in body
+    assert "applicant@example.com" in body
+    assert "{contact_name}" not in body
+    assert "{pending_request_count}" not in body
+    assert not ExhibitionEmailQueue.objects.filter(exhibition_request=exhibition_request).exists()
+
+
+@pytest.mark.django_db
+def test_send_request_organizer_email_withdrawn(mail_event, exhibition_request):
+    team = Team.objects.create(
+        organizer=mail_event.organizer,
+        all_events=True,
+        can_change_exhibition_proposals=True,
+    )
+    member = User.objects.create_user(
+        email="manager@example.com",
+        password="pw",
+        fullname="Manager",
+    )
+    team.members.add(member)
+
+    with patch.object(mail_helpers, "mail") as send_mail:
+        mail_helpers.send_request_organizer_emails(mail_event, exhibition_request, "withdrawn")
+
+    send_mail.assert_called_once()
+    assert send_mail.call_args.kwargs["email"] == "manager@example.com"
+    assert "withdrawn" in str(send_mail.call_args.kwargs["template"])
+
+
+@pytest.mark.django_db
+def test_send_request_organizer_email_falls_back_to_event_settings_team(mail_event, exhibition_request):
+    team = Team.objects.create(
+        organizer=mail_event.organizer,
+        all_events=True,
+        can_change_event_settings=True,
+    )
+    member = User.objects.create_user(
+        email="settings@example.com",
+        password="pw",
+        fullname="Settings Manager",
+    )
+    team.members.add(member)
+
+    with patch.object(mail_helpers, "mail") as send_mail:
+        mail_helpers.send_request_organizer_emails(mail_event, exhibition_request, "reinstated")
+
+    send_mail.assert_called_once()
+    assert send_mail.call_args.kwargs["email"] == "settings@example.com"
+    assert "reinstated" in str(send_mail.call_args.kwargs["template"])
+
+
+@pytest.mark.django_db
+def test_send_request_organizer_email_deduplicates_members(mail_event, exhibition_request):
+    first_team = Team.objects.create(
+        organizer=mail_event.organizer,
+        all_events=True,
+        is_exhibition_reviewer=True,
+    )
+    second_team = Team.objects.create(
+        organizer=mail_event.organizer,
+        all_events=True,
+        can_change_exhibition_proposals=True,
+    )
+    member = User.objects.create_user(
+        email="reviewer@example.com",
+        password="pw",
+        fullname="Reviewer",
+    )
+    first_team.members.add(member)
+    second_team.members.add(member)
+
+    with patch.object(mail_helpers, "mail") as send_mail:
+        mail_helpers.send_request_organizer_emails(mail_event, exhibition_request, "submitted")
+
+    send_mail.assert_called_once()
+    assert send_mail.call_args.kwargs["email"] == "reviewer@example.com"
+
+
+@pytest.mark.django_db
 def test_request_message_template_is_editable_under_email_templates(mail_event):
     form = ExhibitionMailTemplatesForm(obj=mail_event)
 
@@ -1332,7 +1439,14 @@ def _compose_form(event, **data):
 def test_compose_form_offers_the_application_state_as_a_single_choice(mail_event):
     field = ExhibitionComposeForm(event=mail_event).fields["state"]
 
-    assert [value for value, _label in field.choices] == ["", "submitted", "accepted", "rejected", "withdrawn"]
+    assert [value for value, _label in field.choices] == [
+        "",
+        "submitted",
+        "accepted",
+        "confirmed",
+        "rejected",
+        "withdrawn",
+    ]
     assert field.required is False
     assert not field.initial
 

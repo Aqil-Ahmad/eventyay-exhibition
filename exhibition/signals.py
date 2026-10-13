@@ -29,6 +29,8 @@ from .mail import (
     my_exhibitions_url,
     render_device_tokens,
     render_voucher_list,
+    request_admin_url,
+    request_confirmation_url,
     request_public_url,
     sample_device_tokens,
     sample_voucher_list,
@@ -281,10 +283,64 @@ def exhibition_mail_placeholders(sender, **kwargs):
             "ABCD1234EFGH",
         ),
         SimpleFunctionalMailTextPlaceholder(
+            "request_type",
+            ["exhibition_request"],
+            lambda exhibition_request: _("Sponsor") if exhibition_request.is_sponsor else _("Exhibitor"),
+            _("Exhibitor"),
+        ),
+        SimpleFunctionalMailTextPlaceholder(
+            "request_action",
+            ["exhibition_request"],
+            lambda exhibition_request: _("submitted"),
+            _("submitted"),
+        ),
+        SimpleFunctionalMailTextPlaceholder(
+            "contact_name",
+            ["exhibition_request"],
+            lambda exhibition_request: (
+                exhibition_request.user.get_full_name() or exhibition_request.user.email
+                if exhibition_request.user_id
+                else ""
+            ),
+            _("Jane Doe"),
+        ),
+        SimpleFunctionalMailTextPlaceholder(
+            "contact_email",
+            ["exhibition_request"],
+            lambda exhibition_request: (
+                exhibition_request.email or (exhibition_request.user.email if exhibition_request.user_id else "")
+            ),
+            "jane@example.com",
+        ),
+        SimpleFunctionalMailTextPlaceholder(
+            "request_date",
+            ["exhibition_request"],
+            lambda exhibition_request: str(exhibition_request.updated),
+            "2026-10-10 10:00",
+        ),
+        SimpleFunctionalMailTextPlaceholder(
+            "request_admin_url",
+            ["exhibition_request"],
+            request_admin_url,
+            "https://example.com/orga/event/exhibition/call/requests/ABCD1234EFGH/",
+        ),
+        SimpleFunctionalMailTextPlaceholder(
+            "pending_request_count",
+            ["event"],
+            lambda event: "1",
+            "1",
+        ),
+        SimpleFunctionalMailTextPlaceholder(
             "request_url",
             ["exhibition_request"],
             request_public_url,
             "https://example.com/orga/event/exhibition/call/requests/ABCD1234EFGH/",
+        ),
+        SimpleFunctionalMailTextPlaceholder(
+            "confirmation_url",
+            ["exhibition_request"],
+            request_confirmation_url,
+            "https://example.com/orga/event/exhibition/call/requests/ABCD1234EFGH/confirm/",
         ),
         SimpleFunctionalMailTextPlaceholder(
             "name",
@@ -406,6 +462,8 @@ def exhibition_user_menu_item(sender, request=None, icon_class="", **kwargs):
 
 LOG_ENTRY_LABELS = {
     REQUEST_LOG_ACTIONS["approve"]: _("Exhibition request approved."),
+    REQUEST_LOG_ACTIONS["confirm"]: _("Exhibition request confirmed."),
+    REQUEST_LOG_ACTIONS["unconfirm"]: _("Exhibition request moved back to accepted."),
     REQUEST_LOG_ACTIONS["reject"]: _("Exhibition request rejected."),
     REQUEST_LOG_ACTIONS["withdraw"]: _("Exhibition request withdrawn."),
     REQUEST_LOG_ACTIONS["reopen"]: _("Exhibition request reopened for review."),

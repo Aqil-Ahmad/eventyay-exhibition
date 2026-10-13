@@ -1,5 +1,6 @@
 import io
 import json
+import logging
 from urllib.parse import quote, urlencode
 
 from defusedcsv import csv
@@ -143,6 +144,8 @@ from .utils import (
     sync_exhibitor_from_request,
 )
 
+logger = logging.getLogger(__name__)
+
 
 def event_kwargs(event):
     return {
@@ -182,8 +185,19 @@ def send_request_confirmation(event, exhibition_request, requestor):
             mail_helpers.REQUEST_NEW,
             send_now=True,
             requestor=requestor,
-        )
+        ),
+        robust=True,
     )
+
+
+def queue_profile_invitation(event, exhibitor):
+    """Queue the invitation to edit a created profile in the same transaction, for the organizer to send."""
+    return mail_helpers.queue_exhibitor_profile_email(event, exhibitor)
+
+
+def send_request_organizer_notification(event, exhibition_request, action):
+    """Notify eligible organizers once the applicant action commits."""
+    transaction.on_commit(lambda: mail_helpers.send_request_organizer_emails(event, exhibition_request, action))
 
 
 def queue_exhibitor_access_mail(request, exhibitor):
@@ -256,7 +270,7 @@ def organization_type_of(exhibitor):
 
 class PublicEventLoginRequiredMixin(LoginRequiredMixin):
     def get_login_url(self):
-        return reverse("cfp:event.login", kwargs=event_kwargs(self.request.event))
+        return reverse("auth.login")
 
 
 class PublicCallEnabledMixin:
@@ -1089,6 +1103,11 @@ class UserRequestCreateView(
         self.save_link_formsets()
         if form.instance.state == ExhibitionRequestState.SUBMITTED:
             send_request_confirmation(self.request.event, self.object, self.request.user)
+            send_request_organizer_notification(
+                self.request.event,
+                self.object,
+                "submitted",
+            )
         messages.success(self.request, _("Your request has been saved."))
         return response
 
@@ -1140,11 +1159,11 @@ class UserRequestEditView(
         return self.post_with_formsets()
 
     def state_is_locked(self):
-        return self.object.state == ExhibitionRequestState.ACCEPTED
+        return self.object.is_accepted
 
     @transaction.atomic
     def form_valid(self, form):
-        previous_state = self.object.state
+        previous_state = self.object.lock_current_state()
         if not self.state_is_locked():
             if self.request.POST.get("action") == "draft":
                 form.instance.state = ExhibitionRequestState.DRAFT
@@ -1164,6 +1183,11 @@ class UserRequestEditView(
             and previous_state != ExhibitionRequestState.SUBMITTED
         ):
             send_request_confirmation(self.request.event, self.object, self.request.user)
+            send_request_organizer_notification(
+                self.request.event,
+                self.object,
+                "submitted",
+            )
         if form.changed_data:
             self.object.log_action(
                 LOG_REQUEST_CHANGED,
@@ -1181,6 +1205,47 @@ class UserRequestEditView(
         context["state_locked"] = self.state_is_locked()
         context["already_submitted"] = self.object.state == ExhibitionRequestState.SUBMITTED
         return context
+
+    def get_success_url(self):
+        return reverse(
+            "plugins:exhibition:request.user_list",
+            kwargs=event_kwargs(self.request.event),
+        )
+
+
+class UserRequestConfirmView(PublicCallEnabledMixin, PublicEventLoginRequiredMixin, DetailView):
+    model = ExhibitionRequest
+    template_name = "exhibitors/public_request_confirm.html"
+    context_object_name = "exhibition_request"
+    slug_field = "code"
+    slug_url_kwarg = "code"
+    require_call_enabled = False
+
+    def get_queryset(self):
+        return ExhibitionRequest.objects.filter(
+            event=self.request.event,
+            user=self.request.user,
+        )
+
+    def get(self, request, *args, **kwargs):
+        self.object = self.get_object()
+        if self.object.state == ExhibitionRequestState.CONFIRMED:
+            messages.success(request, _("Your participation was already confirmed."))
+            return redirect(self.get_success_url())
+        if not self.object.can_be_confirmed:
+            messages.error(request, _("This request can not be confirmed."))
+            return redirect(self.get_success_url())
+        return super().get(request, *args, **kwargs)
+
+    def post(self, request, *args, **kwargs):
+        self.object = self.get_object()
+        if self.object.can_be_confirmed and self.object.confirm(requestor=request.user):
+            messages.success(request, _("Thank you, your participation is confirmed."))
+        elif self.object.state == ExhibitionRequestState.CONFIRMED:
+            messages.success(request, _("Your participation was already confirmed."))
+        else:
+            messages.error(request, _("This request can not be confirmed."))
+        return redirect(self.get_success_url())
 
     def get_success_url(self):
         return reverse(
@@ -1213,6 +1278,11 @@ class UserRequestWithdrawView(PublicCallEnabledMixin, PublicEventLoginRequiredMi
         self.object = self.get_object()
         if self.object.can_be_withdrawn:
             self.object.withdraw(requestor=request.user)
+            send_request_organizer_notification(
+                request.event,
+                self.object,
+                "withdrawn",
+            )
             messages.success(request, _("Your request has been withdrawn."))
         else:
             messages.error(request, _("This request can no longer be withdrawn."))
@@ -1249,6 +1319,11 @@ class UserRequestReinstateView(PublicCallEnabledMixin, PublicEventLoginRequiredM
         self.object = self.get_object()
         if self.object.can_be_reinstated:
             self.object.reopen(requestor=request.user)
+            send_request_organizer_notification(
+                request.event,
+                self.object,
+                "reinstated",
+            )
             messages.success(request, _("Your request has been reinstated and is pending review again."))
         else:
             messages.error(request, _("This request can no longer be reinstated."))
@@ -1265,8 +1340,12 @@ class ExhibitorLinkFormsetMixin:
     social_formset_prefix = "social_links"
     extra_formset_prefix = "extra_links"
 
+    @property
+    def exhibition_event(self):
+        return self.request.event
+
     def get_request_field_settings(self):
-        settings = ExhibitorSettings.objects.get_or_create(event=self.request.event)[0]
+        settings = ExhibitorSettings.objects.get_or_create(event=self.exhibition_event)[0]
         return settings.normalized_request_field_settings
 
     def request_field_is_active(self, key):
@@ -1277,7 +1356,7 @@ class ExhibitorLinkFormsetMixin:
 
     def get_formset_instance(self):
         obj = getattr(self, "object", None)
-        return obj if obj is not None else ExhibitorInfo(event=self.request.event)
+        return obj if obj is not None else ExhibitorInfo(event=self.exhibition_event)
 
     def get_social_formset(self):
         return ExhibitorSocialLinkFormSet(
@@ -1629,7 +1708,7 @@ class RequestDetailView(EventPermissionRequiredMixin, UpdateView):
         if action in REQUEST_REVIEW_ACTIONS:
             if not self.can_manage():
                 raise PermissionDenied()
-            if not self.object.can_transition_to(REQUEST_REVIEW_ACTIONS[action]):
+            if not self.object.can_apply_action(action):
                 messages.error(self.request, _("This request can no longer be changed to that state."))
                 return redirect(self.get_success_url())
             return self.perform_review_action(action)
@@ -1654,6 +1733,16 @@ class RequestDetailView(EventPermissionRequiredMixin, UpdateView):
         elif action == "reject":
             self.object.reject(requestor=requestor)
             messages.success(self.request, _("Request rejected. A rejection email was placed in the outbox."))
+        elif action == "confirm":
+            if self.object.confirm(requestor=requestor):
+                messages.success(self.request, _("Request confirmed on behalf of the applicant."))
+            else:
+                messages.error(self.request, _("This request can no longer be changed to that state."))
+        elif action == "unconfirm":
+            if self.object.unconfirm(requestor=requestor):
+                messages.success(self.request, _("Request moved back to accepted and awaits confirmation again."))
+            else:
+                messages.error(self.request, _("This request can no longer be changed to that state."))
         elif action == "withdraw":
             self.object.withdraw(requestor=requestor)
             messages.success(self.request, _("Request withdrawn."))
@@ -1693,17 +1782,18 @@ class RequestActionView(EventPermissionRequiredMixin, View):
         if action not in self.valid_actions or not (codes or select_all):
             return self.respond(request, False, _("No valid action was selected."), [], 0)
 
-        target_state = REQUEST_REVIEW_ACTIONS[action]
         exhibition_requests = self.get_requests(request, select_all, codes)
         results = []
         changed = 0
         skipped = 0
         with transaction.atomic():
             for exhibition_request in exhibition_requests:
-                if not exhibition_request.can_transition_to(target_state):
+                if not exhibition_request.can_apply_action(action):
                     skipped += 1
                     continue
-                self.apply_action(exhibition_request, action)
+                if not self.apply_action(exhibition_request, action):
+                    skipped += 1
+                    continue
                 changed += 1
                 if select_all:
                     continue
@@ -1726,19 +1816,31 @@ class RequestActionView(EventPermissionRequiredMixin, View):
         )
 
     def apply_action(self, exhibition_request, action):
+        """Apply the action; ``False`` when a confirmation lost a race with another state change."""
         if action == "approve":
             exhibition_request.approve(requestor=self.request.user)
         elif action == "reject":
             exhibition_request.reject(requestor=self.request.user)
+        elif action == "confirm":
+            return exhibition_request.confirm(requestor=self.request.user)
+        elif action == "unconfirm":
+            return exhibition_request.unconfirm(requestor=self.request.user)
         elif action == "withdraw":
             exhibition_request.withdraw(requestor=self.request.user)
         elif action == "reopen":
             exhibition_request.reopen(requestor=self.request.user)
+        return True
 
     def build_message(self, action, count, skipped):
         if count:
             templates = {
                 "approve": ngettext("%(count)d request was approved.", "%(count)d requests were approved.", count),
+                "confirm": ngettext("%(count)d request was confirmed.", "%(count)d requests were confirmed.", count),
+                "unconfirm": ngettext(
+                    "%(count)d request was moved back to accepted.",
+                    "%(count)d requests were moved back to accepted.",
+                    count,
+                ),
                 "reject": ngettext("%(count)d request was rejected.", "%(count)d requests were rejected.", count),
                 "withdraw": ngettext("%(count)d request was withdrawn.", "%(count)d requests were withdrawn.", count),
                 "reopen": ngettext("%(count)d request was reopened.", "%(count)d requests were reopened.", count),
@@ -2734,6 +2836,7 @@ class ExhibitorCreateView(ExhibitorLinkFormsetMixin, EventPermissionRequiredMixi
         )
         if access_newly_granted(form.instance):
             grant_lead_scanning_access(self.request, self.object)
+        queue_profile_invitation(self.request.event, self.object)
         return response
 
     def get_context_data(self, **kwargs):
@@ -3927,8 +4030,10 @@ class EmailTemplatesView(EventPermissionRequiredMixin, TemplateView):
                 (mail_helpers.REQUEST_NEW, _("Request received (confirmation)")),
                 (mail_helpers.REQUEST_ACCEPTED, _("Request accepted")),
                 (mail_helpers.REQUEST_REJECTED, _("Request rejected")),
+                (mail_helpers.REQUEST_ORGANIZER, _("Request notification (organizer)")),
                 (mail_helpers.EXHIBITOR_ACCESS, _("Exhibitor lead scanning key")),
                 (mail_helpers.VOUCHERS, _("Vouchers")),
+                (mail_helpers.EXHIBITOR_PROFILE, _("Profile created for the exhibitor")),
                 (mail_helpers.REQUEST_MESSAGE, _("Request more information")),
             )
         ]

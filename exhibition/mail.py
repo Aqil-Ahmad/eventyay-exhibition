@@ -7,24 +7,38 @@ import re
 import uuid
 from collections import defaultdict
 from urllib.parse import urljoin
+from zoneinfo import ZoneInfo
 
 from django.conf import settings as django_settings
+from django.db.models import Q
 from django.urls import reverse
+from django.utils import timezone
 from django.utils.html import escape
 from django.utils.translation import gettext, gettext_lazy as _lazy, gettext_noop, ngettext, override
 from eventyay.base.models import PriceModeChoices
+from eventyay.base.services.mail import mail
 from i18nfield.strings import LazyI18nString
 
 logger = logging.getLogger(__name__)
 
 REQUEST_NEW = "request_new"
+REQUEST_ORGANIZER = "request_organizer"
 REQUEST_ACCEPTED = "request_accepted"
 REQUEST_REJECTED = "request_rejected"
 EXHIBITOR_ACCESS = "exhibitor_access"
 VOUCHERS = "vouchers"
+EXHIBITOR_PROFILE = "exhibitor_profile"
 REQUEST_MESSAGE = "request_message"
 
-LIFECYCLE_ROLES = (REQUEST_NEW, REQUEST_ACCEPTED, REQUEST_REJECTED, EXHIBITOR_ACCESS, VOUCHERS)
+LIFECYCLE_ROLES = (
+    REQUEST_NEW,
+    REQUEST_ORGANIZER,
+    REQUEST_ACCEPTED,
+    REQUEST_REJECTED,
+    EXHIBITOR_ACCESS,
+    VOUCHERS,
+    EXHIBITOR_PROFILE,
+)
 TEMPLATE_ROLES = (*LIFECYCLE_ROLES, REQUEST_MESSAGE)
 
 PLACEHOLDER_DOCS = (
@@ -32,6 +46,7 @@ PLACEHOLDER_DOCS = (
     ("{request_name}", _lazy("The request / organisation name")),
     ("{request_code}", _lazy("The request's unique code")),
     ("{request_url}", _lazy("Link for the applicant to view or edit the request")),
+    ("{confirmation_url}", _lazy("Link for the applicant to confirm they will take part (accepted email only)")),
     ("{name}", _lazy("The applicant's name")),
     ("{exhibitor_name}", _lazy("The exhibitor / sponsor name (access email only)")),
     ("{booth_id}", _lazy("The exhibitor's booth ID (access email only)")),
@@ -44,11 +59,17 @@ PLACEHOLDER_DOCS = (
             "for this exhibitor (access email only)"
         ),
     ),
+    ("{request_type}", _lazy("The request type, such as Exhibitor or Sponsor (organizer notification only)")),
+    ("{request_action}", _lazy("The action taken on the request (organizer notification only)")),
+    ("{contact_email}", _lazy("The applicant's contact email (organizer notification only)")),
+    ("{request_date}", _lazy("The date and time of the request action (organizer notification only)")),
+    ("{request_admin_url}", _lazy("The organizer backend URL for the request (organizer notification only)")),
+    ("{pending_request_count}", _lazy("The current number of pending requests (organizer notification only)")),
     (
         "{my_exhibitions_url}",
         _lazy(
             "Link to My Exhibitions in the personal dashboard, where the exhibitor sees "
-            "their vouchers and redemptions (voucher email only)"
+            "their profile, vouchers and redemptions (voucher and profile emails only)"
         ),
     ),
 )
@@ -77,13 +98,27 @@ DEFAULT_TEMPLATE_SOURCES = {
             "The {event_name} team"
         ),
     ),
+    REQUEST_ORGANIZER: (
+        gettext_noop("New exhibition request: {request_name}"),
+        gettext_noop(
+            "Hello,\n\n"
+            "A new {request_type} request from {request_name} has been {request_action}.\n\n"
+            "Contact: {contact_name} ({contact_email})\n"
+            "Date: {request_date}\n"
+            "Review request: {request_admin_url}\n"
+            "Pending requests: {pending_request_count}\n\n"
+            "Best regards,\n"
+            "The {event_name} team"
+        ),
+    ),
     REQUEST_ACCEPTED: (
         gettext_noop("Your request for {event_name} has been accepted"),
         gettext_noop(
             "Hello,\n\n"
             "we are happy to let you know that your request \u201c{request_name}\u201d "
-            "for {event_name} has been accepted. We will be in touch with the next "
-            "steps.\n\n"
+            "for {event_name} has been accepted. Please confirm that you will take part:\n"
+            "{confirmation_url}\n\n"
+            "We will be in touch with the next steps.\n\n"
             "Best regards,\n"
             "The {event_name} team"
         ),
@@ -116,6 +151,18 @@ DEFAULT_TEMPLATE_SOURCES = {
             "The {event_name} Team"
         ),
     ),
+    EXHIBITOR_PROFILE: (
+        gettext_noop("You have been added as an exhibitor for {event_name}"),
+        gettext_noop(
+            "Dear {exhibitor_name},\n\n"
+            "A profile for {exhibitor_name} has been created for {event_name}.\n\n"
+            "You can edit your profile in My Exhibitions: {my_exhibitions_url}\n\n"
+            "To open it, log in or create an account with {login_email}. "
+            "If you create a new account, confirm the address from the email we send you first.\n\n"
+            "If you have any questions, please don't hesitate to reach out.\n\n"
+            "The {event_name} organisers"
+        ),
+    ),
     VOUCHERS: (
         gettext_noop("Your vouchers for {event_name} — {exhibitor_name}"),
         gettext_noop(
@@ -126,7 +173,8 @@ DEFAULT_TEMPLATE_SOURCES = {
             "They can redeem a code on the event ticket shop at checkout.\n\n"
             "You can see which codes have been redeemed, and download your vouchers, at any time in "
             "My Exhibitions: {my_exhibitions_url}\n\n"
-            "To open it, log in or create an account with {login_email}.\n\n"
+            "To open it, log in or create an account with {login_email}. "
+            "If you create a new account, confirm the address from the email we send you first.\n\n"
             "If you have any questions, please don't hesitate to reach out.\n\n"
             "Best regards,\n"
             "The {event_name} Team"
@@ -187,10 +235,12 @@ EXHIBITOR_PLACEHOLDER_CONTEXT = ["event", "exhibitor"]
 
 ROLE_PLACEHOLDER_CONTEXT = {
     REQUEST_NEW: REQUEST_PLACEHOLDER_CONTEXT,
+    REQUEST_ORGANIZER: REQUEST_PLACEHOLDER_CONTEXT,
     REQUEST_ACCEPTED: REQUEST_PLACEHOLDER_CONTEXT,
     REQUEST_REJECTED: REQUEST_PLACEHOLDER_CONTEXT,
     EXHIBITOR_ACCESS: EXHIBITOR_PLACEHOLDER_CONTEXT,
     VOUCHERS: EXHIBITOR_PLACEHOLDER_CONTEXT,
+    EXHIBITOR_PROFILE: EXHIBITOR_PLACEHOLDER_CONTEXT,
     REQUEST_MESSAGE: REQUEST_PLACEHOLDER_CONTEXT,
 }
 
@@ -264,6 +314,30 @@ def build_exhibitor_context(event, exhibitor):
 def request_public_url(exhibition_request):
     path = reverse(
         "plugins:exhibition:request.user_edit",
+        kwargs={
+            "organizer": exhibition_request.event.organizer.slug,
+            "event": exhibition_request.event.slug,
+            "code": exhibition_request.code,
+        },
+    )
+    return urljoin(django_settings.SITE_URL, path)
+
+
+def request_confirmation_url(exhibition_request):
+    path = reverse(
+        "plugins:exhibition:request.user_confirm",
+        kwargs={
+            "organizer": exhibition_request.event.organizer.slug,
+            "event": exhibition_request.event.slug,
+            "code": exhibition_request.code,
+        },
+    )
+    return urljoin(django_settings.SITE_URL, path)
+
+
+def request_admin_url(exhibition_request):
+    path = reverse(
+        "plugins:exhibition:request.detail",
         kwargs={
             "organizer": exhibition_request.event.organizer.slug,
             "event": exhibition_request.event.slug,
@@ -435,6 +509,79 @@ def queue_request_email(event, exhibition_request, role, *, send_now=False, requ
     return queued
 
 
+def _collect_team_members(teams, members, seen):
+    for team in teams:
+        for member in team.members.all():
+            email = (member.email or "").strip()
+            if email and email.lower() not in seen:
+                seen.add(email.lower())
+                members.append(member)
+
+
+def send_request_organizer_emails(event, request, action):
+    """Send a notification to organizers who can manage exhibition requests."""
+    from .models import ExhibitionRequest, ExhibitionRequestState
+
+    teams = event.teams.filter(
+        Q(can_change_exhibition_proposals=True) | Q(is_exhibition_reviewer=True)
+    ).prefetch_related("members")
+
+    members = []
+    seen = set()
+
+    _collect_team_members(teams, members, seen)
+
+    if not members:
+        teams = event.teams.filter(can_change_event_settings=True).prefetch_related("members")
+
+        _collect_team_members(teams, members, seen)
+
+    if not members:
+        return
+
+    subject_tpl, body_tpl = get_email_template(event, REQUEST_ORGANIZER)
+
+    context = build_request_context(event, request)
+    context.update(
+        {
+            "contact_name": request.user.get_full_name() or request.user.email,
+            "contact_email": request.email or request.user.email,
+            "request_date": timezone.localtime(request.updated, ZoneInfo(event.timezone)).strftime("%Y-%m-%d %H:%M %Z"),
+            "request_admin_url": request_admin_url(request),
+            "pending_request_count": ExhibitionRequest.objects.filter(
+                event=event,
+                state=ExhibitionRequestState.SUBMITTED,
+            ).count(),
+        }
+    )
+
+    for member in members:
+        locale = recipient_locale(event, member)
+        with override(locale):
+            member_context = context.copy()
+            member_context.update(
+                {
+                    "request_type": gettext("Sponsor") if request.is_sponsor else gettext("Exhibitor"),
+                    "request_action": gettext(action),
+                }
+            )
+        try:
+            mail(
+                email=member.email.strip(),
+                subject=_render(subject_tpl, member_context, locale),
+                template=LazyI18nString(_render(body_tpl, member_context, locale)),
+                context={},
+                event=event,
+                locale=locale or None,
+                auto_email=False,
+            )
+        except Exception:
+            logger.exception(
+                "Failed to send organizer notification to member %s",
+                member.pk,
+            )
+
+
 def compose_recipients(event, states=None, organization_type=None, sponsor_group=None):
     from .models import ExhibitionRequest, ExhibitionRequestState
 
@@ -525,6 +672,34 @@ def queue_exhibitor_access_email(event, exhibitor, *, requestor=None):
         body=_render(body_tpl, context, locale),
         locale=locale or "",
     )
+
+
+def queue_exhibitor_profile_email(event, exhibitor, *, send_now=False, requestor=None):
+    """Queue the invitation to edit a profile created for an exhibitor; ``None`` for sponsor-only profiles."""
+    from .models import ExhibitionEmailQueue
+
+    if not exhibitor.is_exhibitor:
+        return None
+    to_email = exhibitor.recipient_email
+    if not to_email:
+        return None
+
+    subject_tpl, body_tpl = get_email_template(event, EXHIBITOR_PROFILE)
+    locale = recipient_locale(event)
+    context = build_exhibitor_context(event, exhibitor)
+
+    queued = ExhibitionEmailQueue.objects.create(
+        event=event,
+        exhibitor=exhibitor,
+        role=EXHIBITOR_PROFILE,
+        to_email=to_email,
+        subject=_render(subject_tpl, context, locale),
+        body=_render(body_tpl, context, locale),
+        locale=locale or "",
+    )
+    if send_now:
+        queued.send(requestor=requestor)
+    return queued
 
 
 def exhibitor_vouchers(exhibitor):
