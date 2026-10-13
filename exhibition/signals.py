@@ -51,9 +51,7 @@ from .models import (
     LOG_PREFIX,
     LOG_ORDER_CANCELLED,
     LOG_ORDER_EXPIRED,
-    LOG_ORDER_FORM_ADDED,
     LOG_ORDER_FORM_CHANGED,
-    LOG_ORDER_FORM_DELETED,
     LOG_ORDER_PAID,
     LOG_ORDER_PLACED,
     LOG_ORDER_QUESTION_ADDED,
@@ -76,7 +74,6 @@ from .models import (
     LOG_SETTINGS_CHANGED,
     REQUEST_LOG_ACTIONS,
     ExhibitionOrder,
-    ExhibitionOrderForm,
     ExhibitionOrderQuestion,
     ExhibitionOrderQuestionOption,
     ExhibitionProduct,
@@ -445,9 +442,7 @@ LOG_ENTRY_LABELS = {
     LOG_QUOTA_ADDED: _("Exhibition quota created."),
     LOG_QUOTA_CHANGED: _("Exhibition quota changed."),
     LOG_QUOTA_DELETED: _("Exhibition quota deleted."),
-    LOG_ORDER_FORM_ADDED: _("Exhibition order form created."),
     LOG_ORDER_FORM_CHANGED: _("Exhibition order form changed."),
-    LOG_ORDER_FORM_DELETED: _("Exhibition order form deleted."),
     LOG_ORDER_QUESTION_ADDED: _("Exhibition order form field created."),
     LOG_ORDER_QUESTION_CHANGED: _("Exhibition order form field changed."),
     LOG_ORDER_QUESTION_DELETED: _("Exhibition order form field deleted."),
@@ -568,26 +563,12 @@ def exhibition_logentry_object_link(sender, logentry, **kwargs):
             ),
             "val": escape(target.backend_name),
         }
-    elif isinstance(target, ExhibitionOrderForm):
-        a_text = _("Exhibition order form {val}")
-        a_map = {
-            "href": reverse(
-                "plugins:exhibition:products.order_forms.fields",
-                kwargs={"organizer": sender.organizer.slug, "event": sender.slug, "pk": target.pk},
-            ),
-            "val": escape(target.name),
-        }
     elif isinstance(target, ExhibitionOrderQuestion):
         a_text = _("Exhibition order form field {val}")
         a_map = {
             "href": reverse(
-                "plugins:exhibition:products.order_forms.fields.edit",
-                kwargs={
-                    "organizer": sender.organizer.slug,
-                    "event": sender.slug,
-                    "pk": target.order_form_id,
-                    "question": target.pk,
-                },
+                "plugins:exhibition:products.order_form.fields.edit",
+                kwargs={"organizer": sender.organizer.slug, "event": sender.slug, "pk": target.pk},
             ),
             "val": escape(target.localized_question),
         }
