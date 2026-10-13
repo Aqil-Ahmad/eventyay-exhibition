@@ -1,0 +1,18 @@
+{% extends "eventyay_common/auth/base.html" %}
+{% load bootstrap3 %}
+{% load i18n %}
+{% block content %}
+    <form class="form-signin" action="" method="post">
+        <h3>{% translate "Set your password" %}</h3>
+        <p>{% translate "Choose a password for your account to open your exhibitor profile in My Exhibitions." %}</p>
+        {% csrf_token %}
+        {% bootstrap_form_errors form type='all' layout='inline' %}
+        {% bootstrap_field form.password %}
+        {% bootstrap_field form.password_repeat %}
+        <div class="form-group buttons">
+            <button type="submit" class="btn btn-primary">
+                {% translate "Save" %}
+            </button>
+        </div>
+    </form>
+{% endblock %}
