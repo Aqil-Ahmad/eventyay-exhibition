@@ -163,7 +163,8 @@ DEFAULT_TEMPLATE_SOURCES = {
             "Dear {exhibitor_name},\n\n"
             "A profile for {exhibitor_name} has been created for {event_name}.\n\n"
             "You can edit your profile in My Exhibitions: {my_exhibitions_url}\n\n"
-            "Log in with your account for {login_email} to open it.\n\n"
+            "Log in with your account for {login_email} to open it. If you have not confirmed that "
+            "address on your account yet, confirm it from your account's email settings first.\n\n"
             "If you have any questions, please don't hesitate to reach out.\n\n"
             "The {event_name} organisers"
         ),
