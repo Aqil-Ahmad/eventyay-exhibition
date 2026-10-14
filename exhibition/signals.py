@@ -46,6 +46,8 @@ from .models import (
     LOG_ORGANIZATION_CHANGED,
     LOG_ORGANIZATION_CREATED,
     LOG_ORGANIZATION_DELETED,
+    LOG_ORGANIZATION_ORDER_CANCELLED,
+    LOG_ORGANIZATION_ORDERED,
     LOG_ORGANIZATION_PUBLISHED,
     LOG_ORGANIZATION_REACTIVATED,
     LOG_ORGANIZATION_SYNCED,
@@ -474,6 +476,8 @@ LOG_ENTRY_LABELS = {
     LOG_ORGANIZATION_SYNCED: _("Organization profile updated from the submitter's changes."),
     LOG_ORGANIZATION_PUBLISHED: _("Organization profile published to the public event website."),
     LOG_ORGANIZATION_UNPUBLISHED: _("Organization profile removed from the public event website."),
+    LOG_ORGANIZATION_ORDERED: _("Organization profile linked to a paid exhibition order."),
+    LOG_ORGANIZATION_ORDER_CANCELLED: _("Organization profile hidden because its exhibition order was cancelled."),
     LOG_ORGANIZATION_ADDED: _("Organization profile created."),
     LOG_ORGANIZATION_CHANGED: _("Organization profile changed."),
     LOG_ORGANIZATION_DELETED: _("Organization profile deleted."),
@@ -559,6 +563,15 @@ def exhibition_logentry_display(sender, logentry, **kwargs):
             return _("Email \u201c{subject}\u201d to the applicant scheduled.").format(subject=data.get("subject", ""))
         return _("Email \u201c{subject}\u201d to the applicant placed in the outbox.").format(
             subject=data.get("subject", "")
+        )
+
+    if logentry.action_type == LOG_ORGANIZATION_ORDERED and logentry.parsed_data.get("created"):
+        return _("Organization profile created from paid exhibition order {code}.").format(
+            code=logentry.parsed_data.get("exhibition_order", "")
+        )
+    if logentry.action_type == LOG_ORGANIZATION_ORDER_CANCELLED:
+        return _("Organization profile hidden because exhibition order {code} was cancelled.").format(
+            code=logentry.parsed_data.get("exhibition_order", "")
         )
 
     changed = changed_field_labels(logentry)

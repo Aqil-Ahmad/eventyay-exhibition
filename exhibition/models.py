@@ -1543,6 +1543,36 @@ def generate_exhibition_order_code(event):
             return code
 
 
+def i18n_texts(value):
+    """Every translation of an i18n value, trimmed and casefolded for comparing names."""
+    data = value.data if isinstance(value, LazyI18nString) else value
+    texts = data.values() if isinstance(data, dict) else [data]
+    return {str(text).strip().casefold() for text in texts if text}
+
+
+def find_order_organization(order):
+    """The organisation an order belongs to: one of the same name, else one reached at the same email."""
+    organizations = list(ExhibitorInfo.objects.filter(event=order.event).order_by("pk"))
+    name = (order.organization_name or order.name).strip().casefold()
+    for organization in organizations:
+        if name and name in i18n_texts(organization.name):
+            return organization
+    email = order.email.strip().casefold()
+    if not email:
+        return None
+    for organization in organizations:
+        if (organization.email or "").strip().casefold() == email:
+            return organization
+    earlier = (
+        ExhibitionOrder.objects.filter(event=order.event, email__iexact=email, organization__isnull=False)
+        .exclude(pk=order.pk)
+        .select_related("organization")
+        .order_by("-created")
+        .first()
+    )
+    return earlier.organization if earlier else None
+
+
 class ExhibitionOrder(LoggedModel):
     """A purchase of exhibition products, kept apart from the ticket orders."""
 
@@ -1606,25 +1636,91 @@ class ExhibitionOrder(LoggedModel):
         return self.status != ExhibitionOrderStatus.CANCELLED
 
     def mark_paid(self, *, provider="", reference="", user=None):
-        """Record a received payment; an expired order can still be paid while its quotas have room."""
-        self._transition(
-            {ExhibitionOrderStatus.PENDING, ExhibitionOrderStatus.EXPIRED},
-            ExhibitionOrderStatus.PAID,
-            LOG_ORDER_PAID,
-            user,
-            check=self._reclaim_quota_capacity,
-            payment_provider=provider or self.payment_provider,
-            payment_reference=reference,
-            payment_date=timezone.now(),
-        )
+        """Record a received payment and link the organisation; an expired order needs its quota room back."""
+        with transaction.atomic():
+            self._transition(
+                {ExhibitionOrderStatus.PENDING, ExhibitionOrderStatus.EXPIRED},
+                ExhibitionOrderStatus.PAID,
+                LOG_ORDER_PAID,
+                user,
+                check=self._reclaim_quota_capacity,
+                payment_provider=provider or self.payment_provider,
+                payment_reference=reference,
+                payment_date=timezone.now(),
+            )
+            self.link_organization(user=user)
 
     def cancel(self, *, user=None):
-        self._transition(
-            {ExhibitionOrderStatus.PENDING, ExhibitionOrderStatus.PAID, ExhibitionOrderStatus.EXPIRED},
-            ExhibitionOrderStatus.CANCELLED,
-            LOG_ORDER_CANCELLED,
-            user,
+        with transaction.atomic():
+            self._transition(
+                {ExhibitionOrderStatus.PENDING, ExhibitionOrderStatus.PAID, ExhibitionOrderStatus.EXPIRED},
+                ExhibitionOrderStatus.CANCELLED,
+                LOG_ORDER_CANCELLED,
+                user,
+            )
+            self.release_organization(user=user)
+
+    def link_organization(self, user=None):
+        """Create or reuse the organisation of a paid order and give it the roles its products come with."""
+        products = [position.product for position in self.positions.select_related("product")]
+        is_sponsor = any(product.is_sponsorship for product in products)
+        has_booth = any(product.includes_booth for product in products)
+        organization = self.organization or find_order_organization(self)
+        changed = {}
+        if organization is None:
+            organization = ExhibitorInfo.objects.create(
+                event=self.event,
+                name=self.organization_name or self.name,
+                email=self.email,
+                url=self.website or None,
+                is_sponsor=is_sponsor,
+                is_exhibitor=has_booth,
+                booth_id=generate_booth_id(event=self.event) if has_booth else None,
+                source_order=self,
+            )
+            created = True
+        else:
+            created = False
+            if not organization.active:
+                changed["active"] = True
+            if is_sponsor and not organization.is_sponsor:
+                changed["is_sponsor"] = True
+                changed["sponsor_position"] = get_next_sponsor_position(self.event, organization.sponsor_group)
+            if has_booth and not organization.is_exhibitor:
+                changed["is_exhibitor"] = True
+                changed["exhibitor_position"] = get_next_exhibitor_position(self.event)
+            if has_booth and not organization.booth_id:
+                changed["booth_id"] = generate_booth_id(event=self.event)
+            for name, value in changed.items():
+                setattr(organization, name, value)
+            if changed:
+                organization.save(update_fields=list(changed))
+        if self.organization_id != organization.pk:
+            self.organization = organization
+            self.save(update_fields=["organization"])
+        organization.log_action(
+            LOG_ORGANIZATION_ORDERED,
+            data={"exhibition_order": self.code, "created": created, "changed": list(changed)},
+            user=user,
         )
+        return organization
+
+    def release_organization(self, user=None):
+        """Hide the organisation of a cancelled order unless another paid order or an accepted request keeps it."""
+        organization = self.organization
+        if organization is None or not organization.active:
+            return
+        if organization.exhibition_orders.filter(status=ExhibitionOrderStatus.PAID).exclude(pk=self.pk).exists():
+            return
+        if organization.source_requests.filter(state__in=ACCEPTED_REQUEST_STATES).exists():
+            return
+        was_published = organization.published
+        organization.active = False
+        organization.published = False
+        organization.save(update_fields=["active", "published"])
+        organization.log_action(LOG_ORGANIZATION_ORDER_CANCELLED, data={"exhibition_order": self.code}, user=user)
+        if was_published:
+            organization.log_action(LOG_ORGANIZATION_UNPUBLISHED, user=user)
 
     def expire(self):
         self._transition(
