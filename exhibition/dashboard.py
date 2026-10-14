@@ -12,10 +12,9 @@ from django.urls import reverse
 from django.utils.functional import cached_property
 from django.utils.translation import gettext_lazy as _
 from django.views.generic import ListView, UpdateView, View
-from eventyay.base.forms.auth import PasswordRecoverForm
 from eventyay.base.models import Event
 
-from .forms import ExhibitorSelfEditForm
+from .forms import ExhibitorInvitationPasswordForm, ExhibitorSelfEditForm
 from .models import LOG_ORGANIZATION_CHANGED, ExhibitionRequest, ExhibitionRequestState, ExhibitorInfo
 from .utils import (
     VOUCHER_CSV_FILENAME,
@@ -336,14 +335,14 @@ class MyExhibitionInvitationView(View):
         user = invited_user_for_token(token)
         if user is None:
             return self.invalid(request)
-        return self.render_form(request, PasswordRecoverForm(user_id=user.pk))
+        return self.render_form(request, ExhibitorInvitationPasswordForm())
 
     def post(self, request, token):
         with transaction.atomic():
             user = invited_user_for_token(token, lock=True)
             if user is None:
                 return self.invalid(request)
-            form = PasswordRecoverForm(data=request.POST, user_id=user.pk)
+            form = ExhibitorInvitationPasswordForm(data=request.POST)
             if not form.is_valid():
                 return self.render_form(request, form)
             accept_invitation(user, form.cleaned_data["password"])
