@@ -2,7 +2,7 @@ from datetime import timedelta
 from typing import TYPE_CHECKING
 from urllib.parse import parse_qs, quote_plus, urlparse
 
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.db.models import Q, QuerySet
 from django.utils import timezone
 from django_scopes import scope
@@ -653,11 +653,20 @@ def build_voucher_redemption_csv(event, positions, settings) -> str:
     return output.getvalue()
 
 
+INVITATION_LINK_DAYS = 60
+
+
 def invitation_pending(user) -> bool:
-    """An account created by an invitation whose set-password link is still unused and unexpired."""
-    if not user.pw_reset_token or not user.pw_reset_time or user.last_login:
+    """Whether an invited account never set its password; an expired link is renewed so it can still be used."""
+    from django.utils.crypto import get_random_string
+
+    if not user.pw_reset_token or user.last_login or user.auth_backend != "native":
         return False
-    return user.pw_reset_time >= timezone.now()
+    if not user.pw_reset_time or user.pw_reset_time < timezone.now():
+        user.pw_reset_token = get_random_string(32)
+        user.pw_reset_time = timezone.now() + timedelta(days=INVITATION_LINK_DAYS)
+        user.save(update_fields=["pw_reset_token", "pw_reset_time"])
+    return True
 
 
 def invitation_account(email):
@@ -667,7 +676,11 @@ def invitation_account(email):
 
     user = User.objects.filter(email__iexact=email).first()
     if user is None:
-        return create_user(email=email), True
+        try:
+            with transaction.atomic():
+                return create_user(email=email, pw_reset_days=INVITATION_LINK_DAYS), True
+        except IntegrityError:
+            user = User.objects.get(email__iexact=email)
     return user, invitation_pending(user)
 
 
