@@ -54,6 +54,8 @@ def _organizer_client(event, can_change_orders=True):
 @pytest.mark.django_db
 def test_a_free_order_is_confirmed_and_emailed(event, django_capture_on_commit_callbacks):
     with scopes_disabled():
+        event.plugins = "exhibition"
+        event.save(update_fields=["plugins"])
         product = _product(event, "Community Booth")
         with django_capture_on_commit_callbacks(execute=True):
             order = place_exhibition_order(event, [product], **CUSTOMER_DATA)

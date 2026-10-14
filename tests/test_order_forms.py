@@ -1,7 +1,6 @@
 from decimal import Decimal
 
 import pytest
-from django.http import QueryDict
 from django.test import Client, override_settings
 from django.urls import reverse
 from django.utils.timezone import now
@@ -85,22 +84,19 @@ def _organizer_client(event):
 
 
 def _field_data(**overrides):
-    data = QueryDict("", mutable=True)
-    data.update(
-        {
-            "question_0": "VAT ID",
-            "variant": ExhibitionQuestionVariant.STRING,
-            "active": "on",
-            "options-TOTAL_FORMS": "0",
-            "options-INITIAL_FORMS": "0",
-            "options-MIN_NUM_FORMS": "0",
-            "options-MAX_NUM_FORMS": "1000",
-        }
-    )
+    data = {
+        "question_0": "VAT ID",
+        "variant": ExhibitionQuestionVariant.STRING,
+        "active": "on",
+        "options-TOTAL_FORMS": "0",
+        "options-INITIAL_FORMS": "0",
+        "options-MIN_NUM_FORMS": "0",
+        "options-MAX_NUM_FORMS": "1000",
+    }
     products = overrides.pop("products", None)
     data.update(overrides)
     if products is not None:
-        data.setlist("products", [str(product.pk) for product in products])
+        data["products"] = [str(product.pk) for product in products]
     return data
 
 
@@ -221,9 +217,7 @@ def test_an_invalid_order_form_places_no_order(event, shop):
         form = _checkout(event, [shop["gold"]], {})
 
         with pytest.raises(ExhibitionOrderError):
-            place_exhibition_order(
-                event, [shop["gold"]], payment_provider="manual", order_form=form, **CUSTOMER_DATA
-            )
+            place_exhibition_order(event, [shop["gold"]], payment_provider="manual", order_form=form, **CUSTOMER_DATA)
         assert not ExhibitionOrder.objects.exists()
 
 
