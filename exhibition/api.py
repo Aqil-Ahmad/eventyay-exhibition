@@ -445,7 +445,7 @@ class LeadCreateView(views.APIView):
             scanned=timezone.now(),
             scan_type=scan_type,
             device_name=device_name,
-            booth_id=exhibitor.booth_id,
+            booth_id=exhibitor.booth_id or "",
             booth_name=_localize_i18n_value(exhibitor.booth_name, locale),
             attendee=attendee_data,
         )
