@@ -16,6 +16,13 @@
 {% endblock %}
 
 {% block exhibitors_content %}
+    {% if can_change_orders %}
+        <p class="list-toolbar">
+            <a href="{% url 'plugins:exhibition:orders.add' organizer=request.event.organizer.slug event=request.event.slug %}" class="btn btn-primary">
+                <i class="fa fa-plus"></i> {% trans "Create order" %}
+            </a>
+        </p>
+    {% endif %}
     {% trans "Order" as label_code %}
     {% trans "Organization" as label_organization %}
     {% trans "Total" as label_total %}

@@ -43,7 +43,10 @@ from .forms import (
     ExhibitionDefaultFieldForm,
     ExhibitionEmailQueueForm,
     ExhibitionMailTemplatesForm,
+    ExhibitionOrderBookingForm,
+    ExhibitionOrderForm,
     ExhibitionOrderMarkPaidForm,
+    ExhibitionOrderProductsForm,
     ExhibitionOrderQuestionForm,
     ExhibitionOrderQuestionOptionFormSet,
     ExhibitionProductCategoryForm,
@@ -103,6 +106,7 @@ from .models import (
     ExhibitionCustomEmailTemplate,
     ExhibitionEmailQueue,
     ExhibitionOrder,
+    ExhibitionOrderError,
     ExhibitionOrderPosition,
     ExhibitionOrderQuestion,
     ExhibitionOrderQuestionOption,
@@ -124,7 +128,12 @@ from .models import (
     get_next_sponsor_group_level,
     storable_request_field_settings,
 )
-from .orders import paid_products_lack_payment_method, payment_method_names
+from .orders import (
+    paid_products_lack_payment_method,
+    payment_method_names,
+    place_exhibition_order,
+    send_order_email,
+)
 from .social_links import serialize_social_link
 from .utils import (
     VOUCHER_CSV_FILENAME,
@@ -2173,6 +2182,7 @@ class ExhibitionOrderListView(ExhibitionOrderMixin, FilteredListMixin, ListView)
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
+        context["can_change_orders"] = self.can_change_orders()
         names = payment_method_names(self.request.event)
         for order in context["orders"]:
             order.payment_method_name = names.get(order.payment_provider, order.payment_provider)
@@ -2199,6 +2209,70 @@ class ExhibitionOrderDetailView(ExhibitionOrderMixin, TemplateView):
 
 class ExhibitionOrderActionMixin(ExhibitionOrderMixin):
     permission = ("can_change_event_settings", "can_change_orders")
+
+
+class ExhibitionOrderCreateView(ExhibitionOrderActionMixin, TemplateView):
+    """Organisers book an order themselves: first the products, then the order form and the payment status."""
+
+    template_name = "exhibitors/order_create.html"
+
+    def get_products_form(self):
+        if self.request.method == "POST":
+            data = self.request.POST
+        else:
+            data = self.request.GET if "products" in self.request.GET else None
+        return ExhibitionOrderProductsForm(data=data, event=self.request.event)
+
+    def get_details_forms(self, products, data=None, files=None):
+        order_form = ExhibitionOrderForm(data=data, files=files, event=self.request.event, products=products)
+        for name, field in order_form.question_fields():
+            field.required = False
+        booking_form = ExhibitionOrderBookingForm(data=data, event=self.request.event)
+        return order_form, booking_form
+
+    def get(self, request, *args, **kwargs):
+        products_form = self.get_products_form()
+        context = self.get_context_data(products_form=products_form)
+        if products_form.is_bound and products_form.is_valid():
+            products = list(products_form.cleaned_data["products"])
+            context["products"] = products
+            context["order_form"], context["booking_form"] = self.get_details_forms(products)
+        return self.render_to_response(context)
+
+    def post(self, request, *args, **kwargs):
+        products_form = self.get_products_form()
+        if not products_form.is_valid():
+            messages.error(request, _("Please select at least one product."))
+            return redirect("plugins:exhibition:orders.add", **event_kwargs(request.event))
+        products = list(products_form.cleaned_data["products"])
+        order_form, booking_form = self.get_details_forms(products, request.POST, request.FILES)
+        context = self.get_context_data(
+            products_form=products_form, products=products, order_form=order_form, booking_form=booking_form
+        )
+        if not (order_form.is_valid() and booking_form.is_valid()):
+            return self.render_to_response(context)
+        try:
+            order = place_exhibition_order(
+                request.event,
+                products,
+                **order_form.order_details(),
+                order_form=order_form,
+                payment_provider=booking_form.cleaned_data["payment_provider"],
+                user=request.user,
+                check_availability=False,
+                paid=booking_form.paid,
+                payment_reference=booking_form.cleaned_data["payment_reference"],
+            )
+        except ExhibitionQuotaExceeded:
+            messages.error(request, _("One of the products is sold out. Free up room in its quotas first."))
+            return self.render_to_response(context)
+        except ExhibitionOrderError:
+            messages.error(request, _("The order could not be created."))
+            return self.render_to_response(context)
+        if booking_form.cleaned_data["send_email"]:
+            send_order_email(order, user=request.user)
+        messages.success(request, _("The order has been created."))
+        return redirect("plugins:exhibition:orders.detail", **event_kwargs(request.event), code=order.code)
 
 
 class ExhibitionOrderMarkPaidView(ExhibitionOrderActionMixin, FormView):

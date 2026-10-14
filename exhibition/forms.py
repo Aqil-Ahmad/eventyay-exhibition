@@ -24,6 +24,7 @@ from eventyay.base.forms.widgets import (
     TimePickerWidget,
 )
 from eventyay.base.models import Submission, SubmissionStates
+from eventyay.base.templatetags.money import money_filter
 from eventyay.base.templatetags.rich_text import compile_email_body
 from eventyay.common.forms.fields import I18nEmailBodyFormField
 from eventyay.common.forms.mixins import (
@@ -81,6 +82,7 @@ from .models import (
     get_next_sponsor_group_level,
     order_questions_for,
 )
+from .orders import usable_payment_providers
 from .social_links import (
     SOCIAL_LINK_CHOICES,
     SOCIAL_LINK_SPECS,
@@ -2508,6 +2510,63 @@ class ExhibitionOrderMarkPaidForm(forms.Form):
         max_length=255,
         required=False,
     )
+
+
+class ExhibitionOrderProductsForm(forms.Form):
+    """The products an organiser books, whether or not they are on public sale."""
+
+    products = forms.ModelMultipleChoiceField(
+        queryset=ExhibitionProduct.objects.none(),
+        widget=forms.CheckboxSelectMultiple,
+        label=_("Products"),
+    )
+
+    def __init__(self, *args, event, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["products"].queryset = ExhibitionProduct.objects.filter(event=event).in_sales_order()
+        self.fields["products"].label_from_instance = lambda product: (
+            f"{product} ({money_filter(product.price, event.currency)})"
+        )
+
+
+class ExhibitionOrderBookingForm(forms.Form):
+    """How an organiser-created order stands on payment, and whether its buyer is emailed."""
+
+    PAID = "paid"
+    PENDING = "pending"
+
+    payment_status = forms.ChoiceField(
+        label=_("Payment status"),
+        choices=(
+            (PAID, _("Paid, or nothing to pay")),
+            (PENDING, _("Pending, the buyer still has to pay")),
+        ),
+        initial=PAID,
+        widget=forms.RadioSelect,
+    )
+    payment_provider = forms.ChoiceField(label=_("Payment method"), required=False)
+    payment_reference = forms.CharField(
+        label=_("Payment reference"),
+        help_text=_("For example the reference of the bank transfer you received."),
+        max_length=255,
+        required=False,
+    )
+    send_email = forms.BooleanField(
+        label=_("Send the order email to the buyer"),
+        help_text=_("The confirmation for a paid order, or the order with payment details for a pending one."),
+        initial=True,
+        required=False,
+    )
+
+    def __init__(self, *args, event, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["payment_provider"].choices = [("", "—")] + [
+            (identifier, provider.public_name) for identifier, provider in usable_payment_providers(event).items()
+        ]
+
+    @property
+    def paid(self):
+        return self.cleaned_data["payment_status"] == self.PAID
 
 
 class ExhibitionQuotaForm(I18nModelForm):
