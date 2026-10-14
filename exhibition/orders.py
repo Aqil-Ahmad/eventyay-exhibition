@@ -1,10 +1,14 @@
+from collections import defaultdict
 from datetime import timedelta
 from decimal import Decimal
 
 from django.db import transaction
 from django.utils import timezone
 from django.utils.translation import gettext as _
+from eventyay.base.templatetags.money import money_filter
+from i18nfield.strings import LazyI18nString
 
+from . import mail
 from .models import (
     LOG_ORDER_PLACED,
     ExhibitionOrder,
@@ -41,6 +45,48 @@ def paid_products_lack_payment_method(event):
     return (
         ExhibitionProduct.objects.filter(event=event, active=True, price__gt=0).exists()
         and not usable_payment_providers(event)
+    )
+
+
+def payment_instructions(order):
+    """How to pay a pending order, as plain text from its payment method's settings."""
+    if order.status != ExhibitionOrderStatus.PENDING:
+        return ""
+    provider = order.event.get_payment_providers().get(order.payment_provider)
+    if provider is None:
+        return ""
+    if order.payment_provider == "banktransfer":
+        lines = []
+        if provider.settings.get("bank_details_type") == "sepa":
+            lines += [
+                f"{_('Account holder')}: {provider.settings.get('bank_details_sepa_name')}",
+                f"{_('IBAN')}: {provider.settings.get('bank_details_sepa_iban')}",
+                f"{_('BIC')}: {provider.settings.get('bank_details_sepa_bic')}",
+                f"{_('Bank')}: {provider.settings.get('bank_details_sepa_bank')}",
+            ]
+        details = provider.settings.get("bank_details", as_type=LazyI18nString)
+        if details:
+            lines.append(str(details))
+        lines.append(_("Please use the order code {code} as the payment reference.").format(code=order.code))
+        return "\n".join(lines)
+    instructions = str(provider.settings.get("email_instructions", as_type=LazyI18nString) or "")
+    return instructions.format_map(
+        defaultdict(
+            str,
+            order=order.code,
+            amount=order.total,
+            currency=order.currency,
+            amount_with_currency=money_filter(order.total, order.currency),
+        )
+    )
+
+
+def send_order_email(order, *, user=None):
+    """Email the buyer after commit: the confirmation once paid, otherwise the order with how to pay it."""
+    role = mail.ORDER_PAID if order.status == ExhibitionOrderStatus.PAID else mail.ORDER_PLACED
+    transaction.on_commit(
+        lambda: mail.queue_order_email(order.event, order, role, send_now=True, requestor=user),
+        robust=True,
     )
 
 

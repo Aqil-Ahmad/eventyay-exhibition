@@ -4035,6 +4035,8 @@ class EmailTemplatesView(EventPermissionRequiredMixin, TemplateView):
                 (mail_helpers.VOUCHERS, _("Vouchers")),
                 (mail_helpers.EXHIBITOR_PROFILE, _("Profile created for the exhibitor")),
                 (mail_helpers.REQUEST_MESSAGE, _("Request more information")),
+                (mail_helpers.ORDER_PLACED, _("Order placed (awaiting payment)")),
+                (mail_helpers.ORDER_PAID, _("Order confirmed")),
             )
         ]
         context["custom_panels"] = custom_panels

@@ -15,6 +15,7 @@ from eventyay.base.signals import (
     periodic_task,
     register_mail_placeholders,
 )
+from eventyay.base.templatetags.money import money_filter
 from eventyay.common.signals import user_dashboard_links, user_menu_items
 from eventyay.common.utils.language import localize_event_text
 from eventyay.control.signals import event_dashboard_components, nav_event_common, nav_global
@@ -27,6 +28,8 @@ from eventyay.presale.signals import (
 from .dashboard import user_has_exhibitions
 from .mail import (
     my_exhibitions_url,
+    order_product_list,
+    order_public_url,
     render_device_tokens,
     render_voucher_list,
     request_admin_url,
@@ -95,7 +98,7 @@ from .models import (
     clear_dependencies_on,
     prune_dependency_option,
 )
-from .orders import expire_overdue_orders
+from .orders import expire_overdue_orders, payment_instructions
 from .utils import add_external_image_csp_sources, exhibitor_login_email, public_exhibitors_queryset
 
 
@@ -399,6 +402,48 @@ def exhibition_mail_placeholders(sender, **kwargs):
             ["exhibitor"],
             my_exhibitions_url,
             my_exhibitions_url(),
+        ),
+        SimpleFunctionalMailTextPlaceholder(
+            "order_code",
+            ["exhibition_order"],
+            lambda exhibition_order: exhibition_order.code,
+            "ABC12",
+        ),
+        SimpleFunctionalMailTextPlaceholder(
+            "order_url",
+            ["exhibition_order"],
+            order_public_url,
+            "https://example.com/orga/event/exhibition/packages/order/ABC12/secret/",
+        ),
+        SimpleFunctionalMailTextPlaceholder(
+            "order_products",
+            ["exhibition_order"],
+            order_product_list,
+            _("- Gold sponsorship"),
+        ),
+        SimpleFunctionalMailTextPlaceholder(
+            "order_total",
+            ["exhibition_order"],
+            lambda exhibition_order: money_filter(exhibition_order.total, exhibition_order.currency),
+            "€5,000.00",
+        ),
+        SimpleFunctionalMailTextPlaceholder(
+            "order_contact_name",
+            ["exhibition_order"],
+            lambda exhibition_order: exhibition_order.name,
+            _("Jane Doe"),
+        ),
+        SimpleFunctionalMailTextPlaceholder(
+            "order_organization",
+            ["exhibition_order"],
+            lambda exhibition_order: exhibition_order.organization_name,
+            _("Acme Corp"),
+        ),
+        SimpleFunctionalMailTextPlaceholder(
+            "order_payment_info",
+            ["exhibition_order"],
+            payment_instructions,
+            _("Please transfer the amount to the bank account below."),
         ),
     ]
 
