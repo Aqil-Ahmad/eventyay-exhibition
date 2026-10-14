@@ -42,10 +42,9 @@ def payment_method_names(event):
 
 def paid_products_lack_payment_method(event):
     """Whether active products with a price are on offer while no usable payment method is enabled."""
-    return (
-        ExhibitionProduct.objects.filter(event=event, active=True, price__gt=0).exists()
-        and not usable_payment_providers(event)
-    )
+    return ExhibitionProduct.objects.filter(
+        event=event, active=True, price__gt=0
+    ).exists() and not usable_payment_providers(event)
 
 
 def payment_instructions(order):

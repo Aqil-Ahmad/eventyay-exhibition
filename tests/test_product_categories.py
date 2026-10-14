@@ -7,7 +7,6 @@ from eventyay.base.models import Event, LogEntry
 from eventyay.base.models.auth import User
 
 from exhibition.forms import ExhibitionProductForm
-from exhibition.signals import exhibition_logentry_object_link
 from exhibition.models import (
     LOG_PRODUCT_ADDED,
     LOG_PRODUCT_CATEGORY_ADDED,
@@ -15,6 +14,7 @@ from exhibition.models import (
     ExhibitionProduct,
     ExhibitionProductCategory,
 )
+from exhibition.signals import exhibition_logentry_object_link
 
 
 def _category(event, name="Sponsorship", **kwargs):

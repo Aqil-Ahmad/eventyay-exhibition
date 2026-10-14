@@ -69,6 +69,7 @@ from .forms import (
     SponsorGroupForm,
     social_link_prefixes,
 )
+from .mail import order_public_url
 from .models import (
     LOG_CALL_SETTINGS_CHANGED,
     LOG_GROUP_ADDED,
@@ -129,7 +130,6 @@ from .models import (
     get_next_sponsor_group_level,
     storable_request_field_settings,
 )
-from .mail import order_public_url
 from .orders import (
     paid_products_lack_payment_method,
     payment_method_names,

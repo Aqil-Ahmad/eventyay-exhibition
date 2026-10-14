@@ -337,9 +337,7 @@ class ShopConfirmView(ShopCheckoutMixin, TemplateView):
         files = self.cart.get("files", {})
         transaction.on_commit(lambda: delete_checkout_files(files))
         request.session.pop(checkout_session_key(request.event), None)
-        return redirect(
-            shop_url(request.event, "shop.order", code=order.code, secret=order.secret) + "?thanks=1"
-        )
+        return redirect(shop_url(request.event, "shop.order", code=order.code, secret=order.secret) + "?thanks=1")
 
 
 class ShopOrderView(TemplateView):

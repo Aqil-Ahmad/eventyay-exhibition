@@ -2,12 +2,12 @@ from django.core.exceptions import FieldDoesNotExist
 from django.db.models import Prefetch
 from django.db.models.signals import post_delete, pre_delete
 from django.dispatch import receiver
-from django_scopes import scopes_disabled
 from django.template.loader import get_template
 from django.templatetags.static import static
 from django.urls import reverse
 from django.utils.html import escape, format_html, format_html_join
 from django.utils.translation import gettext_lazy as _
+from django_scopes import scopes_disabled
 from eventyay.base.email import SimpleFunctionalMailTextPlaceholder
 from eventyay.base.signals import (
     logentry_display,
@@ -45,6 +45,14 @@ from .models import (
     LOG_GROUP_ADDED,
     LOG_GROUP_CHANGED,
     LOG_GROUP_DELETED,
+    LOG_ORDER_CANCELLED,
+    LOG_ORDER_EXPIRED,
+    LOG_ORDER_FORM_CHANGED,
+    LOG_ORDER_PAID,
+    LOG_ORDER_PLACED,
+    LOG_ORDER_QUESTION_ADDED,
+    LOG_ORDER_QUESTION_CHANGED,
+    LOG_ORDER_QUESTION_DELETED,
     LOG_ORGANIZATION_ADDED,
     LOG_ORGANIZATION_CHANGED,
     LOG_ORGANIZATION_CREATED,
@@ -56,14 +64,6 @@ from .models import (
     LOG_ORGANIZATION_SYNCED,
     LOG_ORGANIZATION_UNPUBLISHED,
     LOG_PREFIX,
-    LOG_ORDER_CANCELLED,
-    LOG_ORDER_EXPIRED,
-    LOG_ORDER_FORM_CHANGED,
-    LOG_ORDER_PAID,
-    LOG_ORDER_PLACED,
-    LOG_ORDER_QUESTION_ADDED,
-    LOG_ORDER_QUESTION_CHANGED,
-    LOG_ORDER_QUESTION_DELETED,
     LOG_PRODUCT_ADDED,
     LOG_PRODUCT_CATEGORY_ADDED,
     LOG_PRODUCT_CATEGORY_CHANGED,
