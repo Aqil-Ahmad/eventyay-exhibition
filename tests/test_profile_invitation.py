@@ -3,9 +3,11 @@ from unittest.mock import patch
 
 import pytest
 from allauth.account.models import EmailAddress
+from django.conf import settings
 from django.contrib.auth.models import AnonymousUser
 from django.contrib.messages.storage.fallback import FallbackStorage
 from django.contrib.sessions.backends.db import SessionStore
+from django.db import IntegrityError
 from django.http import HttpResponse
 from django.test import RequestFactory
 from django.urls import reverse
@@ -17,7 +19,7 @@ from exhibition import mail as mail_helpers
 from exhibition.dashboard import MyExhibitionInvitationView
 from exhibition.forms import ExhibitionMailTemplatesForm
 from exhibition.models import ExhibitionEmailQueue, ExhibitorInfo, ExhibitorSettings
-from exhibition.utils import user_can_edit_profile, user_exhibitors
+from exhibition.utils import invitation_account, user_can_edit_profile, user_exhibitors
 from exhibition.views import queue_profile_invitation
 
 PASSWORD = "Correct-Horse-Battery-9"
@@ -61,8 +63,7 @@ def test_new_address_gets_an_account_and_the_new_account_email(mail_event):
         user = User.objects.get(email__iexact="booth@example.com")
 
         assert queued.role == mail_helpers.EXHIBITOR_PROFILE_NEW_ACCOUNT
-        assert mail_helpers.invitation_url(user) in queued.body
-        assert user.pw_reset_token in queued.body
+        assert f"{settings.SITE_URL.rstrip('/')}/common/exhibitions/invitation/{user.pw_reset_token}/" in queued.body
         assert mail_helpers.my_exhibitions_url() in queued.body
         for placeholder in ("{invitation_link}", "{my_exhibitions_url}", "{login_email}", "{exhibitor_name}"):
             assert placeholder not in queued.body
@@ -227,3 +228,62 @@ def test_both_templates_are_editable_and_only_the_new_one_offers_the_invitation_
     existing = mail_helpers.role_placeholder_names(mail_event, mail_helpers.EXHIBITOR_PROFILE)
     assert {"invitation_link", "my_exhibitions_url", "login_email", "exhibitor_name", "event_name"} <= set(new_account)
     assert "invitation_link" not in existing
+
+
+@pytest.mark.django_db
+def test_an_expired_link_is_renewed_when_the_exhibitor_is_invited_again(mail_event):
+    with scopes_disabled():
+        _invite(mail_event)
+        user = User.objects.get(email__iexact="booth@example.com")
+        old_token = user.pw_reset_token
+        user.pw_reset_time = now() - timedelta(days=1)
+        user.save(update_fields=["pw_reset_time"])
+
+        _exhibitor, queued = _invite(mail_event, name="Second Booth")
+        user.refresh_from_db()
+
+        assert queued.role == mail_helpers.EXHIBITOR_PROFILE_NEW_ACCOUNT
+        assert user.pw_reset_token != old_token
+        assert user.pw_reset_time > now()
+        assert user.pw_reset_token in queued.body
+
+
+@pytest.mark.django_db
+def test_an_account_that_set_its_password_gets_the_existing_account_email(mail_event):
+    with scopes_disabled():
+        _invite(mail_event)
+        _set_password(User.objects.get(email__iexact="booth@example.com").pw_reset_token)
+
+        _exhibitor, queued = _invite(mail_event, name="Second Booth")
+
+        assert queued.role == mail_helpers.EXHIBITOR_PROFILE
+
+
+@pytest.mark.django_db
+def test_an_account_created_by_a_concurrent_invitation_is_reused(mail_event):
+    with scopes_disabled():
+        winner = User.objects.create_user(email="booth@example.com", password="pw")
+        missing = type("Missing", (), {"first": lambda self: None})()
+
+        with patch.object(User.objects, "filter", return_value=missing):
+            with patch("eventyay.person.services.create_user", side_effect=IntegrityError):
+                account, needs_password = invitation_account("booth@example.com")
+
+        assert account == winner
+        assert needs_password is False
+        assert User.objects.filter(email__iexact="booth@example.com").count() == 1
+
+
+@pytest.mark.django_db
+def test_profiles_created_through_the_api_get_the_invitation(mail_event):
+    from exhibition.api import ExhibitorInfoViewSet
+
+    with scopes_disabled():
+        exhibitor = _profile(mail_event)
+        serializer = type("Serializer", (), {"save": lambda self: exhibitor})()
+        view = ExhibitorInfoViewSet()
+        view.request = type("Request", (), {"event": mail_event})()
+
+        view.perform_create(serializer)
+
+        assert ExhibitionEmailQueue.objects.filter(exhibitor=exhibitor).exists()
