@@ -144,7 +144,11 @@ class ShopCheckoutMixin:
         if None in self.products:
             messages.error(request, _("One of the selected products is no longer on sale."))
             return redirect(shop_url(request.event))
-        return super().dispatch(request, *args, **kwargs)
+        return self.check_step() or super().dispatch(request, *args, **kwargs)
+
+    def check_step(self):
+        """A redirect to an earlier step when this one cannot be shown yet."""
+        return None
 
     def stored_files(self):
         files = MultiValueDict()
@@ -246,10 +250,10 @@ class ShopPaymentView(ShopCheckoutMixin, TemplateView):
     def providers(self):
         return usable_payment_providers(self.request.event)
 
-    def dispatch(self, request, *args, **kwargs):
-        if self.cart.get("products") and not self.total:
-            return redirect(shop_url(request.event, "shop.checkout.confirm"))
-        return super().dispatch(request, *args, **kwargs)
+    def check_step(self):
+        if not self.total:
+            return redirect(shop_url(self.request.event, "shop.checkout.confirm"))
+        return None
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -284,16 +288,14 @@ class ShopConfirmView(ShopCheckoutMixin, TemplateView):
     def payment_provider(self):
         return usable_payment_providers(self.request.event).get(self.cart.get("payment")) if self.total else None
 
-    def dispatch(self, request, *args, **kwargs):
-        if not self.cart.get("products"):
-            return super().dispatch(request, *args, **kwargs)
+    def check_step(self):
         if self.order_form is None or not self.order_form.is_valid():
-            messages.error(request, _("Please check your details."))
-            return redirect(shop_url(request.event, "shop.checkout.details"))
+            messages.error(self.request, _("Please check your details."))
+            return redirect(shop_url(self.request.event, "shop.checkout.details"))
         if self.total and self.payment_provider is None:
-            messages.error(request, _("Please select a payment method."))
-            return redirect(shop_url(request.event, "shop.checkout.payment"))
-        return super().dispatch(request, *args, **kwargs)
+            messages.error(self.request, _("Please select a payment method."))
+            return redirect(shop_url(self.request.event, "shop.checkout.payment"))
+        return None
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
