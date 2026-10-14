@@ -104,8 +104,11 @@ def place_exhibition_order(
     order_form=None,
     payment_provider="",
     user=None,
+    check_availability=True,
+    paid=False,
+    payment_reference="",
 ):
-    """Place an order at current prices with the custom answers of ``order_form``; a free order is paid at once."""
+    """Place an order at current prices; organisers skip the sale checks and may book it as paid, quotas still apply."""
     products = list(products)
     if not products:
         raise ExhibitionOrderError("An order needs at least one product.")
@@ -114,11 +117,11 @@ def place_exhibition_order(
 
     now = timezone.now()
     for product in products:
-        if product.event_id != event.pk or not product.is_available(now):
+        if product.event_id != event.pk or (check_availability and not product.is_available(now)):
             raise ExhibitionOrderError(f"{product} is not on sale.")
 
     total = sum((product.price for product in products), Decimal("0.00"))
-    if total and payment_provider not in usable_payment_providers(event):
+    if check_availability and total and payment_provider not in usable_payment_providers(event):
         raise ExhibitionOrderError("The payment method is not available for this event.")
 
     with transaction.atomic():
@@ -134,7 +137,11 @@ def place_exhibition_order(
             vat_id=vat_id,
             total=total,
             payment_provider=payment_provider if total else "",
-            expires=now + timedelta(days=event.settings.get("payment_term_days", as_type=int)) if total else None,
+            expires=(
+                now + timedelta(days=event.settings.get("payment_term_days", as_type=int))
+                if total and not paid
+                else None
+            ),
         )
         ExhibitionOrderPosition.objects.bulk_create(
             ExhibitionOrderPosition(order=order, product=product, price=product.price) for product in products
@@ -148,6 +155,8 @@ def place_exhibition_order(
         )
         if not total:
             order.mark_paid(provider=FREE_PAYMENT_PROVIDER, user=user)
+        elif paid:
+            order.mark_paid(provider=payment_provider, reference=payment_reference, user=user)
     return order
 
 
