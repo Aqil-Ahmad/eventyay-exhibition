@@ -339,7 +339,7 @@ def exhibition_mail_placeholders(sender, **kwargs):
         SimpleFunctionalMailTextPlaceholder(
             "booth_id",
             ["exhibitor"],
-            lambda exhibitor: exhibitor.booth_id or "",
+            lambda exhibitor: exhibitor.booth_id or str(_("not assigned yet")),
             "A-12",
         ),
         SimpleFunctionalMailTextPlaceholder(
