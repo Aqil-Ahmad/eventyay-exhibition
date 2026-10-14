@@ -227,7 +227,9 @@ def exhibition_presale_nav_tab(sender, request=None, **kwargs):
                     },
                 ),
                 "active"
-                if "/exhibition/" in request.path_info and "/exhibition/call/" not in request.path_info
+                if "/exhibition/" in request.path_info
+                and "/exhibition/call/" not in request.path_info
+                and "/exhibition/packages/" not in request.path_info
                 else "",
                 _("Exhibition"),
             )
@@ -251,6 +253,22 @@ def exhibition_presale_nav_tab(sender, request=None, **kwargs):
                 ),
                 "active" if "/exhibition/call/" in request.path_info else "",
                 call_label,
+            )
+        )
+
+    if ExhibitionProduct.objects.filter(event=sender).available().exists():
+        links.append(
+            format_html(
+                '<a href="{}" class="header-tab {}"><i class="fa fa-star-o"></i> {}</a>',
+                reverse(
+                    "plugins:exhibition:shop",
+                    kwargs={
+                        "organizer": sender.organizer.slug,
+                        "event": sender.slug,
+                    },
+                ),
+                "active" if "/exhibition/packages/" in request.path_info else "",
+                _("Sponsorship and exhibition"),
             )
         )
 

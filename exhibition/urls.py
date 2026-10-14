@@ -15,6 +15,7 @@ from .api import (
     VoucherRedemptionRetrieveView,
 )
 from .dashboard import MyExhibitionEditView, MyExhibitionsView, MyExhibitionVouchersView
+from .shop import ShopConfirmView, ShopDetailsView, ShopIndexView, ShopOrderView, ShopPaymentView
 from .views import (
     CustomEmailTemplateCreateView,
     CustomEmailTemplateDeleteView,
@@ -157,6 +158,31 @@ urlpatterns = [
             pattern_name="plugins:exhibition:request.user_reinstate", permanent=True, query_string=True
         ),
         name="request.user_reinstate.legacy",
+    ),
+    path(
+        "<str:organizer>/<str:event>/exhibition/packages/",
+        ShopIndexView.as_view(),
+        name="shop",
+    ),
+    path(
+        "<str:organizer>/<str:event>/exhibition/packages/checkout/details/",
+        ShopDetailsView.as_view(),
+        name="shop.checkout.details",
+    ),
+    path(
+        "<str:organizer>/<str:event>/exhibition/packages/checkout/payment/",
+        ShopPaymentView.as_view(),
+        name="shop.checkout.payment",
+    ),
+    path(
+        "<str:organizer>/<str:event>/exhibition/packages/checkout/confirm/",
+        ShopConfirmView.as_view(),
+        name="shop.checkout.confirm",
+    ),
+    path(
+        "<str:organizer>/<str:event>/exhibition/packages/order/<str:code>/<str:secret>/",
+        ShopOrderView.as_view(),
+        name="shop.order",
     ),
     path(
         "<str:organizer>/<str:event>/exhibition/<int:pk>/",
