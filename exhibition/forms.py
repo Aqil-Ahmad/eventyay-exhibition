@@ -2510,6 +2510,11 @@ class ExhibitionOrderMarkPaidForm(forms.Form):
         max_length=255,
         required=False,
     )
+    send_email = forms.BooleanField(
+        label=_("Send the order confirmation email to the buyer"),
+        initial=True,
+        required=False,
+    )
 
 
 class ExhibitionOrderProductsForm(forms.Form):

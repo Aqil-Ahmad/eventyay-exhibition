@@ -39,6 +39,8 @@
                         <dd>{{ order.code }}</dd>
                         <dt>{% trans "Order date" %}</dt>
                         <dd>{{ order.created|date:"SHORT_DATETIME_FORMAT" }}</dd>
+                        <dt>{% trans "Buyer's order page" %}</dt>
+                        <dd><a href="{{ buyer_url }}" target="_blank" rel="noopener">{% trans "Open" %}</a></dd>
                         {% if order.status == "pending" or order.status == "expired" %}
                             {% if order.expires %}
                                 <dt>{% trans "Expiration date" %}</dt>
@@ -66,6 +68,13 @@
                     <dl class="dl-horizontal">
                         <dt>{% trans "Organization" %}</dt>
                         <dd>{{ order.organization_name|default:"—" }}</dd>
+                        {% if order.organization %}
+                            <dt>{% trans "Organization profile" %}</dt>
+                            <dd>
+                                <a href="{% url 'plugins:exhibition:edit' organizer=request.event.organizer.slug event=request.event.slug pk=order.organization.pk %}">{{ order.organization }}</a>
+                                {% if not order.organization.active %}<span class="label label-default">{% trans "Inactive" %}</span>{% endif %}
+                            </dd>
+                        {% endif %}
                         <dt>{% trans "Contact person" %}</dt>
                         <dd>{{ order.name }}</dd>
                         <dt>{% trans "Email" %}</dt>

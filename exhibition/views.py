@@ -128,6 +128,7 @@ from .models import (
     get_next_sponsor_group_level,
     storable_request_field_settings,
 )
+from .mail import order_public_url
 from .orders import (
     paid_products_lack_payment_method,
     payment_method_names,
@@ -2204,6 +2205,7 @@ class ExhibitionOrderDetailView(ExhibitionOrderMixin, TemplateView):
             .prefetch_related("options")
             .order_by("question__position", "question_id")
         )
+        context["buyer_url"] = order_public_url(self.order)
         return context
 
 
@@ -2304,6 +2306,8 @@ class ExhibitionOrderMarkPaidView(ExhibitionOrderActionMixin, FormView):
                 ),
             )
         else:
+            if form.cleaned_data["send_email"]:
+                send_order_email(self.order, user=self.request.user)
             messages.success(self.request, _("The order has been marked as paid."))
         return redirect(self.get_order_url())
 
