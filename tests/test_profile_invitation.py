@@ -63,7 +63,7 @@ def test_new_address_gets_an_account_and_the_new_account_email(mail_event):
         user = User.objects.get(email__iexact="booth@example.com")
 
         assert queued.role == mail_helpers.EXHIBITOR_PROFILE_NEW_ACCOUNT
-        assert f"{settings.SITE_URL.rstrip('/')}/common/exhibitions/invitation/{user.pw_reset_token}/" in queued.body
+        assert f"{settings.SITE_URL.rstrip('/')}/exhibitor-invitation/{user.pw_reset_token}/" in queued.body
         assert mail_helpers.my_exhibitions_url() in queued.body
         for placeholder in ("{invitation_link}", "{my_exhibitions_url}", "{login_email}", "{exhibitor_name}"):
             assert placeholder not in queued.body
@@ -79,7 +79,7 @@ def test_existing_account_is_matched_ignoring_case_and_gets_the_existing_account
 
         assert User.objects.filter(email__iexact="booth@example.com").count() == 1
         assert queued.role == mail_helpers.EXHIBITOR_PROFILE
-        assert "/invitation/" not in queued.body
+        assert "/exhibitor-invitation/" not in queued.body
         assert mail_helpers.my_exhibitions_url() in queued.body
 
 
