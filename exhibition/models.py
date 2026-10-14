@@ -37,19 +37,9 @@ def generate_request_code():
 generate_proposal_code = generate_request_code
 
 
-def generate_booth_id(event=None):
-    import random
-    import string
-
-    # Generate a random booth_id if none exists
-    characters = string.ascii_letters + string.digits
-    while True:
-        booth_id = "".join(random.choices(characters, k=8))  # 8-character random string
-        queryset = ExhibitorInfo.objects.filter(booth_id=booth_id)
-        if event is not None:
-            queryset = queryset.filter(event=event)
-        if not queryset.exists():
-            return booth_id
+def normalize_booth_id(value):
+    """Booth numbers are organizer-typed; a blank one means no booth yet and is stored as NULL."""
+    return (value or "").strip() or None
 
 
 def get_next_sponsor_group_level(event):
@@ -465,6 +455,7 @@ class ExhibitorInfo(LoggedModel):
         return str(self.name)
 
     def save(self, *args, **kwargs):
+        self.booth_id = normalize_booth_id(self.booth_id)
         if self._state.adding:
             if self.is_exhibitor and not self.exhibitor_position:
                 self.exhibitor_position = get_next_exhibitor_position(self.event)

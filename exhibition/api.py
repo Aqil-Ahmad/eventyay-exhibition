@@ -16,7 +16,6 @@ from .models import (
     ExhibitorTag,
     Lead,
     SponsorGroup,
-    generate_booth_id,
     get_next_sponsor_group_level,
 )
 from .social_links import SOCIAL_LINK_SPECS
@@ -269,8 +268,6 @@ class ExhibitorInfoSerializer(I18nAwareModelSerializer):
             instance.allow_voucher_access = False
             instance.allow_lead_access = False
             instance.lead_scanning_scope_by_device = False
-        elif not instance.booth_id:
-            instance.booth_id = generate_booth_id(event=self.context["event"])
 
     def _replace_links(self, instance, social_links=UNSET, extra_links=UNSET):
         if social_links is not UNSET:

@@ -190,12 +190,10 @@ def create_exhibitor_from_request(exhibition_request, requestor=None):
         ExhibitorExtraLink,
         ExhibitorInfo,
         ExhibitorSocialLink,
-        generate_booth_id,
+        normalize_booth_id,
     )
 
-    booth_id = exhibition_request.booth_id
-    if exhibition_request.is_exhibitor and not booth_id:
-        booth_id = generate_booth_id(event=exhibition_request.event)
+    booth_id = normalize_booth_id(exhibition_request.booth_id)
 
     if exhibition_request.approved_exhibitor_id:
         exhibitor = exhibition_request.approved_exhibitor
@@ -203,7 +201,7 @@ def create_exhibitor_from_request(exhibition_request, requestor=None):
         exhibitor.is_exhibitor = exhibition_request.is_exhibitor
         exhibitor.is_sponsor = exhibition_request.is_sponsor
         exhibitor.sponsor_group = exhibition_request.sponsor_group if exhibition_request.is_sponsor else None
-        exhibitor.booth_id = booth_id if exhibition_request.is_exhibitor else None
+        exhibitor.booth_id = (booth_id or exhibitor.booth_id) if exhibition_request.is_exhibitor else None
         exhibitor.booth_name = exhibition_request.booth_name if exhibition_request.is_exhibitor else ""
         exhibitor.save(
             update_fields=["active", "is_exhibitor", "is_sponsor", "sponsor_group", "booth_id", "booth_name"]

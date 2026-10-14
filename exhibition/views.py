@@ -90,7 +90,6 @@ from .models import (
     ExhibitorSettings,
     ExhibitorVoucher,
     SponsorGroup,
-    generate_booth_id,
     get_next_sponsor_group_level,
     storable_request_field_settings,
 )
@@ -2238,11 +2237,6 @@ class ExhibitorCreateView(ExhibitorLinkFormsetMixin, EventPermissionRequiredMixi
     @transaction.atomic
     def form_valid(self, form):
         form.instance.event = self.request.event
-
-        # Only generate booth_id for exhibitors if none was provided.
-        if form.cleaned_data.get("is_exhibitor", True) and not form.cleaned_data.get("booth_id"):
-            form.instance.booth_id = generate_booth_id(event=self.request.event)
-
         response = super().form_valid(form)
         self.save_link_formsets()
         self.object.log_action(
@@ -2295,14 +2289,6 @@ class ExhibitorEditView(ExhibitorLinkFormsetMixin, EventPermissionRequiredMixin,
             .values("lead_scanning_enabled", "allow_voucher_access")
             .first()
         ) or {}
-
-        # Generate booth_id only for exhibitors if none exists.
-        if (
-            form.cleaned_data.get("is_exhibitor", True)
-            and not form.cleaned_data.get("booth_id")
-            and not form.instance.booth_id
-        ):
-            form.instance.booth_id = generate_booth_id(event=self.request.event)
 
         response = super().form_valid(form)
         self.save_link_formsets()

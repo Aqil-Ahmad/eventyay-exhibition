@@ -434,6 +434,7 @@ class ExhibitorInfoForm(ExhibitionQuestionFieldsMixin, I18nModelForm):
     )
     booth_id = forms.CharField(
         required=False,
+        empty_value=None,
         label=_("Booth ID"),
     )
     sessions = SessionChoiceField(
