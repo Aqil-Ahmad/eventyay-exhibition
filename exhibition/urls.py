@@ -68,13 +68,13 @@ from .views import (
 )
 
 urlpatterns = [
-    path("common/exhibitions/", MyExhibitionsView.as_view(), name="my_exhibitions"),
-    path("common/exhibitions/<int:pk>/edit/", MyExhibitionEditView.as_view(), name="my_exhibitions.edit"),
     path(
-        "common/exhibitions/invitation/<str:token>/",
+        "exhibitor-invitation/<str:token>/",
         MyExhibitionInvitationView.as_view(),
         name="my_exhibitions.invitation",
     ),
+    path("common/exhibitions/", MyExhibitionsView.as_view(), name="my_exhibitions"),
+    path("common/exhibitions/<int:pk>/edit/", MyExhibitionEditView.as_view(), name="my_exhibitions.edit"),
     path(
         "common/exhibitions/<int:pk>/vouchers/",
         MyExhibitionVouchersView.as_view(),
