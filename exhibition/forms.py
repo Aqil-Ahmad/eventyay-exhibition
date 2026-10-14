@@ -435,7 +435,10 @@ class ExhibitorInfoForm(ExhibitionQuestionFieldsMixin, I18nModelForm):
     booth_id = forms.CharField(
         required=False,
         empty_value=None,
-        label=_("Booth ID"),
+        label=_("Booth number"),
+        help_text=_(
+            "Assigned by the organizer when planning the floor, such as B12 or Hall 1-04. Leave empty until then."
+        ),
     )
     sessions = SessionChoiceField(
         queryset=Submission.objects.none(),
@@ -1705,7 +1708,7 @@ class ExhibitionRequestReviewForm(I18nModelForm):
         labels = {
             "is_exhibitor": _("Approve as exhibitor"),
             "is_sponsor": _("Approve as sponsor"),
-            "booth_id": _("Booth ID"),
+            "booth_id": _("Booth number"),
             "booth_name": _("Booth name"),
             "review_notes": _("Internal review notes"),
         }
