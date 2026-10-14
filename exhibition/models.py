@@ -31,6 +31,11 @@ def generate_call_secret():
     return secrets.token_urlsafe(24)
 
 
+def generate_order_secret():
+    alphabet = string.ascii_lowercase + string.digits
+    return get_random_string(length=32, allowed_chars=alphabet)
+
+
 def generate_request_code():
     alphabet = string.ascii_uppercase + string.digits
     return get_random_string(length=12, allowed_chars=alphabet)
@@ -520,6 +525,14 @@ class ExhibitorInfo(LoggedModel):
         related_name="exhibitors",
         verbose_name=_("Related sessions"),
     )
+    source_order = models.ForeignKey(
+        "ExhibitionOrder",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="+",
+        verbose_name=_("Created by order"),
+    )
 
     class Meta:
         ordering = ("name",)
@@ -696,6 +709,8 @@ LOG_ORGANIZATION_DELETED = f"{LOG_PREFIX}.organization.deleted"
 LOG_ORGANIZATION_SYNCED = f"{LOG_PREFIX}.organization.synced"
 LOG_ORGANIZATION_PUBLISHED = f"{LOG_PREFIX}.organization.published"
 LOG_ORGANIZATION_UNPUBLISHED = f"{LOG_PREFIX}.organization.unpublished"
+LOG_ORGANIZATION_ORDERED = f"{LOG_PREFIX}.organization.ordered"
+LOG_ORGANIZATION_ORDER_CANCELLED = f"{LOG_PREFIX}.organization.order_cancelled"
 LOG_SETTINGS_CHANGED = f"{LOG_PREFIX}.settings.changed"
 LOG_CALL_SETTINGS_CHANGED = f"{LOG_PREFIX}.call.settings.changed"
 LOG_CALL_SECRET_REGENERATED = f"{LOG_PREFIX}.call.secret.regenerated"
@@ -1537,6 +1552,7 @@ class ExhibitionOrder(LoggedModel):
         related_name="exhibition_orders",
     )
     code = models.CharField(max_length=16, verbose_name=_("Order code"))
+    secret = models.CharField(max_length=32, default=generate_order_secret)
     status = models.CharField(
         max_length=16,
         choices=ExhibitionOrderStatus.choices,
@@ -1558,6 +1574,14 @@ class ExhibitionOrder(LoggedModel):
     payment_date = models.DateTimeField(null=True, blank=True, verbose_name=_("Payment date"))
     expires = models.DateTimeField(null=True, blank=True, verbose_name=_("Expiration date"))
     created = models.DateTimeField(auto_now_add=True, verbose_name=_("Order date"))
+    organization = models.ForeignKey(
+        ExhibitorInfo,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="exhibition_orders",
+        verbose_name=_("Organization"),
+    )
 
     class Meta:
         verbose_name = _("Exhibition order")
@@ -1872,6 +1896,13 @@ class ExhibitionEmailQueue(LoggedModel):
     )
     exhibitor = models.ForeignKey(
         ExhibitorInfo,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="emails",
+    )
+    exhibition_order = models.ForeignKey(
+        ExhibitionOrder,
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
