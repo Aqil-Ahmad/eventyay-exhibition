@@ -47,14 +47,14 @@ def paid_products_lack_payment_method(event):
     ).exists() and not usable_payment_providers(event)
 
 
-def payment_instructions(order):
+def payment_instructions(exhibition_order):
     """How to pay a pending order, as plain text from its payment method's settings."""
-    if order.status != ExhibitionOrderStatus.PENDING:
+    if exhibition_order.status != ExhibitionOrderStatus.PENDING:
         return ""
-    provider = order.event.get_payment_providers().get(order.payment_provider)
+    provider = exhibition_order.event.get_payment_providers().get(exhibition_order.payment_provider)
     if provider is None:
         return ""
-    if order.payment_provider == "banktransfer":
+    if exhibition_order.payment_provider == "banktransfer":
         lines = []
         if provider.settings.get("bank_details_type") == "sepa":
             lines += [
@@ -66,16 +66,16 @@ def payment_instructions(order):
         details = provider.settings.get("bank_details", as_type=LazyI18nString)
         if details:
             lines.append(str(details))
-        lines.append(_("Please use the order code {code} as the payment reference.").format(code=order.code))
+        lines.append(_("Please use the order code {code} as the payment reference.").format(code=exhibition_order.code))
         return "\n".join(lines)
     instructions = str(provider.settings.get("email_instructions", as_type=LazyI18nString) or "")
     return instructions.format_map(
         defaultdict(
             str,
-            order=order.code,
-            amount=order.total,
-            currency=order.currency,
-            amount_with_currency=money_filter(order.total, order.currency),
+            order=exhibition_order.code,
+            amount=exhibition_order.total,
+            currency=exhibition_order.currency,
+            amount_with_currency=money_filter(exhibition_order.total, exhibition_order.currency),
         )
     )
 

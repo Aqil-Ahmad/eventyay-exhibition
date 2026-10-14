@@ -360,21 +360,22 @@ def build_order_context(event, order):
     return context
 
 
-def order_public_url(order):
+def order_public_url(exhibition_order):
     path = reverse(
         "plugins:exhibition:shop.order",
         kwargs={
-            "organizer": order.event.organizer.slug,
-            "event": order.event.slug,
-            "code": order.code,
-            "secret": order.secret,
+            "organizer": exhibition_order.event.organizer.slug,
+            "event": exhibition_order.event.slug,
+            "code": exhibition_order.code,
+            "secret": exhibition_order.secret,
         },
     )
     return urljoin(django_settings.SITE_URL, path)
 
 
-def order_product_list(order):
-    return "\n".join(f"- {position.product}" for position in order.positions.select_related("product"))
+def order_product_list(exhibition_order):
+    positions = exhibition_order.positions.select_related("product")
+    return "\n".join(f"- {position.product}" for position in positions)
 
 
 def request_public_url(exhibition_request):

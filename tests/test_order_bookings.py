@@ -68,6 +68,8 @@ def test_a_free_order_is_confirmed_and_emailed(event, django_capture_on_commit_c
         assert email.role == mail_helpers.ORDER_PAID
         assert email.sent_at is not None
         assert order.code in email.subject
+        assert "Community Booth" in email.body
+        assert order.secret in email.body
 
 
 @pytest.mark.django_db
