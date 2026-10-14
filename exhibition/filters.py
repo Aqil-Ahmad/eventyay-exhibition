@@ -1,5 +1,5 @@
 from django import forms
-from django.db.models import Q
+from django.db.models import F, Q
 from django.utils.translation import gettext_lazy as _
 from eventyay.control.forms.filter import FilterForm
 
@@ -128,6 +128,14 @@ class ExhibitorFilterForm(ExhibitionFilterForm):
         "active": "active",
         "published": "published",
     }
+
+    def apply_ordering(self, queryset):
+        ordering = self.cleaned_data.get("ordering")
+        if ordering not in ("booth", "-booth"):
+            return super().apply_ordering(queryset)
+        booth = F("booth_id")
+        booth = booth.desc(nulls_last=True) if ordering == "-booth" else booth.asc(nulls_last=True)
+        return queryset.order_by(booth, "name", "pk")
 
     query = forms.CharField(
         label=_("Search organizations…"),
