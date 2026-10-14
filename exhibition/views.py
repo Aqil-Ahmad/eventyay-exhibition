@@ -106,6 +106,7 @@ from .models import (
     ExhibitionCustomEmailTemplate,
     ExhibitionEmailQueue,
     ExhibitionOrder,
+    ExhibitionOrderAnswer,
     ExhibitionOrderError,
     ExhibitionOrderPosition,
     ExhibitionOrderQuestion,
@@ -2994,6 +2995,15 @@ class ExhibitorEditView(ExhibitorLinkFormsetMixin, EventPermissionRequiredMixin,
             "exhibitor": _("Edit Exhibitor"),
             "both": _("Edit Exhibitor & Sponsor"),
         }.get(organization_type_of(self.object), _("Edit Exhibitor or Sponsor"))
+        context["exhibition_orders"] = self.object.exhibition_orders.prefetch_related(
+            Prefetch("positions", queryset=ExhibitionOrderPosition.objects.select_related("product")),
+            Prefetch(
+                "answers",
+                queryset=ExhibitionOrderAnswer.objects.select_related("question")
+                .prefetch_related("options")
+                .order_by("question__position", "question_id"),
+            ),
+        )
         return context
 
     def get_success_url(self):
