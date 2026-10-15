@@ -2656,6 +2656,8 @@ ExhibitionOrderQuestionOptionFormSet = inlineformset_factory(
 class ExhibitionOrderForm(ExhibitionQuestionFieldsMixin, forms.Form):
     """What buyers fill in when they order: the active customer fields and the custom fields of their products."""
 
+    required_css_class = "required"
+
     def __init__(self, *args, event, products, **kwargs):
         super().__init__(*args, **kwargs)
         settings = ExhibitorSettings.objects.filter(event=event).first() or ExhibitorSettings(event=event)
