@@ -1,7 +1,13 @@
 {% extends "exhibitors/base.html" %}
 {% load i18n %}
+{% load static %}
 
 {% block title %}{{ request.event.name }} - {% trans "Quotas" %}{% endblock %}
+
+{% block custom_header %}
+    {{ block.super }}
+    <link rel="stylesheet" href="{% static 'pretixcontrol/css/tickets-mobile.css' %}">
+{% endblock %}
 
 {% block exhibitors_header %}
     <h1>{% trans "Quotas" %}</h1>

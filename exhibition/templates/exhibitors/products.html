@@ -7,6 +7,7 @@
 
 {% block custom_header %}
     {{ block.super }}
+    <link rel="stylesheet" href="{% static 'pretixcontrol/css/tickets-mobile.css' %}">
     <link rel="stylesheet" href="{% static 'exhibition/css/dragsort-table.css' %}">
     <script defer src="{% static 'orga/js/dragsort.js' %}"></script>
 {% endblock %}
@@ -74,36 +75,31 @@
             </p>
         {% endif %}
         <div class="table-responsive">
-            <table class="table table-condensed table-hover dragsort-table">
+            <table class="table table-condensed table-hover table-flip tickets-table dragsort-table">
                 <thead>
                 <tr>
                     <th>{% trans "Product name" %}</th>
+                    <th></th>
                     <th>{% trans "Product purpose" %}</th>
-                    <th>{% trans "Includes exhibition booth" %}</th>
-                    <th class="text-right">{% trans "Price" %}</th>
+                    <th>{% trans "Exhibition booth" %}</th>
+                    <th>{% trans "Price" %}</th>
+                    <th>{% trans "Category" %}</th>
                     <th class="action-col-2"></th>
                 </tr>
                 </thead>
                 {% regroup products by category as product_groups %}
                 {% for group in product_groups %}
-                    {% if group.grouper or product_groups|length > 1 %}
-                        <tbody>
-                        <tr class="active">
-                            <th colspan="5">
-                                {% if group.grouper %}{{ group.grouper.backend_name }}{% else %}{% trans "No category" %}{% endif %}
-                            </th>
-                        </tr>
-                        </tbody>
-                    {% endif %}
                     <tbody {% if reorder_enabled %}dragsort-url="{% url 'plugins:exhibition:products.reorder' organizer=request.event.organizer.slug event=request.event.slug %}?category_id={% if group.grouper %}{{ group.grouper.pk }}{% else %}none{% endif %}"{% endif %}>
                     {% for product in group.list %}
                         <tr {% if reorder_enabled %}dragsort-id="{{ product.pk }}"{% endif %}>
-                            <td>
+                            <td class="list-name-cell">
                                 <strong>
                                     {% if not product.active %}<strike>{% endif %}
                                     <a href="{% url 'plugins:exhibition:products.edit' organizer=request.event.organizer.slug event=request.event.slug pk=product.pk %}">{{ product }}</a>
                                     {% if not product.active %}</strike>{% endif %}
                                 </strong>
+                            </td>
+                            <td class="list-indicators" data-label="{% trans 'Availability' %}">
                                 {% if product.available_from or product.available_until %}
                                     {% if not product.is_available_by_time %}
                                         <span class="label label-danger" data-toggle="tooltip"
@@ -116,8 +112,8 @@
                                     {% endif %}
                                 {% endif %}
                             </td>
-                            <td>{{ product.get_purpose_display }}</td>
-                            <td>
+                            <td data-label="{% trans 'Product purpose' %}">{{ product.get_purpose_display }}</td>
+                            <td data-label="{% trans 'Exhibition booth' %}">
                                 {% if product.includes_booth %}
                                     <span class="fa fa-check text-success" aria-hidden="true"></span>
                                     <span class="sr-only">{% trans "Yes" %}</span>
@@ -126,8 +122,11 @@
                                     <span class="sr-only">{% trans "No" %}</span>
                                 {% endif %}
                             </td>
-                            <td class="text-right">{{ product.price|money:request.event.currency }}</td>
-                            <td class="text-right flip">
+                            <td data-label="{% trans 'Price' %}">{{ product.price|money:request.event.currency }}</td>
+                            <td class="list-meta" data-label="{% trans 'Category' %}">
+                                {% if product.category %}<span class="category-pill">{{ product.category.backend_name }}</span>{% endif %}
+                            </td>
+                            <td class="list-actions text-right flip" data-label="{% trans 'Actions' %}">
                                 <a href="{% url 'plugins:exhibition:products.edit' organizer=request.event.organizer.slug event=request.event.slug pk=product.pk %}"
                                    class="btn btn-default btn-sm" title="{% trans 'Edit' %}" data-toggle="tooltip"><i class="fa fa-edit"></i></a>
                                 <a href="{% url 'plugins:exhibition:products.delete' organizer=request.event.organizer.slug event=request.event.slug pk=product.pk %}"

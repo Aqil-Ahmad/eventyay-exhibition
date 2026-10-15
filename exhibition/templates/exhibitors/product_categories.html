@@ -6,6 +6,7 @@
 
 {% block custom_header %}
     {{ block.super }}
+    <link rel="stylesheet" href="{% static 'pretixcontrol/css/tickets-mobile.css' %}">
     <link rel="stylesheet" href="{% static 'exhibition/css/dragsort-table.css' %}">
     <script defer src="{% static 'orga/js/dragsort.js' %}"></script>
 {% endblock %}
