@@ -2627,10 +2627,12 @@ class ExhibitionOrderQuestionForm(ExhibitionQuestionForm):
         instance = super(ExhibitionQuestionForm, self).save(commit=False)
         instance.event = self.event
         if not instance.pk:
-            max_position = ExhibitionOrderQuestion.objects.filter(event=self.event).aggregate(Max("position"))[
+            settings = ExhibitorSettings.objects.filter(event=self.event).first() or ExhibitorSettings(event=self.event)
+            last_question = ExhibitionOrderQuestion.objects.filter(event=self.event).aggregate(Max("position"))[
                 "position__max"
             ]
-            instance.position = (max_position if max_position is not None else -1) + 1
+            last_field = max(field["position"] for field in settings.normalized_order_field_settings)
+            instance.position = max(last_field, -1 if last_question is None else last_question) + 1
         if commit:
             instance.save()
             self.save_m2m()
@@ -2661,15 +2663,19 @@ class ExhibitionOrderForm(ExhibitionQuestionFieldsMixin, forms.Form):
     def __init__(self, *args, event, products, **kwargs):
         super().__init__(*args, **kwargs)
         settings = ExhibitorSettings.objects.filter(event=event).first() or ExhibitorSettings(event=event)
+        positions = []
         for field in settings.normalized_order_field_settings:
             if field["active"]:
                 self.fields[field["key"]] = self.customer_field(field)
+                positions.append((field["position"], 0, field["key"]))
         for question in order_questions_for(list(products)):
             field = self.get_exhibition_question_field(question=question, answer=None, readonly=False)
             field.question = question
             field.answer = None
             self.apply_question_dependency(field, question)
             self.fields[f"question_{question.pk}"] = field
+            positions.append((question.position, 1, f"question_{question.pk}"))
+        self.order_fields([name for position, kind, name in sorted(positions)])
 
     @staticmethod
     def customer_field(field):

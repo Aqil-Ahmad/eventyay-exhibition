@@ -291,7 +291,7 @@ def test_new_fields_go_to_the_end_and_keep_their_products(event, shop):
         question = form.save()
 
         assert question.event == event
-        assert question.position == 5
+        assert question.position == 7
         assert list(question.products.all()) == [shop["booth"]]
 
 
@@ -354,13 +354,20 @@ def test_customer_fields_and_custom_fields_can_be_reordered(event, shop):
         second = _question(event, "Second", shop["gold"], position=1)
     url = _url(event, "products.order_form")
 
-    assert client.post(url, {"order": "email,name,organization_name"}).status_code == 204
-    assert client.post(url, {"order": f"{second.pk},{first.pk}"}).status_code == 204
+    assert client.post(url, {"order": f"email,{second.pk},name,organization_name,{first.pk}"}).status_code == 204
 
     with scopes_disabled():
         keys = [field["key"] for field in ExhibitorSettings.objects.get(event=event).normalized_order_field_settings]
         assert keys[:3] == ["email", "name", "organization_name"]
         assert list(ExhibitionOrderQuestion.objects.filter(event=event).order_by("position")) == [second, first]
+        form = ExhibitionOrderForm(event=event, products=[shop["gold"]])
+        assert list(form.fields)[:5] == [
+            "email",
+            f"question_{second.pk}",
+            "name",
+            "organization_name",
+            f"question_{first.pk}",
+        ]
 
 
 @pytest.mark.django_db

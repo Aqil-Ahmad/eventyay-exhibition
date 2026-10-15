@@ -2650,7 +2650,7 @@ class ExhibitionQuestionDeleteView(EventPermissionRequiredMixin, DeleteView):
 
 
 class ExhibitionOrderFormView(EventPermissionRequiredMixin, TemplateView):
-    """The questions buyers answer when they order, laid out like the Tickets order form page."""
+    """The questions buyers answer when they order, laid out like the exhibitor form page."""
 
     permission = "can_change_event_settings"
     template_name = "exhibitors/order_form.html"
@@ -2662,14 +2662,53 @@ class ExhibitionOrderFormView(EventPermissionRequiredMixin, TemplateView):
     def get_questions(self):
         return ExhibitionOrderQuestion.objects.filter(event=self.request.event)
 
+    def get_customer_answer_counts(self):
+        return ExhibitionOrder.objects.filter(event=self.request.event).aggregate(
+            **{key: Count("pk", filter=~Q(**{key: ""})) for key in ORDER_DEFAULT_FIELD_KEYS}
+        )
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context["customer_fields"] = self.exhibitor_settings.normalized_order_field_settings
-        context["questions"] = (
+        answer_counts = self.get_customer_answer_counts()
+        rows = [
+            {
+                **field,
+                "sort_position": field["position"],
+                "sort_kind": 0,
+                "dragsort_id": field["key"],
+                "input_prefix": field["key"],
+                "answer_count": answer_counts[field["key"]],
+                "is_custom": False,
+            }
+            for field in self.exhibitor_settings.normalized_order_field_settings
+        ]
+        questions = (
             self.get_questions()
             .annotate(answer_count=Count("answers", distinct=True))
             .prefetch_related(Prefetch("products", queryset=ExhibitionProduct.objects.in_sales_order()))
         )
+        for question in questions:
+            rows.append(
+                {
+                    "sort_position": question.position,
+                    "sort_kind": 1,
+                    "dragsort_id": question.pk,
+                    "input_prefix": f"question_{question.pk}",
+                    "label": question.localized_question,
+                    "active": question.active,
+                    "required": question.required,
+                    "active_locked": False,
+                    "required_locked": False,
+                    "lock_notice": "",
+                    "answer_count": question.answer_count,
+                    "is_custom": True,
+                    "pk": question.pk,
+                    "has_dependency": bool(question.dependency_question_id),
+                    "products": list(question.products.all()),
+                }
+            )
+        rows.sort(key=lambda row: (row["sort_position"], row["sort_kind"]))
+        context["order_fields"] = rows
         return context
 
     def store_customer_fields(self, fields):
@@ -2682,7 +2721,8 @@ class ExhibitionOrderFormView(EventPermissionRequiredMixin, TemplateView):
     def post(self, request, *args, **kwargs):
         order_param = request.POST.get("order")
         if order_param:
-            return self.save_order(order_param)
+            self.save_order(order_param)
+            return HttpResponse(status=204)
 
         fields = self.exhibitor_settings.normalized_order_field_settings
         for field in fields:
@@ -2705,26 +2745,32 @@ class ExhibitionOrderFormView(EventPermissionRequiredMixin, TemplateView):
         return redirect("plugins:exhibition:products.order_form", **event_kwargs(request.event))
 
     def save_order(self, order_param):
-        """Store a drag-and-drop order posted for either the customer fields or the custom fields."""
-        tokens = [token.strip() for token in order_param.split(",") if token.strip()]
-        if tokens and set(tokens) <= set(ORDER_DEFAULT_FIELD_KEYS):
-            positions = {key: index for index, key in enumerate(tokens)}
-            fields = self.exhibitor_settings.normalized_order_field_settings
-            for field in fields:
-                field["position"] = positions.get(field["key"], len(tokens) + field["position"])
-            self.store_customer_fields(fields)
-            return HttpResponse(status=204)
-
-        if not tokens or not all(token.isdigit() for token in tokens):
-            return HttpResponse(status=400)
+        """Store a drag-and-drop order of customer and custom fields; fields left out keep their order after them."""
+        fields = {field["key"]: field for field in self.exhibitor_settings.normalized_order_field_settings}
         questions = {question.pk: question for question in self.get_questions()}
-        ids = [int(token) for token in tokens]
-        if set(ids) != set(questions) or len(ids) != len(set(ids)):
-            return HttpResponse(status=400)
-        for index, pk in enumerate(ids):
-            questions[pk].position = index
-        ExhibitionOrderQuestion.objects.bulk_update(questions.values(), ["position"])
-        return HttpResponse(status=204)
+        ordered = []
+        for token in (raw_token.strip() for raw_token in order_param.split(",")):
+            if token in fields:
+                item = fields.pop(token)
+            elif token.isdigit() and int(token) in questions:
+                item = questions.pop(int(token))
+            else:
+                continue
+            ordered.append(item)
+        remaining = [(field["position"], 0, field) for field in fields.values()]
+        remaining += [(question.position, 1, question) for question in questions.values()]
+        ordered += [item for position, kind, item in sorted(remaining, key=lambda entry: entry[:2])]
+        reordered_questions = []
+        for position, item in enumerate(ordered):
+            if isinstance(item, ExhibitionOrderQuestion):
+                item.position = position
+                reordered_questions.append(item)
+            else:
+                item["position"] = position
+        with transaction.atomic():
+            self.store_customer_fields([item for item in ordered if isinstance(item, dict)])
+            if reordered_questions:
+                ExhibitionOrderQuestion.objects.bulk_update(reordered_questions, ["position"])
 
 
 class ExhibitionOrderQuestionMixin(EventPermissionRequiredMixin):
