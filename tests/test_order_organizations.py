@@ -102,13 +102,14 @@ def test_one_organisation_buying_twice_keeps_one_profile(event):
 
 
 @pytest.mark.django_db
-def test_an_existing_profile_is_matched_by_email(event):
+def test_another_organisation_of_the_same_email_gets_its_own_profile(event):
     with scopes_disabled():
         existing = ExhibitorInfo.objects.create(event=event, name="Acme", email="ADA@example.com", is_exhibitor=False)
-        order = _paid_order(event, _product(event, "Gold"), organization_name="Acme Incorporated")
+        order = _paid_order(event, _product(event, "Gold"), organization_name="Globex")
 
-        assert order.organization == existing
-        assert ExhibitorInfo.objects.filter(event=event).count() == 1
+        assert order.organization != existing
+        assert str(order.organization.name) == "Globex"
+        assert ExhibitorInfo.objects.filter(event=event).count() == 2
 
 
 @pytest.mark.django_db

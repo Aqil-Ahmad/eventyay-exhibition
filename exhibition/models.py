@@ -1552,26 +1552,14 @@ def i18n_texts(value):
 
 
 def find_order_organization(order):
-    """The organisation an order belongs to: one of the same name, else one reached at the same email."""
-    organizations = list(ExhibitorInfo.objects.filter(event=order.event).order_by("pk"))
+    """The organisation of the same name as the order's, since one email can manage several organisations."""
     name = (order.organization_name or order.name).strip().casefold()
-    for organization in organizations:
-        if name and name in i18n_texts(organization.name):
-            return organization
-    email = order.email.strip().casefold()
-    if not email:
+    if not name:
         return None
-    for organization in organizations:
-        if (organization.email or "").strip().casefold() == email:
+    for organization in ExhibitorInfo.objects.filter(event=order.event).order_by("pk"):
+        if name in i18n_texts(organization.name):
             return organization
-    earlier = (
-        ExhibitionOrder.objects.filter(event=order.event, email__iexact=email, organization__isnull=False)
-        .exclude(pk=order.pk)
-        .select_related("organization")
-        .order_by("-created")
-        .first()
-    )
-    return earlier.organization if earlier else None
+    return None
 
 
 class ExhibitionOrder(LoggedModel):

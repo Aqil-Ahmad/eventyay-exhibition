@@ -146,9 +146,10 @@ When an order is paid, or confirmed because it is free, the plugin creates
 an organisation profile for the buyer. If the buyer already has one, it is
 updated instead:
 
-- An existing profile is found by the organisation name, then by the email
-  address. An organisation that buys twice, or buys both a sponsorship and a
-  booth, keeps one profile, which gains the roles of both orders.
+- An existing profile is found by the organisation name only, because one
+  email address can manage several organisations. An organisation that buys
+  twice, or buys both a sponsorship and a booth, keeps one profile, which
+  gains the roles of both orders.
 - A new profile takes its name, email and website from the order and is not
   published. Review and publish it as usual.
 - The profile shows the orders linked to it, the answers to their order form,
