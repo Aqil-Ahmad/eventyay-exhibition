@@ -11,6 +11,7 @@ from django.urls import reverse
 from django.utils.datastructures import MultiValueDict
 from django.utils.functional import cached_property
 from django.utils.translation import gettext_lazy as _
+from django.views import View
 from django.views.generic import TemplateView
 from eventyay.control.forms import ExtFileField
 
@@ -68,44 +69,42 @@ def answer_text(value):
     return str(value)
 
 
+def packages_url(event):
+    """Where buyers pick packages: the call for exhibitors page, at its package list."""
+    return shop_url(event, "public_call") + "#exhibition-packages"
+
+
 def delete_checkout_files(files):
     for info in files.values():
         default_storage.delete(info["path"])
 
 
-class ShopIndexView(TemplateView):
-    """The public page listing the exhibition and sponsorship products, where buyers pick what to order."""
-
-    template_name = "exhibitors/shop.html"
+class ShopIndexView(View):
+    """Starts the checkout with the packages picked on the call for exhibitors page."""
 
     @cached_property
     def products(self):
         return shop_products(self.request.event)
 
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        cart = self.request.session.get(checkout_session_key(self.request.event), {})
-        context["event"] = self.request.event
-        context["products_by_category"] = group_by_category(self.products)
-        context["selected"] = {str(pk) for pk in cart.get("products", [])}
-        return context
+    def get(self, request, *args, **kwargs):
+        return redirect(packages_url(request.event))
 
     def post(self, request, *args, **kwargs):
         on_sale = {str(product.pk): product for product in self.products}
         chosen = [on_sale.get(pk) for pk in request.POST.getlist("product")]
         if not chosen:
             messages.error(request, _("Please select at least one product."))
-            return redirect(shop_url(request.event))
+            return redirect(packages_url(request.event))
         if None in chosen:
             messages.error(request, _("One of the selected products is no longer on sale."))
-            return redirect(shop_url(request.event))
+            return redirect(packages_url(request.event))
         sold_out = [product for product in chosen if product.sold_out]
         if sold_out:
             messages.error(
                 request,
                 _("{products} is sold out.").format(products=", ".join(str(product) for product in sold_out)),
             )
-            return redirect(shop_url(request.event))
+            return redirect(packages_url(request.event))
         key = checkout_session_key(request.event)
         cart = request.session.get(key, {})
         cart["products"] = [product.pk for product in chosen]
@@ -140,10 +139,10 @@ class ShopCheckoutMixin:
     def dispatch(self, request, *args, **kwargs):
         if not self.cart.get("products"):
             messages.info(request, _("Please select the products you want to order."))
-            return redirect(shop_url(request.event))
+            return redirect(packages_url(request.event))
         if None in self.products:
             messages.error(request, _("One of the selected products is no longer on sale."))
-            return redirect(shop_url(request.event))
+            return redirect(packages_url(request.event))
         return self.check_step() or super().dispatch(request, *args, **kwargs)
 
     def check_step(self):
@@ -212,7 +211,7 @@ class ShopDetailsView(ShopCheckoutMixin, TemplateView):
             initial = {"email": user.email, "name": user.get_full_name()} if user.is_authenticated else {}
             form = ExhibitionOrderForm(initial=initial, event=self.request.event, products=self.products)
         context["form"] = form
-        context["prev_url"] = shop_url(self.request.event)
+        context["prev_url"] = packages_url(self.request.event)
         return context
 
     def post(self, request, *args, **kwargs):
@@ -329,10 +328,10 @@ class ShopConfirmView(ShopCheckoutMixin, TemplateView):
             )
         except ExhibitionQuotaExceeded:
             messages.error(request, _("Sorry, one of the selected products has sold out in the meantime."))
-            return redirect(shop_url(request.event))
+            return redirect(packages_url(request.event))
         except ExhibitionOrderError:
             messages.error(request, _("Your order could not be placed. Please check your selection."))
-            return redirect(shop_url(request.event))
+            return redirect(packages_url(request.event))
         send_order_email(order)
         files = self.cart.get("files", {})
         transaction.on_commit(lambda: delete_checkout_files(files))

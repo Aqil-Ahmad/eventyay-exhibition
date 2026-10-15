@@ -136,6 +136,7 @@ from .orders import (
     place_exhibition_order,
     send_order_email,
 )
+from .shop import checkout_session_key, group_by_category, shop_products
 from .social_links import serialize_social_link
 from .utils import (
     VOUCHER_CSV_FILENAME,
@@ -303,13 +304,21 @@ class PublicCallEnabledMixin:
             settings.call_is_open or (settings.call_private and self.has_private_call_access(settings))
         )
 
-    def dispatch(self, request, *args, **kwargs):
-        settings = self.get_exhibition_settings()
+    def call_is_visible(self, settings):
+        """Whether the call itself may be shown, going by its switch, its deadline and its privacy."""
         if self.require_call_enabled and not settings.call_enabled:
-            raise Http404()
+            return False
         if self.hide_after_deadline and settings.call_hide_after_deadline and not self.is_call_open(settings):
-            raise Http404()
+            return False
         if self.enforce_private and settings.call_private and not self.can_access_private_call(settings):
+            return False
+        return True
+
+    def page_is_visible(self, settings):
+        return self.call_is_visible(settings)
+
+    def dispatch(self, request, *args, **kwargs):
+        if not self.page_is_visible(self.get_exhibition_settings()):
             raise Http404()
         return super().dispatch(request, *args, **kwargs)
 
@@ -883,17 +892,30 @@ class PublicExhibitorDetailView(PublicExhibitorBrowsingMixin, DetailView):
 
 
 class PublicCallView(PublicCallEnabledMixin, TemplateView):
+    """The call for exhibitors, and the sponsorship and exhibition packages on sale below it."""
+
     template_name = "exhibitors/public_call.html"
     hide_after_deadline = True
     enforce_private = True
+
+    @cached_property
+    def packages(self):
+        return shop_products(self.request.event)
+
+    def page_is_visible(self, settings):
+        return bool(self.packages) or self.call_is_visible(settings)
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context["event"] = self.request.event
         settings = self.get_exhibition_settings()
         context["settings"] = settings
+        context["show_call"] = self.call_is_visible(settings)
         context["call_is_open"] = self.is_call_open(settings)
         context["private_call_access"] = settings.call_private and self.has_private_call_access(settings)
+        cart = self.request.session.get(checkout_session_key(self.request.event), {})
+        context["products_by_category"] = group_by_category(self.packages)
+        context["selected"] = {str(pk) for pk in cart.get("products", [])}
         if self.request.user.is_authenticated:
             context["user_requests"] = ExhibitionRequest.objects.filter(
                 event=self.request.event,

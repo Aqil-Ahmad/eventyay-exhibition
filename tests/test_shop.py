@@ -32,6 +32,10 @@ def _url(event, name, **kwargs):
     )
 
 
+def _packages_url(event):
+    return _url(event, "public_call") + "#exhibition-packages"
+
+
 def _enable_plugin(event):
     with scopes_disabled():
         event.plugins = "exhibition"
@@ -54,7 +58,7 @@ def test_the_sales_page_lists_products_on_sale_with_their_booth(event):
         _product(event, "Late Package", available_from=now() + dt.timedelta(days=3))
         _product(event, "Past Package", available_until=now() - dt.timedelta(days=3))
 
-    content = Client().get(_url(event, "shop")).content.decode()
+    content = Client().get(_url(event, "public_call")).content.decode()
 
     assert "Gold Sponsor" in content
     assert "Digital Sponsor" in content
@@ -75,12 +79,12 @@ def test_a_sold_out_product_is_shown_but_cannot_be_selected(event):
         quota.products.set([product])
     client = Client()
 
-    assert "SOLD OUT" in client.get(_url(event, "shop")).content.decode()
+    assert "SOLD OUT" in client.get(_url(event, "public_call")).content.decode()
 
     response = client.post(_url(event, "shop"), {"product": [product.pk]})
 
-    assert response.url == _url(event, "shop")
-    assert client.get(_url(event, "shop.checkout.details")).url == _url(event, "shop")
+    assert response.url == _packages_url(event)
+    assert client.get(_url(event, "shop.checkout.details")).url == _packages_url(event)
 
 
 @pytest.mark.django_db
@@ -185,11 +189,25 @@ def test_the_order_page_needs_the_secret(event):
 
 
 @pytest.mark.django_db
-def test_the_sales_tab_shows_only_while_something_is_on_sale(event):
+def test_packages_on_sale_open_the_call_page_without_a_call(event):
+    _enable_plugin(event)
     with scopes_disabled():
         html = exhibition_presale_nav_tab(sender=event, request=RequestFactory().get("/x/"))
-        assert "/exhibition/packages/" not in str(html)
+        assert "/exhibition/call/" not in str(html)
+    assert Client().get(_url(event, "public_call")).status_code == 404
 
+    with scopes_disabled():
         _product(event, "Gold Sponsor")
         html = exhibition_presale_nav_tab(sender=event, request=RequestFactory().get("/x/"))
-        assert "/exhibition/packages/" in str(html)
+        assert "/exhibition/call/" in str(html)
+        assert "/exhibition/packages/" not in str(html)
+    content = Client().get(_url(event, "public_call")).content.decode()
+    assert "Gold Sponsor" in content
+    assert "Submit a request" not in content
+
+
+@pytest.mark.django_db
+def test_the_packages_address_leads_to_the_call_page(event):
+    _enable_plugin(event)
+
+    assert Client().get(_url(event, "shop")).url == _packages_url(event)

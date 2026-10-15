@@ -13,7 +13,7 @@
             <div class="panel panel-primary cart">
                 <div class="panel-heading">
                     <div class="pull-right flip">
-                        <a href="{% url 'plugins:exhibition:shop' organizer=request.event.organizer.slug event=request.event.slug %}">
+                        <a href="{% url 'plugins:exhibition:public_call' organizer=request.event.organizer.slug event=request.event.slug %}#exhibition-packages">
                             <span class="fa fa-edit" aria-hidden="true"></span>
                             {% trans "Change selection" %}
                         </a>

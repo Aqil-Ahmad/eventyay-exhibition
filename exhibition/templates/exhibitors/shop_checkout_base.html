@@ -17,7 +17,7 @@
             </summary>
             <div class="panel-body">
                 {% include "exhibitors/_shop_order_summary.html" %}
-                <a href="{% url 'plugins:exhibition:shop' organizer=request.event.organizer.slug event=request.event.slug %}">
+                <a href="{% url 'plugins:exhibition:public_call' organizer=request.event.organizer.slug event=request.event.slug %}#exhibition-packages">
                     <span class="fa fa-edit" aria-hidden="true"></span>
                     {% trans "Change selection" %}
                 </a>

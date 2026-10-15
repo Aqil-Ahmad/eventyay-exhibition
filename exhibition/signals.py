@@ -239,8 +239,11 @@ def exhibition_presale_nav_tab(sender, request=None, **kwargs):
         event=sender,
         call_enabled=True,
     ).first()
-    if settings and not settings.call_private and (settings.call_is_open or not settings.call_hide_after_deadline):
-        call_label = localize_event_text(settings.call_headline) or _("Call for Exhibitors")
+    call_is_public = bool(
+        settings and not settings.call_private and (settings.call_is_open or not settings.call_hide_after_deadline)
+    )
+    if call_is_public or ExhibitionProduct.objects.filter(event=sender).available().exists():
+        call_label = (localize_event_text(settings.call_headline) if settings else "") or _("Call for Exhibitors")
         links.append(
             format_html(
                 '<a href="{}" class="header-tab {}"><i class="fa fa-handshake-o"></i> {}</a>',
@@ -251,24 +254,10 @@ def exhibition_presale_nav_tab(sender, request=None, **kwargs):
                         "event": sender.slug,
                     },
                 ),
-                "active" if "/exhibition/call/" in request.path_info else "",
+                "active"
+                if "/exhibition/call/" in request.path_info or "/exhibition/packages/" in request.path_info
+                else "",
                 call_label,
-            )
-        )
-
-    if ExhibitionProduct.objects.filter(event=sender).available().exists():
-        links.append(
-            format_html(
-                '<a href="{}" class="header-tab {}"><i class="fa fa-star-o"></i> {}</a>',
-                reverse(
-                    "plugins:exhibition:shop",
-                    kwargs={
-                        "organizer": sender.organizer.slug,
-                        "event": sender.slug,
-                    },
-                ),
-                "active" if "/exhibition/packages/" in request.path_info else "",
-                _("Sponsorship and exhibition"),
             )
         )
 
