@@ -12,13 +12,20 @@
     <form class="form-horizontal" method="post" enctype="multipart/form-data">
         {% csrf_token %}
         {% bootstrap_form_errors form type="non_fields" %}
-        <div class="panel panel-default">
-            <div class="panel-heading">
-                <h4 class="panel-title"><strong>{% trans "Order form" %}</strong></h4>
-            </div>
-            <div class="panel-body">
-                {% bootstrap_form form layout="checkout" %}
-            </div>
+        <div class="panel-group" id="questions_group">
+            <details class="panel panel-default" open>
+                <summary class="panel-heading">
+                    <h4 class="panel-title">
+                        <strong>{% trans "Contact information" %}</strong>
+                        <i class="fa fa-angle-down collapse-indicator" aria-hidden="true"></i>
+                    </h4>
+                </summary>
+                <div id="contact">
+                    <div class="panel-body questions-form">
+                        {% bootstrap_form form layout="checkout" %}
+                    </div>
+                </div>
+            </details>
         </div>
         <div class="row checkout-button-row">
             <div class="col-md-4 col-sm-6">
