@@ -19,6 +19,7 @@ from .forms import ExhibitionOrderForm
 from .models import (
     ExhibitionOrder,
     ExhibitionOrderError,
+    ExhibitionOrderStateError,
     ExhibitionOrderStatus,
     ExhibitionProduct,
     ExhibitionQuotaExceeded,
@@ -339,10 +340,8 @@ class ShopConfirmView(ShopCheckoutMixin, TemplateView):
         return redirect(shop_url(request.event, "shop.order", code=order.code, secret=order.secret) + "?thanks=1")
 
 
-class ShopOrderView(TemplateView):
-    """The buyer's page for one order, reached with the secret link from the checkout and the emails."""
-
-    template_name = "exhibitors/shop_order.html"
+class ShopOrderMixin:
+    """An order reached with its secret link from the checkout and the emails."""
 
     @cached_property
     def order(self):
@@ -350,6 +349,15 @@ class ShopOrderView(TemplateView):
         if order.secret != self.kwargs["secret"]:
             raise Http404()
         return order
+
+    def order_url(self):
+        return shop_url(self.request.event, "shop.order", code=self.order.code, secret=self.order.secret)
+
+
+class ShopOrderView(ShopOrderMixin, TemplateView):
+    """The buyer's page for one order."""
+
+    template_name = "exhibitors/shop_order.html"
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -364,4 +372,44 @@ class ShopOrderView(TemplateView):
         context["payment_instructions"] = payment_instructions(order)
         provider = self.request.event.get_payment_providers().get(order.payment_provider)
         context["payment_method"] = provider.public_name if provider else ""
+        context["can_change_payment"] = context["is_pending"] and bool(usable_payment_providers(self.request.event))
         return context
+
+
+class ShopOrderPayChangeView(ShopOrderMixin, TemplateView):
+    """Where a buyer of a pending order sees how to pay again or picks another payment method."""
+
+    template_name = "exhibitors/shop_order_pay_change.html"
+
+    @cached_property
+    def providers(self):
+        return usable_payment_providers(self.request.event)
+
+    def dispatch(self, request, *args, **kwargs):
+        if self.order.status != ExhibitionOrderStatus.PENDING:
+            messages.error(request, _("This order is not awaiting a payment."))
+            return redirect(self.order_url())
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["event"] = self.request.event
+        context["order"] = self.order
+        context["providers"] = [
+            {"provider": provider, "form": provider.payment_form_render(self.request)}
+            for provider in self.providers.values()
+        ]
+        context["selected"] = self.order.payment_provider
+        context["order_url"] = self.order_url()
+        return context
+
+    def post(self, request, *args, **kwargs):
+        payment = request.POST.get("payment")
+        if payment not in self.providers:
+            messages.error(request, _("Please select a payment method."))
+            return self.render_to_response(self.get_context_data())
+        try:
+            self.order.change_payment_provider(payment)
+        except ExhibitionOrderStateError:
+            messages.error(request, _("This order is not awaiting a payment."))
+        return redirect(self.order_url())

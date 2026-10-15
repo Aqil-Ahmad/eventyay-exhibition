@@ -6,9 +6,11 @@ from django.test import Client, RequestFactory, override_settings
 from django.urls import reverse
 from django.utils.timezone import now
 from django_scopes import scopes_disabled
+from eventyay.base.models import LogEntry
 
 from exhibition import mail as mail_helpers
 from exhibition.models import (
+    LOG_ORDER_PAYMENT_CHANGED,
     ExhibitionEmailQueue,
     ExhibitionOrder,
     ExhibitionOrderStatus,
@@ -16,6 +18,7 @@ from exhibition.models import (
     ExhibitionProductPurpose,
     ExhibitionQuota,
 )
+from exhibition.orders import place_exhibition_order
 from exhibition.signals import exhibition_presale_nav_tab
 
 CUSTOMER_DATA = {"organization_name": "Acme Inc", "name": "Ada Lovelace", "email": "ada@example.com"}
@@ -211,3 +214,49 @@ def test_the_packages_address_leads_to_the_call_page(event):
     _enable_plugin(event)
 
     assert Client().get(_url(event, "shop")).url == _packages_url(event)
+
+
+@pytest.mark.django_db
+@override_settings(SITE_URL="https://testserver")
+def test_a_pending_order_can_switch_its_payment_method(event):
+    _enable_plugin(event)
+    event.settings.set("payment_manual__enabled", True)
+    event.settings.set("payment_banktransfer__enabled", True)
+    event.settings.set("payment_banktransfer_bank_details", "Acme Bank")
+    with scopes_disabled():
+        order = place_exhibition_order(
+            event,
+            [_product(event, "Gold Sponsor", price="5000.00")],
+            **CUSTOMER_DATA,
+            payment_provider="manual",
+        )
+    client = Client()
+    order_url = _url(event, "shop.order", code=order.code, secret=order.secret)
+    change_url = _url(event, "shop.order.pay_change", code=order.code, secret=order.secret)
+
+    assert "Re-try payment or choose another payment method" in client.get(order_url).content.decode()
+
+    response = client.post(change_url, {"payment": "banktransfer"})
+
+    assert response.url == order_url
+    with scopes_disabled():
+        order.refresh_from_db()
+        assert order.payment_provider == "banktransfer"
+        assert LogEntry.objects.filter(action_type=LOG_ORDER_PAYMENT_CHANGED, object_id=order.pk).exists()
+
+
+@pytest.mark.django_db
+@override_settings(SITE_URL="https://testserver")
+def test_a_paid_order_cannot_switch_its_payment_method(event):
+    _enable_plugin(event)
+    event.settings.set("payment_manual__enabled", True)
+    with scopes_disabled():
+        order = place_exhibition_order(event, [_product(event, "Community Booth")], **CUSTOMER_DATA)
+    client = Client()
+    change_url = _url(event, "shop.order.pay_change", code=order.code, secret=order.secret)
+
+    assert client.post(change_url, {"payment": "manual"}).status_code == 302
+    with scopes_disabled():
+        order.refresh_from_db()
+        assert order.payment_provider == "free"
+    assert client.get(_url(event, "shop.order.pay_change", code=order.code, secret="wrong")).status_code == 404

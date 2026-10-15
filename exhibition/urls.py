@@ -15,7 +15,14 @@ from .api import (
     VoucherRedemptionRetrieveView,
 )
 from .dashboard import MyExhibitionEditView, MyExhibitionsView, MyExhibitionVouchersView
-from .shop import ShopConfirmView, ShopDetailsView, ShopIndexView, ShopOrderView, ShopPaymentView
+from .shop import (
+    ShopConfirmView,
+    ShopDetailsView,
+    ShopIndexView,
+    ShopOrderPayChangeView,
+    ShopOrderView,
+    ShopPaymentView,
+)
 from .views import (
     CustomEmailTemplateCreateView,
     CustomEmailTemplateDeleteView,
@@ -184,6 +191,11 @@ urlpatterns = [
         "<str:organizer>/<str:event>/exhibition/packages/order/<str:code>/<str:secret>/",
         ShopOrderView.as_view(),
         name="shop.order",
+    ),
+    path(
+        "<str:organizer>/<str:event>/exhibition/packages/order/<str:code>/<str:secret>/pay/change/",
+        ShopOrderPayChangeView.as_view(),
+        name="shop.order.pay_change",
     ),
     path(
         "<str:organizer>/<str:event>/exhibition/<int:pk>/",

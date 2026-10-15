@@ -30,20 +30,31 @@
             {% include "exhibitors/_order_status.html" with order=order %}
         </h2>
         {% if is_pending %}
-            <div class="panel panel-danger">
+            <div class="panel panel-primary">
                 <div class="panel-heading">
                     <h3 class="panel-title">{% trans "Payment" %}</h3>
                 </div>
                 <div class="panel-body">
-                    {% if order.expires %}
-                        <p>
-                            {% blocktrans trimmed with date=order.expires|date:"SHORT_DATE_FORMAT" %}
-                                Please complete your payment before {{ date }}.
-                            {% endblocktrans %}
-                        </p>
-                    {% endif %}
+                    <p>
+                        <strong>{% blocktrans trimmed with total=order.total|money:order.currency %}
+                            A payment of {{ total }} is still pending for this order.
+                        {% endblocktrans %}</strong>
+                        {% if order.expires %}
+                            <strong>{% blocktrans trimmed with date=order.expires|date:"SHORT_DATE_FORMAT" %}
+                                Please complete your payment before {{ date }}
+                            {% endblocktrans %}</strong>
+                        {% endif %}
+                    </p>
                     {% if payment_method %}<p><strong>{{ payment_method }}</strong></p>{% endif %}
                     {% if payment_instructions %}<p>{{ payment_instructions|linebreaksbr }}</p>{% endif %}
+                    {% if can_change_payment %}
+                        <div class="text-right flip">
+                            <a href="{% url 'plugins:exhibition:shop.order.pay_change' organizer=request.event.organizer.slug event=request.event.slug code=order.code secret=order.secret %}" class="btn btn-default">
+                                {% trans "Re-try payment or choose another payment method" %}
+                            </a>
+                        </div>
+                    {% endif %}
+                    <div class="clearfix"></div>
                 </div>
             </div>
         {% endif %}

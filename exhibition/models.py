@@ -731,6 +731,7 @@ LOG_ORDER_PLACED = f"{LOG_PREFIX}.order.placed"
 LOG_ORDER_PAID = f"{LOG_PREFIX}.order.paid"
 LOG_ORDER_CANCELLED = f"{LOG_PREFIX}.order.cancelled"
 LOG_ORDER_EXPIRED = f"{LOG_PREFIX}.order.expired"
+LOG_ORDER_PAYMENT_CHANGED = f"{LOG_PREFIX}.order.payment_changed"
 LOG_QUOTA_ADDED = f"{LOG_PREFIX}.quota.added"
 LOG_QUOTA_CHANGED = f"{LOG_PREFIX}.quota.changed"
 LOG_QUOTA_DELETED = f"{LOG_PREFIX}.quota.deleted"
@@ -1659,6 +1660,17 @@ class ExhibitionOrder(LoggedModel):
                 user,
             )
             self.release_organization(user=user)
+
+    def change_payment_provider(self, provider, *, user=None):
+        """Switch a pending order to another payment method, as a buyer retrying the payment does."""
+        with transaction.atomic():
+            current = type(self).objects.select_for_update().get(pk=self.pk)
+            if current.status != ExhibitionOrderStatus.PENDING:
+                raise ExhibitionOrderStateError(f"Order {self.code} is not awaiting payment.")
+            previous = current.payment_provider
+            self.payment_provider = provider
+            self.save(update_fields=["payment_provider"])
+            self.log_action(LOG_ORDER_PAYMENT_CHANGED, data={"old_provider": previous, "provider": provider}, user=user)
 
     def link_organization(self, user=None):
         """Create or reuse the organisation of a paid order and give it the roles its products come with."""
