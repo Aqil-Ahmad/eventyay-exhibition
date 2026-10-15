@@ -10,8 +10,8 @@ Exhibition products are separate from tickets
 
 Exhibition and sponsorship products are their own products. They are managed
 only under **Exhibition → Products** and sold on the event's
-**Sponsorship and exhibition** page. They never appear in the ticket shop,
-and ticket products never appear on the sponsorship page. Exhibition orders
+**Call for Exhibitors** page. They never appear in the ticket shop, and ticket
+products never appear on the call for exhibitors page. Exhibition orders
 are also separate from ticket orders: they are listed under
 **Exhibition → Orders** and not in the ticket order list.
 
@@ -64,17 +64,18 @@ left, and warns you about booth products that are not on any booth quota.
 The order form
 --------------
 
-Go to **Exhibition → Products → Order form**.
+Go to **Exhibition → Products → Order form**. Like the exhibitor form, it is
+one table of fields: turn each field on or off, set whether it is required,
+and drag rows to set the order buyers see them in.
 
-**Customer data** is asked once per order. Organization, contact person and
-email are always asked. Phone and website are on by default, and billing
-address and VAT ID are off by default. Turn each field on or off and set
-whether it is required.
+The built-in fields are asked on every order. Organization, contact person
+and email are always asked. Phone and website are on by default, and billing
+address and VAT ID are off by default.
 
-**Custom fields** are your own questions, such as booth power or furniture
-needs. Each custom field lists the products it is asked for. A buyer only
-answers the fields of the products they order, and a field with no products
-is never asked.
+Click **New custom field** to add your own questions, such as booth power or
+furniture needs. Each custom field lists the products it is asked for. A
+buyer only answers the fields of the products they order, and a field with no
+products is never asked.
 
 Payment
 -------
@@ -90,12 +91,19 @@ event's payment term to pay. After that, the order expires and frees its
 quota. To record a payment, open the order and click **Mark as paid**. You can
 also mark an expired order as paid while its quotas still have room.
 
+While an order is pending, the buyer's order page shows how to pay and a
+**Re-try payment or choose another payment method** button, the same as for
+tickets. If the buyer has lost the email, click **Resend link** next to their
+email address on the order page.
+
 The public page and checkout
 ----------------------------
 
-When at least one product is on sale, the event's public pages show a
-**Sponsorship and exhibition** tab. Buyers do not need an account. The steps
-are:
+Products on sale are listed on the **Call for Exhibitors** page, below the
+call itself, in the same layout as the ticket products on the event's front
+page. The page and its tab are shown whenever a product is on sale, even if
+the call is closed, private or turned off; in that case only the packages are
+shown. Buyers do not need an account. The steps are:
 
 1. select the packages; each one shows its price, its purpose and whether it
    includes an exhibition booth;
