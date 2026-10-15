@@ -113,6 +113,7 @@ from .models import (
     ExhibitionOrderQuestion,
     ExhibitionOrderQuestionOption,
     ExhibitionOrderStateError,
+    ExhibitionOrderStatus,
     ExhibitionProduct,
     ExhibitionProductCategory,
     ExhibitionQuestion,
@@ -2332,6 +2333,18 @@ class ExhibitionOrderMarkPaidView(ExhibitionOrderActionMixin, FormView):
             if form.cleaned_data["send_email"]:
                 send_order_email(self.order, user=self.request.user)
             messages.success(self.request, _("The order has been marked as paid."))
+        return redirect(self.get_order_url())
+
+
+class ExhibitionOrderResendView(ExhibitionOrderActionMixin, View):
+    """Send the buyer the current order email again, with the link to their order page."""
+
+    def post(self, request, *args, **kwargs):
+        if self.order.status == ExhibitionOrderStatus.CANCELLED:
+            messages.error(request, _("This order has been cancelled."))
+        else:
+            send_order_email(self.order, user=request.user)
+            messages.success(request, _("The email has been queued to be sent."))
         return redirect(self.get_order_url())
 
 

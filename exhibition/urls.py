@@ -47,6 +47,7 @@ from .views import (
     ExhibitionOrderQuestionCreateView,
     ExhibitionOrderQuestionDeleteView,
     ExhibitionOrderQuestionEditView,
+    ExhibitionOrderResendView,
     ExhibitionProductCategoryCreateView,
     ExhibitionProductCategoryDeleteView,
     ExhibitionProductCategoryEditView,
@@ -271,6 +272,11 @@ urlpatterns = [
         "exhibitors/event/<orgslug:organizer>/<slug:event>/orders/<str:code>/mark_paid",
         ExhibitionOrderMarkPaidView.as_view(),
         name="orders.mark_paid",
+    ),
+    path(
+        "exhibitors/event/<orgslug:organizer>/<slug:event>/orders/<str:code>/resend",
+        ExhibitionOrderResendView.as_view(),
+        name="orders.resend",
     ),
     path(
         "exhibitors/event/<orgslug:organizer>/<slug:event>/orders/<str:code>/cancel",

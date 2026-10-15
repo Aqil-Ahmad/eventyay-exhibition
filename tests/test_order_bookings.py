@@ -141,3 +141,20 @@ def test_creating_orders_needs_the_change_orders_permission(event):
     client = _organizer_client(event, can_change_orders=False)
 
     assert client.get(_url(event, "orders.add")).status_code == 403
+
+
+@pytest.mark.django_db
+@override_settings(SITE_URL="https://testserver")
+def test_the_order_link_can_be_resent(event, django_capture_on_commit_callbacks):
+    client = _organizer_client(event)
+    with scopes_disabled():
+        order = place_exhibition_order(event, [_product(event, "Community Booth")], **CUSTOMER_DATA)
+
+    with django_capture_on_commit_callbacks(execute=True):
+        response = client.post(_url(event, "orders.resend", code=order.code))
+
+    assert response.url == _url(event, "orders.detail", code=order.code)
+    with scopes_disabled():
+        email = ExhibitionEmailQueue.objects.get(exhibition_order=order)
+        assert email.role == mail_helpers.ORDER_PAID
+        assert order.secret in email.body

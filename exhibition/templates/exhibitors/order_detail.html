@@ -78,7 +78,16 @@
                         <dt>{% trans "Contact person" %}</dt>
                         <dd>{{ order.name }}</dd>
                         <dt>{% trans "Email" %}</dt>
-                        <dd><a href="mailto:{{ order.email }}">{{ order.email }}</a></dd>
+                        <dd>
+                            <a href="mailto:{{ order.email }}">{{ order.email }}</a>
+                            {% if can_change_orders and order.status != "cancelled" %}
+                                <form class="form-inline helper-display-inline" method="post"
+                                      action="{% url 'plugins:exhibition:orders.resend' organizer=request.event.organizer.slug event=request.event.slug code=order.code %}">
+                                    {% csrf_token %}
+                                    <button class="btn btn-default btn-xs">{% trans "Resend link" %}</button>
+                                </form>
+                            {% endif %}
+                        </dd>
                         {% if order.phone %}
                             <dt>{% trans "Phone number" %}</dt>
                             <dd>{{ order.phone }}</dd>
