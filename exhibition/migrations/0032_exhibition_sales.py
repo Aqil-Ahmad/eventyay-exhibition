@@ -136,6 +136,9 @@ class Migration(migrations.Migration):
             name='ExhibitionOrderPosition',
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
+                ('name', i18nfield.fields.I18nCharField(max_length=255, verbose_name='Product name')),
+                ('purpose', models.CharField(choices=[('exhibition', 'Exhibition'), ('sponsorship', 'Sponsorship')], max_length=16, verbose_name='Product purpose')),
+                ('includes_booth', models.BooleanField(default=False, verbose_name='Includes exhibition booth')),
                 ('price', models.DecimalField(decimal_places=2, max_digits=13, verbose_name='Price')),
                 ('order', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='positions', to='exhibition.exhibitionorder')),
                 ('product', models.ForeignKey(on_delete=django.db.models.deletion.RESTRICT, related_name='order_positions', to='exhibition.exhibitionproduct', verbose_name='Product')),
