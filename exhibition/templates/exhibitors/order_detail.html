@@ -124,9 +124,9 @@
                 <tbody>
                 {% for position in order.positions.all %}
                     <tr>
-                        <td>{{ position.product }}</td>
-                        <td>{{ position.product.get_purpose_display }}</td>
-                        <td>{% if position.product.includes_booth %}{% trans "Yes" %}{% else %}{% trans "No" %}{% endif %}</td>
+                        <td>{{ position }}</td>
+                        <td>{{ position.get_purpose_display }}</td>
+                        <td>{% if position.includes_booth %}{% trans "Yes" %}{% else %}{% trans "No" %}{% endif %}</td>
                         <td class="text-right">{{ position.price|money:order.currency }}</td>
                     </tr>
                 {% endfor %}

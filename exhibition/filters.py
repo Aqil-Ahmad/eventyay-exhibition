@@ -337,8 +337,8 @@ class OrderFilterForm(ExhibitionFilterForm):
         if fdata.get("product"):
             positions = positions.filter(product=fdata["product"])
         if fdata.get("purpose"):
-            positions = positions.filter(product__purpose=fdata["purpose"])
-        positions = apply_flag(positions, "product__includes_booth", fdata.get("includes_booth"))
+            positions = positions.filter(purpose=fdata["purpose"])
+        positions = apply_flag(positions, "includes_booth", fdata.get("includes_booth"))
         if fdata.get("product") or fdata.get("purpose") or fdata.get("includes_booth"):
             queryset = queryset.filter(pk__in=positions.values("order_id"))
 

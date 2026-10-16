@@ -57,9 +57,9 @@
                         <td>
                             {% for position in order.positions.all %}
                                 <div>
-                                    {{ position.product }}
-                                    <span class="text-muted">· {{ position.product.get_purpose_display }}</span>
-                                    {% if position.product.includes_booth %}
+                                    {{ position }}
+                                    <span class="text-muted">· {{ position.get_purpose_display }}</span>
+                                    {% if position.includes_booth %}
                                         <span class="fa fa-map-marker text-muted" data-toggle="tooltip" title="{% trans 'Includes exhibition booth' %}" aria-hidden="true"></span>
                                         <span class="sr-only">{% trans "Includes exhibition booth" %}</span>
                                     {% endif %}

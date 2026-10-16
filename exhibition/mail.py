@@ -374,8 +374,7 @@ def order_public_url(exhibition_order):
 
 
 def order_product_list(exhibition_order):
-    positions = exhibition_order.positions.select_related("product")
-    return "\n".join(f"- {position.product}" for position in positions)
+    return "\n".join(f"- {position}" for position in exhibition_order.positions.all())
 
 
 def request_public_url(exhibition_request):

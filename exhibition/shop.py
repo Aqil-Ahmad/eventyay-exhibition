@@ -364,7 +364,7 @@ class ShopOrderView(ShopOrderMixin, TemplateView):
         order = self.order
         context["event"] = self.request.event
         context["order"] = order
-        context["positions"] = list(order.positions.select_related("product"))
+        context["positions"] = list(order.positions.all())
         context["answers"] = list(order.answers.select_related("question").prefetch_related("options"))
         context["thanks"] = "thanks" in self.request.GET
         context["is_pending"] = order.status == ExhibitionOrderStatus.PENDING

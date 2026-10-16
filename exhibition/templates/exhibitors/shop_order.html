@@ -74,8 +74,8 @@
                     <tbody>
                         {% for position in positions %}
                             <tr>
-                                <td>{{ position.product.name|event_localize }}</td>
-                                <td>{% if position.product.includes_booth %}{% trans "Yes" %}{% else %}{% trans "No" %}{% endif %}</td>
+                                <td>{{ position.name|event_localize }}</td>
+                                <td>{% if position.includes_booth %}{% trans "Yes" %}{% else %}{% trans "No" %}{% endif %}</td>
                                 <td class="text-right">{{ position.price|money:order.currency }}</td>
                             </tr>
                         {% endfor %}

@@ -1662,9 +1662,9 @@ class ExhibitionOrder(LoggedModel):
 
     def link_organization(self, user=None):
         """Create or reuse the organisation of a paid order and give it the roles its products come with."""
-        products = [position.product for position in self.positions.select_related("product")]
-        is_sponsor = any(product.is_sponsorship for product in products)
-        has_booth = any(product.includes_booth for product in products)
+        positions = list(self.positions.all())
+        is_sponsor = any(position.is_sponsorship for position in positions)
+        has_booth = any(position.includes_booth for position in positions)
         organization = self.organization or find_order_organization(self)
         changed = {}
         if organization is None:
@@ -1757,7 +1757,7 @@ class ExhibitionOrder(LoggedModel):
 
 
 class ExhibitionOrderPosition(models.Model):
-    """One product bought in an exhibition order, at the price it was sold for."""
+    """One product bought in an exhibition order, with its name, purpose, booth and price as sold."""
 
     order = models.ForeignKey(
         ExhibitionOrder,
@@ -1770,13 +1770,39 @@ class ExhibitionOrderPosition(models.Model):
         related_name="order_positions",
         verbose_name=_("Product"),
     )
+    name = I18nCharField(max_length=255, verbose_name=_("Product name"))
+    purpose = models.CharField(
+        max_length=16,
+        choices=ExhibitionProductPurpose.choices,
+        verbose_name=_("Product purpose"),
+    )
+    includes_booth = models.BooleanField(default=False, verbose_name=_("Includes exhibition booth"))
     price = models.DecimalField(max_digits=13, decimal_places=2, verbose_name=_("Price"))
 
     class Meta:
         ordering = ("order", "id")
 
+    @classmethod
+    def for_product(cls, order, product):
+        return cls(
+            order=order,
+            product=product,
+            name=product.name,
+            purpose=product.purpose,
+            includes_booth=product.includes_booth,
+            price=product.price,
+        )
+
+    @property
+    def localized_name(self):
+        return localize_event_text(self.name) or ""
+
+    @property
+    def is_sponsorship(self):
+        return self.purpose == ExhibitionProductPurpose.SPONSORSHIP
+
     def __str__(self):
-        return f"{self.order.code}: {self.product}"
+        return self.localized_name or str(self.name)
 
 
 class ExhibitionOrderQuestion(BaseExhibitionQuestion):

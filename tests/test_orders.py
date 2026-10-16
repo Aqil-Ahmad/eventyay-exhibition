@@ -126,6 +126,23 @@ def test_an_order_records_its_products_prices_total_and_contact(event):
 
 
 @pytest.mark.django_db
+def test_positions_keep_the_product_details_at_the_time_of_purchase(event):
+    with scopes_disabled():
+        _enable_manual_payment(event)
+        product = _product(event, "Gold Sponsor")
+        order = _order(event, product)
+
+        product.name = {"en": "Platinum Sponsor"}
+        product.purpose = "exhibition"
+        product.save()
+
+        position = order.positions.get()
+        assert str(position) == "Gold Sponsor"
+        assert position.purpose == "sponsorship"
+        assert position.includes_booth
+
+
+@pytest.mark.django_db
 def test_positions_keep_the_price_at_the_time_of_purchase(event):
     with scopes_disabled():
         _enable_manual_payment(event)

@@ -143,7 +143,7 @@ def place_exhibition_order(
             ),
         )
         ExhibitionOrderPosition.objects.bulk_create(
-            ExhibitionOrderPosition(order=order, product=product, price=product.price) for product in products
+            ExhibitionOrderPosition.for_product(order, product) for product in products
         )
         if order_form is not None:
             order_form.save_exhibition_questions(order)

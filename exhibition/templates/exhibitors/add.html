@@ -116,7 +116,7 @@
                 </h4>
                 <dl class="dl-horizontal">
                     <dt>{% trans "Products" %}</dt>
-                    <dd>{% for position in order.positions.all %}{{ position.product }}{% if not forloop.last %}, {% endif %}{% endfor %}</dd>
+                    <dd>{% for position in order.positions.all %}{{ position }}{% if not forloop.last %}, {% endif %}{% endfor %}</dd>
                     <dt>{% trans "Contact person" %}</dt>
                     <dd>{{ order.name }} ({{ order.email }})</dd>
                     {% if order.phone %}
