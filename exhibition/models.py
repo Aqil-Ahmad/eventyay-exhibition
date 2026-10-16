@@ -1681,7 +1681,7 @@ class ExhibitionOrder(LoggedModel):
             created = True
         else:
             created = False
-            if not organization.active:
+            if not organization.active and organization.source_order_id:
                 changed["active"] = True
             if is_sponsor and not organization.is_sponsor:
                 changed["is_sponsor"] = True
@@ -1706,9 +1706,9 @@ class ExhibitionOrder(LoggedModel):
         return organization
 
     def release_organization(self, user=None):
-        """Hide the organisation of a cancelled order unless another paid order or an accepted request keeps it."""
+        """Hide a profile an order created once no paid order or accepted request keeps it; others stay as set."""
         organization = self.organization
-        if organization is None or not organization.active:
+        if organization is None or not organization.active or not organization.source_order_id:
             return
         if organization.exhibition_orders.filter(status=ExhibitionOrderStatus.PAID).exclude(pk=self.pk).exists():
             return

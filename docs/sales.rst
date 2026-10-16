@@ -155,10 +155,12 @@ updated instead:
 - The profile shows the orders linked to it, the answers to their order form,
   and which order created it. The order page links back to the profile.
 
-When an order is cancelled, its booth goes back to the quota. If no other
-paid order and no accepted exhibitor request keeps the profile, the profile
-is deactivated and taken off the public site. It is not deleted, so a later
-payment, or reactivating it yourself, brings it back.
+When an order is cancelled, its booth goes back to the quota. If the profile
+was created by an order, and no other paid order and no accepted exhibitor
+request keeps it, the profile is deactivated and taken off the public site.
+It is not deleted, so a later payment, or reactivating it yourself, brings it
+back. A profile you created yourself, or one from an exhibitor request, is
+never hidden or reactivated by an order; its visibility stays as you set it.
 
 Emails
 ------

@@ -216,3 +216,29 @@ def test_paying_again_reactivates_a_hidden_profile(event):
         assert second.organization == first.organization
         second.organization.refresh_from_db()
         assert second.organization.active
+
+
+@pytest.mark.django_db
+def test_cancelling_leaves_a_profile_the_order_did_not_create(event):
+    with scopes_disabled():
+        existing = ExhibitorInfo.objects.create(event=event, name="Acme Inc", published=True)
+        order = _paid_order(event, _product(event, "Gold"))
+        assert order.organization == existing
+
+        order.cancel()
+
+        existing.refresh_from_db()
+        assert existing.active
+        assert existing.published
+
+
+@pytest.mark.django_db
+def test_paying_does_not_reactivate_a_profile_the_organiser_hid(event):
+    with scopes_disabled():
+        hidden = ExhibitorInfo.objects.create(event=event, name="Acme Inc", active=False)
+
+        order = _paid_order(event, _product(event, "Gold"))
+
+        assert order.organization == hidden
+        hidden.refresh_from_db()
+        assert not hidden.active
