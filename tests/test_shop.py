@@ -219,7 +219,9 @@ def test_the_packages_address_leads_to_the_call_page(event):
 @pytest.mark.django_db
 @override_settings(SITE_URL="https://testserver")
 def test_a_pending_order_can_switch_its_payment_method(event):
-    _enable_plugin(event)
+    with scopes_disabled():
+        event.plugins = "exhibition,eventyay.plugins.banktransfer"
+        event.save()
     event.settings.set("payment_manual__enabled", True)
     event.settings.set("payment_banktransfer__enabled", True)
     event.settings.set("payment_banktransfer_bank_details", "Acme Bank")

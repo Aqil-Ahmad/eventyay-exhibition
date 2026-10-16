@@ -311,7 +311,7 @@ def test_category_pages_need_the_exhibition_settings_permission(event):
 
 @pytest.mark.django_db
 @override_settings(SITE_URL="https://testserver")
-def test_products_page_groups_products_under_their_categories(event):
+def test_products_page_lists_products_in_category_order_with_their_category(event):
     client = _organizer_client(event)
     with scopes_disabled():
         tiers = _category(event, "Sponsor tiers")
@@ -323,13 +323,13 @@ def test_products_page_groups_products_under_their_categories(event):
     content = client.get(_url(event, "products")).content.decode()
 
     assert (
-        content.index("Sponsor tiers")
-        < content.index("Gold Sponsor")
-        < content.index("Booth packages")
+        content.index("Gold Sponsor")
+        < content.index('<span class="category-pill">Sponsor tiers</span>')
         < content.index("Standard Booth")
-        < content.index("No category")
+        < content.index('<span class="category-pill">Booth packages</span>')
         < content.index("Lanyard")
     )
+    assert "No category" not in content
 
 
 # The API
