@@ -333,8 +333,48 @@ def unassigned_pool_vouchers(event, pool_tag):
 
     if not pool_tag:
         return Voucher.objects.none()
-    linked_ids = ExhibitorVoucher.objects.filter(exhibitor__event=event).values("voucher_id")
+    linked_ids = ExhibitorVoucher.objects.filter(voucher__event=event).values("voucher_id")
     return Voucher.objects.filter(event=event, tag=pool_tag).exclude(pk__in=linked_ids)
+
+
+def voucher_was_emailed(link, *, include_unsent=True):
+    """Whether a voucher email listing this code went to its organization, or is waiting to.
+
+    Such a code cannot go back to the pool: it would reach somebody else while the first
+    recipient still holds it in their inbox.
+    """
+    from .mail import VOUCHERS
+    from .models import ExhibitionEmailQueue
+
+    emails = ExhibitionEmailQueue.objects.filter(
+        exhibitor_id=link.exhibitor_id, role=VOUCHERS, created__gte=link.created
+    )
+    if not include_unsent:
+        emails = emails.filter(sent_at__isnull=False)
+    return emails.exists()
+
+
+def pending_voucher_emails(exhibitor):
+    from .mail import VOUCHERS
+    from .models import ExhibitionEmailQueue
+
+    return ExhibitionEmailQueue.objects.filter(exhibitor=exhibitor, role=VOUCHERS, sent_at__isnull=True)
+
+
+def split_vouchers_for_deletion(exhibitor):
+    """Codes the pool can take back once this organization is deleted, and codes it must never reissue.
+
+    Its outbox voucher emails are discarded on deletion, so only emails already sent count here.
+    """
+    from .models import ExhibitorVoucher
+
+    returnable, kept = [], []
+    for link in ExhibitorVoucher.objects.filter(exhibitor=exhibitor).select_related("voucher"):
+        if link.voucher.redeemed or voucher_was_emailed(link, include_unsent=False):
+            kept.append(link)
+        else:
+            returnable.append(link)
+    return returnable, kept
 
 
 def pool_remaining(event, pool_tag):

@@ -68,7 +68,13 @@ from .models import (
     clear_dependencies_on,
     prune_dependency_option,
 )
-from .utils import add_external_image_csp_sources, exhibitor_login_email, public_exhibitors_queryset
+from .utils import (
+    add_external_image_csp_sources,
+    exhibitor_login_email,
+    pending_voucher_emails,
+    public_exhibitors_queryset,
+    split_vouchers_for_deletion,
+)
 
 
 def exhibition_access(event, request):
@@ -388,9 +394,11 @@ def exhibition_question_dependency_cleanup(sender, instance, **kwargs):
 
 
 @receiver(pre_delete, sender=ExhibitorInfo, dispatch_uid="exhibition_exhibitor_voucher_cleanup")
-def delete_exhibitor_vouchers(sender, instance, **kwargs):
-    for link in ExhibitorVoucher.objects.filter(exhibitor=instance, voucher__redeemed=0).select_related("voucher"):
-        link.voucher.delete()
+def release_exhibitor_vouchers(sender, instance, **kwargs):
+    """Return codes nobody received or used to the pool; the rest keep their link and stay out of it."""
+    pending_voucher_emails(instance).delete()
+    returnable, _kept = split_vouchers_for_deletion(instance)
+    ExhibitorVoucher.objects.filter(pk__in=[link.pk for link in returnable]).delete()
 
 
 @receiver(pre_delete, sender=ExhibitorInfo, dispatch_uid="exhibition_exhibitor_device_cleanup")

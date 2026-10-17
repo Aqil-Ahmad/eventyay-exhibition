@@ -111,6 +111,7 @@ from .utils import (
     resolve_voucher_defaults,
     should_hide_applicant_emails,
     sync_exhibitor_from_request,
+    voucher_was_emailed,
 )
 
 logger = logging.getLogger(__name__)
@@ -2447,7 +2448,7 @@ class ExhibitorVoucherManageView(EventPermissionRequiredMixin, DetailView):
         if link.voucher.redeemed:
             messages.error(request, _("This voucher has already been redeemed and cannot be returned."))
             return redirect(self.get_success_url())
-        if self.was_already_emailed(link):
+        if voucher_was_emailed(link):
             messages.error(
                 request,
                 _(
@@ -2468,18 +2469,6 @@ class ExhibitorVoucherManageView(EventPermissionRequiredMixin, DetailView):
             .order_by("pk")
             .values_list("pk", flat=True)
         )
-
-    def was_already_emailed(self, link):
-        """Whether a voucher email went out after this code was assigned, and so lists it.
-
-        Returning such a code would hand it to somebody else while the first recipient still
-        holds it in their inbox.
-        """
-        return ExhibitionEmailQueue.objects.filter(
-            exhibitor=self.object,
-            role=mail_helpers.VOUCHERS,
-            created__gte=link.created,
-        ).exists()
 
     @transaction.atomic
     def create_vouchers(self, request):
