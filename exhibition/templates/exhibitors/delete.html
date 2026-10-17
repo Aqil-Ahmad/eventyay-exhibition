@@ -13,7 +13,7 @@
   {% endblocktrans %}
 </p>
 
-{% if vouchers_returned or vouchers_kept or voucher_emails_discarded %}
+{% if vouchers_returned or vouchers_deleted or vouchers_kept or voucher_emails_discarded %}
   <div class="alert alert-info" role="note">
     <p><strong>{% trans "What happens to its vouchers" %}</strong></p>
     <ul>
@@ -26,12 +26,21 @@
           {% endblocktrans %}
         </li>
       {% endif %}
+      {% if vouchers_deleted %}
+        <li>
+          {% blocktrans trimmed count counter=vouchers_deleted %}
+            {{ counter }} code that was emailed but never redeemed is deleted, so it can no longer be used.
+          {% plural %}
+            {{ counter }} codes that were emailed but never redeemed are deleted, so they can no longer be used.
+          {% endblocktrans %}
+        </li>
+      {% endif %}
       {% if vouchers_kept %}
         <li>
           {% blocktrans trimmed count counter=vouchers_kept %}
-            {{ counter }} code that was already emailed or used stays out of the pool, so it is never given to anyone else. It remains under Tickets → Vouchers.
+            {{ counter }} code that was already used stays out of the pool, so it is never given to anyone else. It remains under Tickets → Vouchers.
           {% plural %}
-            {{ counter }} codes that were already emailed or used stay out of the pool, so they are never given to anyone else. They remain under Tickets → Vouchers.
+            {{ counter }} codes that were already used stay out of the pool, so they are never given to anyone else. They remain under Tickets → Vouchers.
           {% endblocktrans %}
         </li>
       {% endif %}

@@ -2370,8 +2370,9 @@ class ExhibitorDeleteView(EventPermissionRequiredMixin, DeleteView):
             "both": _("Delete Exhibitor & Sponsor"),
         }.get(organization_type, _("Delete Exhibitor or Sponsor"))
         context["cancel_url"] = organization_list_url(self.request.event, organization_type)
-        returnable, kept = split_vouchers_for_deletion(self.object)
+        returnable, deletable, kept = split_vouchers_for_deletion(self.object)
         context["vouchers_returned"] = len(returnable)
+        context["vouchers_deleted"] = len(deletable)
         context["vouchers_kept"] = len(kept)
         context["voucher_emails_discarded"] = pending_voucher_emails(self.object).count()
         return context

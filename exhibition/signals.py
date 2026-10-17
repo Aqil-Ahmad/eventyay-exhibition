@@ -395,10 +395,12 @@ def exhibition_question_dependency_cleanup(sender, instance, **kwargs):
 
 @receiver(pre_delete, sender=ExhibitorInfo, dispatch_uid="exhibition_exhibitor_voucher_cleanup")
 def release_exhibitor_vouchers(sender, instance, **kwargs):
-    """Return codes nobody received or used to the pool; the rest keep their link and stay out of it."""
+    """Return codes nobody received, delete emailed unredeemed ones, and keep used ones out of the pool."""
     pending_voucher_emails(instance).delete()
-    returnable, _kept = split_vouchers_for_deletion(instance)
+    returnable, deletable, _kept = split_vouchers_for_deletion(instance)
     ExhibitorVoucher.objects.filter(pk__in=[link.pk for link in returnable]).delete()
+    for link in deletable:
+        link.voucher.delete()
 
 
 @receiver(pre_delete, sender=ExhibitorInfo, dispatch_uid="exhibition_exhibitor_device_cleanup")

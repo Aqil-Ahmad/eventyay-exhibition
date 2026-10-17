@@ -362,19 +362,27 @@ def pending_voucher_emails(exhibitor):
 
 
 def split_vouchers_for_deletion(exhibitor):
-    """Codes the pool can take back once this organization is deleted, and codes it must never reissue.
+    """What deleting this organization does to each of its codes: returned, deleted, or kept.
 
-    Its outbox voucher emails are discarded on deletion, so only emails already sent count here.
+    Unused codes nobody received go back to the pool. Emailed codes that were never redeemed are
+    deleted from Tickets. Codes that were used, or that an order or cart still refers to, are kept
+    out of the pool for good. Its outbox voucher emails are discarded on deletion, so only emails
+    already sent count here.
     """
     from .models import ExhibitorVoucher
 
-    returnable, kept = [], []
+    returnable, deletable, kept = [], [], []
     for link in ExhibitorVoucher.objects.filter(exhibitor=exhibitor).select_related("voucher"):
-        if link.voucher.redeemed or voucher_was_emailed(link, include_unsent=False):
+        voucher = link.voucher
+        if voucher.redeemed:
             kept.append(link)
-        else:
+        elif not voucher_was_emailed(link, include_unsent=False):
             returnable.append(link)
-    return returnable, kept
+        elif voucher.allow_delete() and not voucher.is_in_cart():
+            deletable.append(link)
+        else:
+            kept.append(link)
+    return returnable, deletable, kept
 
 
 def pool_remaining(event, pool_tag):
