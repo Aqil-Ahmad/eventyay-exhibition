@@ -103,6 +103,7 @@ from .utils import (
     build_voucher_csv,
     claim_pool_vouchers,
     event_exhibitor_settings,
+    pending_voucher_emails,
     pool_remaining,
     provision_exhibitor_devices,
     public_exhibitor_sessions,
@@ -110,6 +111,7 @@ from .utils import (
     reset_exhibitor_device_setup,
     resolve_voucher_defaults,
     should_hide_applicant_emails,
+    split_vouchers_for_deletion,
     sync_exhibitor_from_request,
     voucher_was_emailed,
 )
@@ -2368,6 +2370,10 @@ class ExhibitorDeleteView(EventPermissionRequiredMixin, DeleteView):
             "both": _("Delete Exhibitor & Sponsor"),
         }.get(organization_type, _("Delete Exhibitor or Sponsor"))
         context["cancel_url"] = organization_list_url(self.request.event, organization_type)
+        returnable, kept = split_vouchers_for_deletion(self.object)
+        context["vouchers_returned"] = len(returnable)
+        context["vouchers_kept"] = len(kept)
+        context["voucher_emails_discarded"] = pending_voucher_emails(self.object).count()
         return context
 
     def get_success_url(self) -> str:
