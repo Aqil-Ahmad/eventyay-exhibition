@@ -38,9 +38,9 @@
       {% if vouchers_kept %}
         <li>
           {% blocktrans trimmed count counter=vouchers_kept %}
-            {{ counter }} code that was already used stays out of the pool, so it is never given to anyone else. It remains under Tickets → Vouchers.
+            {{ counter }} code that was used, or is still in an order or cart, stays out of the pool, so it is never given to anyone else. It remains under Tickets → Vouchers.
           {% plural %}
-            {{ counter }} codes that were already used stay out of the pool, so they are never given to anyone else. They remain under Tickets → Vouchers.
+            {{ counter }} codes that were used, or are still in an order or cart, stay out of the pool, so they are never given to anyone else. They remain under Tickets → Vouchers.
           {% endblocktrans %}
         </li>
       {% endif %}
