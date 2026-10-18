@@ -1117,3 +1117,18 @@ def test_an_emailed_code_in_a_cart_is_kept_instead_of_deleted(voucher_event):
         assert Voucher.objects.filter(pk=emailed[0].pk).exists()
         assert _held_by_deleted_organization() == {emailed[0].pk}
         assert pool_remaining(voucher_event, POOL) == 0
+
+
+@pytest.mark.django_db
+def test_an_unemailed_code_in_a_cart_stays_out_of_the_pool(voucher_event):
+    with scopes_disabled():
+        ExhibitorSettings.objects.create(event=voucher_event, voucher_pool_tag=POOL)
+        exhibitor = _mailed_exhibitor(voucher_event)
+        unsent = _issue(exhibitor, count=1)
+
+        with patch.object(Voucher, "is_in_cart", return_value=True):
+            exhibitor.delete()
+
+        assert Voucher.objects.filter(pk=unsent[0].pk).exists()
+        assert _held_by_deleted_organization() == {unsent[0].pk}
+        assert pool_remaining(voucher_event, POOL) == 0

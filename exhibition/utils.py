@@ -364,24 +364,22 @@ def pending_voucher_emails(exhibitor):
 def split_vouchers_for_deletion(exhibitor):
     """What deleting this organization does to each of its codes: returned, deleted, or kept.
 
-    Unused codes nobody received go back to the pool. Emailed codes that were never redeemed are
-    deleted from Tickets. Codes that were used, or that an order or cart still refers to, are kept
-    out of the pool for good. Its outbox voucher emails are discarded on deletion, so only emails
-    already sent count here.
+    Codes that were used, or that an order or cart still refers to, are kept out of the pool for
+    good. Of the rest, codes nobody received go back to the pool and emailed ones are deleted from
+    Tickets. Its outbox voucher emails are discarded on deletion, so only emails already sent count
+    here.
     """
     from .models import ExhibitorVoucher
 
     returnable, deletable, kept = [], [], []
     for link in ExhibitorVoucher.objects.filter(exhibitor=exhibitor).select_related("voucher"):
         voucher = link.voucher
-        if voucher.redeemed:
+        if not voucher.allow_delete() or voucher.is_in_cart():
             kept.append(link)
-        elif not voucher_was_emailed(link, include_unsent=False):
-            returnable.append(link)
-        elif voucher.allow_delete() and not voucher.is_in_cart():
+        elif voucher_was_emailed(link, include_unsent=False):
             deletable.append(link)
         else:
-            kept.append(link)
+            returnable.append(link)
     return returnable, deletable, kept
 
 
