@@ -635,11 +635,12 @@ class ExhibitorListView(EventPermissionRequiredMixin, FilteredListMixin, ListVie
 
         output = io.StringIO()
         writer = csv.writer(output, quoting=csv.QUOTE_NONNUMERIC, delimiter=",")
-        writer.writerow([_("Name"), _("Booth ID"), _("Booth name"), _("Email"), _("Access key")])
+        writer.writerow([_("Name"), _("Group"), _("Booth ID"), _("Booth name"), _("Email"), _("Access key")])
         for exhibitor in queryset:
             writer.writerow(
                 [
                     localize_event_text(exhibitor.name) or str(exhibitor.name),
+                    str(exhibitor.group_label),
                     exhibitor.booth_id or "",
                     exhibitor.localized_booth_name,
                     exhibitor.recipient_email,
