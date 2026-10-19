@@ -3,7 +3,7 @@ from django.db.models import Case, F, IntegerField, Q, Value, When
 from django.utils.translation import gettext_lazy as _
 from eventyay.control.forms.filter import FilterForm
 
-from .models import ExhibitionRequestState, ExhibitorGroup, SponsorGroup
+from .models import ExhibitionRequestState, ExhibitorGroup, OrganizationVoucherState, SponsorGroup
 
 FLAG_CHOICES = (
     ("", _("Any")),
@@ -128,6 +128,7 @@ class ExhibitorFilterForm(ExhibitionFilterForm):
         "active": "active",
         "published": "published",
         "group": "group_rank",
+        "vouchers": "voucher_rank",
     }
 
     query = forms.CharField(
@@ -176,6 +177,11 @@ class ExhibitorFilterForm(ExhibitionFilterForm):
     voucher_access = forms.ChoiceField(
         label=_("Voucher access"),
         choices=FLAG_CHOICES,
+        required=False,
+    )
+    voucher_state = forms.ChoiceField(
+        label=_("Vouchers"),
+        choices=(("", _("Any")),) + tuple(OrganizationVoucherState.choices),
         required=False,
     )
 
@@ -258,6 +264,8 @@ class ExhibitorFilterForm(ExhibitionFilterForm):
         queryset = apply_flag(queryset, "lead_scanning_enabled", fdata.get("lead_scanning"))
         queryset = apply_flag(queryset, "allow_lead_access", fdata.get("lead_access"))
         queryset = apply_flag(queryset, "allow_voucher_access", fdata.get("voucher_access"))
+        if fdata.get("voucher_state"):
+            queryset = queryset.filter(voucher_state=fdata["voucher_state"])
         return self.apply_ordering(queryset)
 
 

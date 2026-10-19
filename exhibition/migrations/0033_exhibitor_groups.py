@@ -13,7 +13,7 @@ def start_group_counts_at_the_event_count(apps, schema_editor):
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('exhibition', '0031_exhibitionrequest_confirmed_state'),
+        ('exhibition', '0032_exhibitionemaildraft'),
     ]
 
     operations = [
