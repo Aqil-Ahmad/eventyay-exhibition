@@ -9,6 +9,7 @@ from .models import (
     ExhibitionProduct,
     ExhibitionProductPurpose,
     ExhibitionRequestState,
+    OrganizationVoucherState,
     SponsorGroup,
 )
 
@@ -134,6 +135,7 @@ class ExhibitorFilterForm(ExhibitionFilterForm):
         "booth": "booth_id",
         "active": "active",
         "published": "published",
+        "vouchers": "voucher_rank",
     }
 
     query = forms.CharField(
@@ -180,6 +182,11 @@ class ExhibitorFilterForm(ExhibitionFilterForm):
         choices=FLAG_CHOICES,
         required=False,
     )
+    voucher_state = forms.ChoiceField(
+        label=_("Vouchers"),
+        choices=(("", _("Any")),) + tuple(OrganizationVoucherState.choices),
+        required=False,
+    )
 
     def __init__(self, *args, event=None, organization_type=None, **kwargs):
         self.event = event
@@ -213,6 +220,8 @@ class ExhibitorFilterForm(ExhibitionFilterForm):
         queryset = apply_flag(queryset, "lead_scanning_enabled", fdata.get("lead_scanning"))
         queryset = apply_flag(queryset, "allow_lead_access", fdata.get("lead_access"))
         queryset = apply_flag(queryset, "allow_voucher_access", fdata.get("voucher_access"))
+        if fdata.get("voucher_state"):
+            queryset = queryset.filter(voucher_state=fdata["voucher_state"])
         return self.apply_ordering(queryset)
 
 
