@@ -4,7 +4,7 @@ from django.db import migrations, models
 
 class Migration(migrations.Migration):
     dependencies = [
-        ("exhibition", "0031_exhibitionrequest_confirmed_state"),
+        ("exhibition", "0032_exhibitionemaildraft"),
     ]
 
     operations = [
