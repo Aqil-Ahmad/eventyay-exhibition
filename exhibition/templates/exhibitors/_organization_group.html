@@ -1,0 +1,8 @@
+{% load i18n %}
+{% if e.is_sponsor %}
+    <span class="organization-group-sponsor"><i class="fa fa-star" aria-hidden="true"></i> {{ e.group_label }}</span>
+{% elif e.exhibitor_group %}
+    {{ e.group_label }}
+{% else %}
+    <span class="text-muted">{{ e.group_label }}</span>
+{% endif %}

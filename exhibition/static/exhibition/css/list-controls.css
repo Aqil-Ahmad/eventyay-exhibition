@@ -18,3 +18,16 @@
 .btn-default[disabled] {
     box-shadow: 0 0 0 1px #cccccc inset;
 }
+
+.organization-group-col {
+    white-space: nowrap;
+}
+
+.organization-group-sponsor {
+    display: inline-block;
+    padding: 1px 8px;
+    border: 1px solid currentColor;
+    border-radius: 999px;
+    color: var(--color-primary-text, #1a69a4);
+    font-weight: 600;
+}
