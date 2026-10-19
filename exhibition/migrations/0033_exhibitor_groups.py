@@ -20,17 +20,17 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='exhibitorinfo',
             name='exhibitor_group',
-            field=models.CharField(blank=True, choices=[('paid', 'Paid exhibitor'), ('non_paid', 'Non-paid exhibitor')], default='', max_length=16, verbose_name='Exhibitor group'),
+            field=models.CharField(blank=True, choices=[('paid', 'Paid exhibitor'), ('non_paid', 'Non-paid exhibitor')], db_default='', default='', max_length=16, verbose_name='Exhibitor group'),
         ),
         migrations.AddField(
             model_name='exhibitorsettings',
             name='paid_voucher_default_count',
-            field=models.PositiveIntegerField(default=1, verbose_name='Vouchers per paid exhibitor'),
+            field=models.PositiveIntegerField(db_default=1, default=1, verbose_name='Vouchers per paid exhibitor'),
         ),
         migrations.AddField(
             model_name='exhibitorsettings',
             name='non_paid_voucher_default_count',
-            field=models.PositiveIntegerField(default=1, verbose_name='Vouchers per non-paid exhibitor'),
+            field=models.PositiveIntegerField(db_default=1, default=1, verbose_name='Vouchers per non-paid exhibitor'),
         ),
         migrations.RunPython(start_group_counts_at_the_event_count, migrations.RunPython.noop),
     ]

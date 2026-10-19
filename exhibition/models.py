@@ -269,10 +269,12 @@ class ExhibitorSettings(VoucherDefaultsMixin, LoggedModel):
     event = models.ForeignKey("base.Event", on_delete=models.CASCADE)
     paid_voucher_default_count = models.PositiveIntegerField(
         default=1,
+        db_default=1,
         verbose_name=_("Vouchers per paid exhibitor"),
     )
     non_paid_voucher_default_count = models.PositiveIntegerField(
         default=1,
+        db_default=1,
         verbose_name=_("Vouchers per non-paid exhibitor"),
     )
     voucher_pool_tag = models.CharField(
@@ -442,6 +444,7 @@ class ExhibitorInfo(LoggedModel):
         choices=ExhibitorGroup.choices,
         blank=True,
         default="",
+        db_default="",
         verbose_name=_("Exhibitor group"),
     )
     active = models.BooleanField(default=True)
