@@ -132,6 +132,7 @@ def test_adding_an_exhibitor_needs_a_group(event, image_uploads):
             data={"name_0": "Acme"}, files=image_uploads(), event=event, organization_type="exhibitor"
         )
         assert "exhibitor_group" in form.fields
+        assert form.fields["exhibitor_group"]._required
         assert not form.fields["exhibitor_group"].initial
         assert [value for value, label in form.fields["exhibitor_group"].choices] == ["paid", "non_paid"]
         assert not form.is_valid()

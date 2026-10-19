@@ -552,8 +552,11 @@ class ExhibitorInfoForm(ExhibitionQuestionFieldsMixin, I18nModelForm):
         if "sponsor_group" in self.fields:
             self.fields["sponsor_group"].queryset = SponsorGroup.objects.filter(event=self.event).order_by("pk")
             self.fields["sponsor_group"].empty_label = _("No sponsor group")
-        if "exhibitor_group" in self.fields and self.instance.pk and not self.instance.exhibitor_group:
-            self.fields["exhibitor_group"].choices = [("", _("No group")), *ExhibitorGroup.choices]
+        if "exhibitor_group" in self.fields:
+            if self.instance.pk and not self.instance.exhibitor_group:
+                self.fields["exhibitor_group"].choices = [("", _("No group")), *ExhibitorGroup.choices]
+            else:
+                self.fields["exhibitor_group"]._required = True
         if self.event:
             with scope(event=self.event):
                 self.fields["sessions"].queryset = (
@@ -728,6 +731,7 @@ class ExhibitorInfoForm(ExhibitionQuestionFieldsMixin, I18nModelForm):
             if not is_sponsor and not is_exhibitor:
                 self.add_error(None, _("An organization must be marked as an exhibitor, a sponsor, or both."))
         self._resolved_is_sponsor = is_sponsor
+        self._resolved_is_exhibitor = is_exhibitor
         cleaned_data["is_exhibitor"] = is_exhibitor
 
         if not is_sponsor:
@@ -799,7 +803,7 @@ class ExhibitorInfoForm(ExhibitionQuestionFieldsMixin, I18nModelForm):
         """A new exhibitor needs a group, and one that has a group keeps one; sponsors are exempt."""
         if "exhibitor_group" not in self.fields or cleaned_data.get("exhibitor_group"):
             return
-        if not cleaned_data.get("is_exhibitor") or getattr(self, "_resolved_is_sponsor", False):
+        if not getattr(self, "_resolved_is_exhibitor", False) or getattr(self, "_resolved_is_sponsor", False):
             return
         if not self.instance.pk or self.instance.exhibitor_group:
             self.add_error("exhibitor_group", _("Please choose whether this is a paid or a non-paid exhibitor."))
