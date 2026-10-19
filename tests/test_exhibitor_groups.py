@@ -243,3 +243,14 @@ def test_the_export_lists_each_organizations_group(event):
     assert "Sponsor · Gold" in body
     assert "Paid exhibitor" in body
     assert "No group" in body
+
+
+@pytest.mark.django_db
+def test_a_sponsor_without_a_booth_ignores_a_leftover_exhibitor_group(event):
+    with scopes_disabled():
+        ExhibitorSettings.objects.create(event=event, voucher_default_count=3, paid_voucher_default_count=5)
+        organization = _organization(
+            event, "Acme", is_exhibitor=False, is_sponsor=True, exhibitor_group=ExhibitorGroup.PAID
+        )
+
+        assert resolve_voucher_defaults(organization)["count"] == 3

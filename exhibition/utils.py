@@ -326,9 +326,9 @@ def resolve_voucher_defaults(exhibitor, *, event_settings=None):
     settings = event_settings or event_exhibitor_settings(exhibitor.event)
     if exhibitor.sponsor_group_id:
         count = exhibitor.sponsor_group.voucher_default_count
-    elif exhibitor.exhibitor_group == ExhibitorGroup.PAID:
+    elif exhibitor.is_exhibitor and exhibitor.exhibitor_group == ExhibitorGroup.PAID:
         count = settings.paid_voucher_default_count
-    elif exhibitor.exhibitor_group == ExhibitorGroup.NON_PAID:
+    elif exhibitor.is_exhibitor and exhibitor.exhibitor_group == ExhibitorGroup.NON_PAID:
         count = settings.non_paid_voucher_default_count
     else:
         count = settings.voucher_default_count
