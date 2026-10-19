@@ -934,7 +934,7 @@ class ExhibitorDeviceDefaultsForm(forms.ModelForm):
         fields = ["device_default_count"]
 
 
-class ExhibitorVoucherDefaultsForm(VoucherDefaultsFormMixin, forms.ModelForm):
+class ExhibitorVoucherDefaultsForm(forms.ModelForm):
     """Which pools organizations draw from, and how many codes each one gets by default."""
 
     voucher_pool_tag = forms.ChoiceField(required=False, label=_("Exhibitor voucher pool"))
@@ -945,7 +945,8 @@ class ExhibitorVoucherDefaultsForm(VoucherDefaultsFormMixin, forms.ModelForm):
         fields = [
             "voucher_pool_tag",
             "sponsor_voucher_pool_tag",
-            *VoucherDefaultsFormMixin.voucher_default_fields,
+            "paid_voucher_default_count",
+            "non_paid_voucher_default_count",
             "voucher_attach_csv",
         ]
 
