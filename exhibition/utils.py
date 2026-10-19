@@ -188,6 +188,7 @@ def create_exhibitor_from_request(exhibition_request, requestor=None):
         LOG_ORGANIZATION_REACTIVATED,
         ExhibitionRequestState,
         ExhibitorExtraLink,
+        ExhibitorGroup,
         ExhibitorInfo,
         ExhibitorSocialLink,
         generate_booth_id,
@@ -237,6 +238,7 @@ def create_exhibitor_from_request(exhibition_request, requestor=None):
         is_sponsor=exhibition_request.is_sponsor,
         sponsor_group=exhibition_request.sponsor_group if exhibition_request.is_sponsor else None,
         is_exhibitor=exhibition_request.is_exhibitor,
+        exhibitor_group=ExhibitorGroup.NON_PAID if exhibition_request.is_exhibitor else "",
         booth_id=booth_id if exhibition_request.is_exhibitor else None,
         booth_name=exhibition_request.booth_name if exhibition_request.is_exhibitor else "",
     )
@@ -301,13 +303,23 @@ def resolve_voucher_pool_tag(exhibitor, *, event_settings=None):
 def resolve_voucher_defaults(exhibitor, *, event_settings=None):
     """How many pool vouchers this exhibitor gets, and which pool they come from.
 
-    The count is their sponsor group's when they have one, otherwise the event-wide default.
-    Pass ``event_settings`` when resolving for many exhibitors to avoid a query per row.
+    The count is their sponsor group's when they have one, then their exhibitor group's, otherwise the
+    event-wide default that exhibitors without a group keep. Pass ``event_settings`` when resolving for
+    many exhibitors to avoid a query per row.
     """
+    from .models import ExhibitorGroup
+
     settings = event_settings or event_exhibitor_settings(exhibitor.event)
-    source = exhibitor.sponsor_group if exhibitor.sponsor_group_id else settings
+    if exhibitor.sponsor_group_id:
+        count = exhibitor.sponsor_group.voucher_default_count
+    elif exhibitor.exhibitor_group == ExhibitorGroup.PAID:
+        count = settings.paid_voucher_default_count
+    elif exhibitor.exhibitor_group == ExhibitorGroup.NON_PAID:
+        count = settings.non_paid_voucher_default_count
+    else:
+        count = settings.voucher_default_count
     return {
-        "count": source.voucher_default_count,
+        "count": count,
         "pool_tag": resolve_voucher_pool_tag(exhibitor, event_settings=settings),
     }
 
