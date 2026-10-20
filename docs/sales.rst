@@ -165,10 +165,21 @@ never hidden or reactivated by an order; its visibility stays as you set it.
 Emails
 ------
 
-Two emails go to the buyer. You can edit both under
+There are two buyer email templates. You can edit both under
 **Exhibition → Message center → Templates**:
 
 - **Order placed (awaiting payment)**, with the products, the total and how
   to pay;
-- **Order confirmed**, sent when a free order is placed, and when you mark an
-  order as paid and keep **Send the order confirmation email** ticked.
+- **Order confirmed**, for an order that is paid or free.
+
+When each one is sent:
+
+- An order placed on the public page always sends one of them: **Order
+  confirmed** for a free order, otherwise **Order placed (awaiting
+  payment)**.
+- An order you create yourself sends one only if **Send the order email to
+  the buyer** is ticked; which one depends on the payment status you chose.
+- Marking an order as paid sends **Order confirmed** only if **Send the order
+  confirmation email to the buyer** stays ticked.
+- **Resend link** on the order page sends the template that matches the
+  order's current status again.
