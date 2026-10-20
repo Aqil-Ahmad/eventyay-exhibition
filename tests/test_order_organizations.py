@@ -242,3 +242,22 @@ def test_paying_does_not_reactivate_a_profile_the_organiser_hid(event):
         assert order.organization == hidden
         hidden.refresh_from_db()
         assert not hidden.active
+
+
+@pytest.mark.django_db
+def test_any_website_the_order_form_accepts_fits_on_the_profile(event):
+    with scopes_disabled():
+        product = _product(event, "Community Booth", purpose=ExhibitionProductPurpose.EXHIBITION)
+        prefix = "https://example.com/"
+        longest = prefix + "a" * (200 - len(prefix))
+        data = {"organization_name": "Acme Inc", "name": "Ada", "email": "ada@example.com"}
+
+        too_long = ExhibitionOrderForm(data={**data, "website": longest + "a"}, event=event, products=[product])
+        assert not too_long.is_valid()
+        assert "website" in too_long.errors
+
+        form = ExhibitionOrderForm(data={**data, "website": longest}, event=event, products=[product])
+        assert form.is_valid(), form.errors
+        order = _paid_order(event, product, website=longest)
+
+        assert order.organization.url == longest

@@ -1583,7 +1583,7 @@ class ExhibitionOrder(LoggedModel):
     name = models.CharField(max_length=255, verbose_name=_("Contact name"))
     email = models.EmailField(verbose_name=_("Email"))
     phone = models.CharField(max_length=64, blank=True, verbose_name=_("Phone number"))
-    website = models.URLField(max_length=500, blank=True, verbose_name=_("Website"))
+    website = models.URLField(max_length=200, blank=True, verbose_name=_("Website"))
     billing_address = models.TextField(blank=True, verbose_name=_("Billing address"))
     vat_id = models.CharField(max_length=64, blank=True, verbose_name=_("VAT ID"))
     total = models.DecimalField(max_digits=13, decimal_places=2, verbose_name=_("Total"))

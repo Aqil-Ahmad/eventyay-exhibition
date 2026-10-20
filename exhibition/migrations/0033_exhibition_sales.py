@@ -31,7 +31,7 @@ class Migration(migrations.Migration):
                 ('name', models.CharField(max_length=255, verbose_name='Contact name')),
                 ('email', models.EmailField(max_length=254, verbose_name='Email')),
                 ('phone', models.CharField(blank=True, max_length=64, verbose_name='Phone number')),
-                ('website', models.URLField(blank=True, max_length=500, verbose_name='Website')),
+                ('website', models.URLField(blank=True, max_length=200, verbose_name='Website')),
                 ('billing_address', models.TextField(blank=True, verbose_name='Billing address')),
                 ('vat_id', models.CharField(blank=True, max_length=64, verbose_name='VAT ID')),
                 ('total', models.DecimalField(decimal_places=2, max_digits=13, verbose_name='Total')),

@@ -2678,7 +2678,7 @@ class ExhibitionOrderForm(ExhibitionQuestionFieldsMixin, forms.Form):
         if field["key"] == "email":
             return forms.EmailField(**options)
         if field["key"] == "website":
-            return forms.URLField(max_length=500, **options)
+            return forms.URLField(max_length=200, **options)
         if field["key"] == "billing_address":
             return forms.CharField(widget=forms.Textarea(attrs={"rows": 3}), **options)
         if field["key"] in ("phone", "vat_id"):
