@@ -119,8 +119,9 @@ Free products
 A product with a price of 0 has no payment step. Its order is confirmed at
 once, but otherwise works like a paid order: the buyer fills in the order
 form, the order takes its quota place, it creates the organisation profile,
-and the buyer gets the confirmation email. Use free products for community
-booths.
+and a buyer ordering on the public page gets the **Order confirmed** email
+(see `Emails`_ for orders you create yourself). Use free products for
+community booths.
 
 Creating orders yourself
 ------------------------
