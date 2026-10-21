@@ -3428,7 +3428,7 @@ class EmailSendView(EventPermissionRequiredMixin, View):
         return redirect("plugins:exhibition:email.outbox", **event_kwargs(request.event))
 
 
-class EmailDeleteView(EventPermissionRequiredMixin, DeleteView):
+class EmailDeleteView(ApplicantEmailVisibilityMixin, EventPermissionRequiredMixin, DeleteView):
     """Discard a queued email (or the whole batch it belongs to)."""
 
     model = ExhibitionEmailQueue
