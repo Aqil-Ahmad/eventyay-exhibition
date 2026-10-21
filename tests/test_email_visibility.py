@@ -125,3 +125,12 @@ def test_bulk_select_all_skips_recipient_search_for_hiding_reviewer(event):
         manager = _member(event, "m-bulk@e.com", can_change_exhibition_proposals=True)
         view = _view(EmailBulkActionView, event, manager, query="applicant@", select_all_pages="true")
         assert view.target_rows(view.request, "all").exists()
+
+
+@pytest.mark.django_db
+def test_bulk_select_all_with_rejected_ordering_targets_nothing(event):
+    with scopes_disabled():
+        _email(event)
+        reviewer = _member(event, "r-order@e.com", is_exhibition_reviewer=True, hide_exhibition_applicant_emails=True)
+        view = _view(EmailBulkActionView, event, reviewer, query="Hello", ordering="to_email", select_all_pages="true")
+        assert not view.target_rows(view.request, "all").exists()
