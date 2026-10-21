@@ -4,6 +4,7 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 import pytest
+from django.contrib.auth.models import AnonymousUser
 from django.contrib.messages.storage.fallback import FallbackStorage
 from django.http import Http404
 from django.test import RequestFactory
@@ -1060,7 +1061,7 @@ def test_bulk_action_discard_select_all_pages_stable_op(mail_event):
 def _outbox_context(event, **params):
     request = RequestFactory().get("/outbox", params)
     request.event = event
-    request.user = None
+    request.user = AnonymousUser()
     request.session = {}
     request.resolver_match = SimpleNamespace(url_name="email.outbox")
     view = EmailOutboxListView()
