@@ -3497,7 +3497,7 @@ class EmailBulkActionView(EventPermissionRequiredMixin, View):
                 )
                 if filter_form.is_valid():
                     return filter_form.filter_qs(base)
-                return base
+                return base.none()
             return base
         selected = request.POST.getlist("selected")
         if not selected:
