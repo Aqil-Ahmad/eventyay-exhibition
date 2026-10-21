@@ -3490,7 +3490,11 @@ class EmailBulkActionView(EventPermissionRequiredMixin, View):
         base = ExhibitionEmailQueue.objects.filter(event=request.event, sent_at__isnull=True)
         if scope == "all":
             if request.GET.get("select_all_pages") == "true" or request.POST.get("select_all_pages") == "true":
-                filter_form = EmailFilterForm(data=request.GET, date_field="created")
+                filter_form = EmailFilterForm(
+                    data=request.GET,
+                    date_field="created",
+                    hide_emails=should_hide_applicant_emails(request.user, request.event, request=request),
+                )
                 if filter_form.is_valid():
                     return filter_form.filter_qs(base)
                 return base
