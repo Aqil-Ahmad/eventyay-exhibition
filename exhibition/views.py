@@ -3169,7 +3169,7 @@ def group_email_entries(emails):
     return entries
 
 
-class EmailListMixin(FilteredListMixin):
+class EmailListMixin(ApplicantEmailVisibilityMixin, FilteredListMixin):
     """Shared search, ordering and batch-aware pagination for the outbox and sent lists."""
 
     context_object_name = "emails"
@@ -3180,7 +3180,9 @@ class EmailListMixin(FilteredListMixin):
         raise NotImplementedError
 
     def build_filter_form(self):
-        return EmailFilterForm(data=self.request.GET, date_field=self.date_field)
+        return EmailFilterForm(
+            data=self.request.GET, date_field=self.date_field, hide_emails=self.hide_applicant_emails
+        )
 
     def batch_representatives(self, base, matched):
         """One row per message: the lowest-numbered row of each batch, plus every unbatched row."""
