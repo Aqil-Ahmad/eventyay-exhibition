@@ -12,6 +12,7 @@ from django.utils.translation import get_language
 from django_scopes import scopes_disabled
 from eventyay.base.models import LogEntry, Team
 from eventyay.base.models.auth import User
+from eventyay.base.templatetags.rich_text import compile_email_body
 from i18nfield.strings import LazyI18nString
 
 from exhibition import mail as mail_helpers
@@ -142,7 +143,7 @@ def test_default_template_initial_blanks_locales_without_translation():
         subject, body = mail_helpers.default_template_initial(mail_helpers.REQUEST_NEW, ["en", "th"])
 
     assert subject.data["en"] == source_subject
-    assert body.data["en"] == source_body
+    assert body.data["en"] == mail_helpers.with_hard_line_breaks(source_body)
     assert "th" not in subject.data
     assert "th" not in body.data
 
@@ -157,8 +158,29 @@ def test_default_template_initial_uses_available_translation():
 
     source_subject, source_body = mail_helpers.DEFAULT_TEMPLATE_SOURCES[mail_helpers.REQUEST_NEW]
     assert subject.data["th"] == f"TH:{source_subject}"
-    assert body.data["th"] == f"TH:{source_body}"
+    assert body.data["th"] == f"TH:{mail_helpers.with_hard_line_breaks(source_body)}"
     assert subject.data["en"] == source_subject
+
+
+def test_hard_line_breaks_keep_paragraph_breaks():
+    assert mail_helpers.with_hard_line_breaks("Hi,\n\nBest regards,\nThe team") == "Hi,\n\nBest regards,  \nThe team"
+
+
+@pytest.mark.django_db
+def test_default_body_keeps_sign_off_on_two_lines(mail_event):
+    for role in mail_helpers.DEFAULT_TEMPLATE_SOURCES:
+        _subject, body = mail_helpers.get_email_template(mail_event, role)
+        html = compile_email_body(str(body))
+        assert "regards,<br" in html or "regards," not in html
+
+
+@pytest.mark.django_db
+def test_default_template_initial_keeps_line_breaks():
+    with patch("exhibition.mail.gettext", side_effect=lambda msgid: msgid):
+        _subject, body = mail_helpers.default_template_initial(mail_helpers.REQUEST_NEW, ["en"])
+
+    assert "here:  \n{request_url}" in body.data["en"]
+    assert "Best regards,  \nThe {event_name} team" in body.data["en"]
 
 
 @pytest.mark.django_db
