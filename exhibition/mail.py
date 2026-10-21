@@ -203,12 +203,19 @@ def with_hard_line_breaks(text):
     return _SINGLE_NEWLINE_RE.sub("  \n", text)
 
 
+class _HardLineBreakGettextProxy(LazyI18nString.LazyGettextProxy):
+    """Translate lazily like ``from_gettext`` and keep single newlines as line breaks."""
+
+    def __getitem__(self, item):
+        return with_hard_line_breaks(super().__getitem__(item))
+
+    def __str__(self):
+        return with_hard_line_breaks(super().__str__())
+
+
 def _default_body(msgid):
-    body = LazyI18nString.from_gettext(msgid)
-    if isinstance(body.data, dict):
-        body.data = {code: with_hard_line_breaks(text) for code, text in body.data.items()}
-    else:
-        body.data = with_hard_line_breaks(body.data)
+    body = LazyI18nString({})
+    body.data = _HardLineBreakGettextProxy(msgid)
     return body
 
 
