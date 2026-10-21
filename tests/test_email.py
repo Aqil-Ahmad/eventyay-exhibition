@@ -975,6 +975,7 @@ def test_bulk_action_target_rows_select_all_pages_no_batch_expansion(mail_event)
 
     request = RequestFactory().post("/bulk?query=match%40example.com", {"select_all_pages": "true"})
     request.event = mail_event
+    request.user = AnonymousUser()
 
     view = EmailBulkActionView()
     with scopes_disabled():
@@ -996,7 +997,7 @@ def test_bulk_action_send_select_all_pages_stable_op(mail_event):
 
     request = RequestFactory().post("/bulk?query=match%40example.com", {"op": "send", "select_all_pages": "true"})
     request.event = mail_event
-    request.user = None
+    request.user = AnonymousUser()
     request.session = {}
     request._messages = FallbackStorage(request)
 
@@ -1023,7 +1024,7 @@ def test_bulk_action_discard_select_all_pages_stable_op(mail_event):
     request = RequestFactory().post("/bulk?query=match%40example.com", {"op": "discard", "select_all_pages": "true"})
     request.event = mail_event
     request.organizer = mail_event.organizer
-    request.user = None
+    request.user = AnonymousUser()
     request.session = {}
     request.LANGUAGE_CODE = "en"
     request._messages = FallbackStorage(request)
@@ -1042,7 +1043,7 @@ def test_bulk_action_discard_select_all_pages_stable_op(mail_event):
     )
     confirm_request.event = mail_event
     confirm_request.organizer = mail_event.organizer
-    confirm_request.user = None
+    confirm_request.user = AnonymousUser()
     confirm_request.session = {}
     confirm_request.LANGUAGE_CODE = "en"
     confirm_request._messages = FallbackStorage(confirm_request)
