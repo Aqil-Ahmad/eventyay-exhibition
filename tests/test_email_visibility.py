@@ -5,10 +5,15 @@ from django.test import RequestFactory
 from django_scopes import scopes_disabled
 from eventyay.base.models.auth import User
 
-from exhibition.filters import EmailFilterForm
 from exhibition.forms import ExhibitionEmailQueueForm
 from exhibition.models import ExhibitionEmailQueue
-from exhibition.views import EmailDeleteView, EmailEditView, EmailOutboxListView, EmailSentListView
+from exhibition.views import (
+    EmailBulkActionView,
+    EmailDeleteView,
+    EmailEditView,
+    EmailOutboxListView,
+    EmailSentListView,
+)
 
 
 def _member(event, email, **flags):
@@ -18,8 +23,8 @@ def _member(event, email, **flags):
     return user
 
 
-def _view(view_class, event, user):
-    request = RequestFactory().get("/")
+def _view(view_class, event, user, **params):
+    request = RequestFactory().get("/", params)
     request.user = user
     request.event = event
     request.session = SimpleNamespace(session_key=None)
@@ -84,19 +89,39 @@ def test_edit_form_keeps_recipient_for_managers(event):
 
 
 @pytest.mark.django_db
-def test_email_search_skips_recipient_when_hidden(event):
+@pytest.mark.parametrize("view_class", [EmailOutboxListView, EmailSentListView])
+def test_list_search_skips_recipient_for_hiding_reviewer(event, view_class):
     with scopes_disabled():
         _email(event)
         queryset = ExhibitionEmailQueue.objects.filter(event=event)
-        hidden = EmailFilterForm(data={"query": "applicant@"}, hide_emails=True)
+        reviewer = _member(event, "r-search@e.com", is_exhibition_reviewer=True, hide_exhibition_applicant_emails=True)
+        hidden = _view(view_class, event, reviewer, query="applicant@").build_filter_form()
         assert hidden.is_valid()
         assert not hidden.filter_qs(queryset).exists()
-        shown = EmailFilterForm(data={"query": "applicant@"})
+        manager = _member(event, "m-search@e.com", can_change_exhibition_proposals=True)
+        shown = _view(view_class, event, manager, query="applicant@").build_filter_form()
         assert shown.is_valid()
         assert shown.filter_qs(queryset).exists()
 
 
-def test_email_sort_by_recipient_rejected_when_hidden():
-    assert not EmailFilterForm(data={"ordering": "to_email"}, hide_emails=True).is_valid()
-    assert not EmailFilterForm(data={"ordering": "-to_email"}, hide_emails=True).is_valid()
-    assert EmailFilterForm(data={"ordering": "to_email"}).is_valid()
+@pytest.mark.django_db
+@pytest.mark.parametrize("view_class", [EmailOutboxListView, EmailSentListView])
+@pytest.mark.parametrize("ordering", ["to_email", "-to_email"])
+def test_list_sort_by_recipient_rejected_for_hiding_reviewer(event, view_class, ordering):
+    with scopes_disabled():
+        reviewer = _member(event, "r-sort@e.com", is_exhibition_reviewer=True, hide_exhibition_applicant_emails=True)
+        assert not _view(view_class, event, reviewer, ordering=ordering).build_filter_form().is_valid()
+        manager = _member(event, "m-sort@e.com", can_change_exhibition_proposals=True)
+        assert _view(view_class, event, manager, ordering=ordering).build_filter_form().is_valid()
+
+
+@pytest.mark.django_db
+def test_bulk_select_all_skips_recipient_search_for_hiding_reviewer(event):
+    with scopes_disabled():
+        _email(event)
+        reviewer = _member(event, "r-bulk@e.com", is_exhibition_reviewer=True, hide_exhibition_applicant_emails=True)
+        view = _view(EmailBulkActionView, event, reviewer, query="applicant@", select_all_pages="true")
+        assert not view.target_rows(view.request, "all").exists()
+        manager = _member(event, "m-bulk@e.com", can_change_exhibition_proposals=True)
+        view = _view(EmailBulkActionView, event, manager, query="applicant@", select_all_pages="true")
+        assert view.target_rows(view.request, "all").exists()
