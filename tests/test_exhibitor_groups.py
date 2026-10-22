@@ -255,3 +255,34 @@ def test_a_sponsor_without_a_booth_ignores_a_leftover_exhibitor_group(event):
         )
 
         assert resolve_voucher_defaults(organization)["count"] == 3
+
+
+@pytest.mark.django_db
+def test_reapproving_a_sponsor_as_an_exhibitor_makes_it_non_paid(event):
+    with scopes_disabled():
+        user = User.objects.create_user(email="applicant@example.com", password="secret")
+        sponsor = _organization(event, "Acme", is_exhibitor=False, is_sponsor=True)
+        exhibition_request = ExhibitionRequest.objects.create(
+            event=event, user=user, name="Acme", is_exhibitor=True, approved_exhibitor=sponsor
+        )
+
+        create_exhibitor_from_request(exhibition_request)
+
+        sponsor.refresh_from_db()
+        assert sponsor.is_exhibitor
+        assert sponsor.exhibitor_group == ExhibitorGroup.NON_PAID
+
+
+@pytest.mark.django_db
+def test_reapproving_an_ungrouped_exhibitor_leaves_it_ungrouped(event):
+    with scopes_disabled():
+        user = User.objects.create_user(email="applicant@example.com", password="secret")
+        exhibitor = _organization(event, "Acme")
+        exhibition_request = ExhibitionRequest.objects.create(
+            event=event, user=user, name="Acme", is_exhibitor=True, approved_exhibitor=exhibitor
+        )
+
+        create_exhibitor_from_request(exhibition_request)
+
+        exhibitor.refresh_from_db()
+        assert exhibitor.exhibitor_group == ""

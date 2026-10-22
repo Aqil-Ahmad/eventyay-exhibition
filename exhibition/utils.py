@@ -214,14 +214,25 @@ def create_exhibitor_from_request(exhibition_request, requestor=None):
 
     if exhibition_request.approved_exhibitor_id:
         exhibitor = exhibition_request.approved_exhibitor
+        becomes_exhibitor = exhibition_request.is_exhibitor and not exhibitor.is_exhibitor
         exhibitor.active = True
         exhibitor.is_exhibitor = exhibition_request.is_exhibitor
         exhibitor.is_sponsor = exhibition_request.is_sponsor
         exhibitor.sponsor_group = exhibition_request.sponsor_group if exhibition_request.is_sponsor else None
         exhibitor.booth_id = booth_id if exhibition_request.is_exhibitor else None
         exhibitor.booth_name = exhibition_request.booth_name if exhibition_request.is_exhibitor else ""
+        if becomes_exhibitor and not exhibitor.exhibitor_group:
+            exhibitor.exhibitor_group = ExhibitorGroup.NON_PAID
         exhibitor.save(
-            update_fields=["active", "is_exhibitor", "is_sponsor", "sponsor_group", "booth_id", "booth_name"]
+            update_fields=[
+                "active",
+                "is_exhibitor",
+                "is_sponsor",
+                "sponsor_group",
+                "booth_id",
+                "booth_name",
+                "exhibitor_group",
+            ]
         )
         exhibition_request.state = ExhibitionRequestState.ACCEPTED
         exhibition_request.submitted = exhibition_request.submitted or timezone.now()
