@@ -270,8 +270,8 @@ def test_my_exhibitions_is_in_the_personal_dashboard_sidebar(event, url_name):
         _exhibitor, user = _accepted(event)
         labels = _labels(get_global_navigation(_nav_request(url_name, user)))
 
-    assert "My Tickets" in labels
-    assert "My Exhibitions" in labels
+    assert "My orders" in labels
+    assert "My exhibitions" in labels
 
 
 @pytest.mark.django_db
@@ -292,7 +292,7 @@ def test_my_exhibitions_stays_out_of_the_admin_sidebar(event, url_name):
         labels = _labels(get_admin_navigation(_nav_request(url_name, user)))
 
     assert "Message center" in labels
-    assert "My Exhibitions" not in labels
+    assert "My exhibitions" not in labels
 
 
 @pytest.mark.django_db
