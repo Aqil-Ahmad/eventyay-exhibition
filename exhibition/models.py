@@ -1298,7 +1298,7 @@ class ExhibitionEmailQueue(LoggedModel):
         return f"{self.to_email} · {state} · {self.subject}"
 
     def send(self, requestor=None):
-        """Deliver the email via the core mail() service and mark it sent, holding the row so a concurrent discard waits."""
+        """Deliver the email via core mail() and mark it sent, holding the row so a concurrent discard waits."""
         from eventyay.base.services.mail import mail
 
         if self.sent_at:
