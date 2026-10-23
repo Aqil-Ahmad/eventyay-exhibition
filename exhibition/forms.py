@@ -978,8 +978,15 @@ class ExhibitorVoucherDefaultsForm(forms.ModelForm):
             "sponsor_voucher_pool_tag",
             "paid_voucher_default_count",
             "non_paid_voucher_default_count",
+            "voucher_default_count",
             "voucher_attach_csv",
         ]
+        labels = {"voucher_default_count": _("Vouchers per organization without a group")}
+        help_texts = {
+            "voucher_default_count": _(
+                "For exhibitors not yet placed in a group, and sponsors without a sponsor group."
+            ),
+        }
 
     def __init__(self, *args, **kwargs):
         self.event = kwargs.pop("event", None)

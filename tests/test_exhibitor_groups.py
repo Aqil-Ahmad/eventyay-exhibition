@@ -90,13 +90,13 @@ def test_a_sponsor_with_a_booth_shows_and_uses_its_sponsor_group(event):
 
 
 @pytest.mark.django_db
-def test_voucher_settings_offer_one_count_per_group(event):
+def test_voucher_settings_offer_a_count_per_group_and_one_without(event):
     with scopes_disabled():
         form = ExhibitorVoucherDefaultsForm(event=event)
 
     assert "paid_voucher_default_count" in form.fields
     assert "non_paid_voucher_default_count" in form.fields
-    assert "voucher_default_count" not in form.fields
+    assert str(form.fields["voucher_default_count"].label) == "Vouchers per organization without a group"
 
 
 @pytest.mark.django_db
