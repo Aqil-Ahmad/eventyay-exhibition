@@ -610,7 +610,7 @@ LONG_ORGANIZATION_NAME = "Indic Mediawiki Developers User Group(IMDUG) - affilia
 @pytest.mark.parametrize("organization_type", ["exhibitor", "sponsor"])
 def test_long_organization_name_can_be_created_with_images(event, image_uploads, organization_type):
     form = ExhibitorInfoForm(
-        data={"name_0": LONG_ORGANIZATION_NAME},
+        data={"name_0": LONG_ORGANIZATION_NAME, "exhibitor_group": "paid"},
         files=image_uploads(),
         event=event,
         organization_type=organization_type,
