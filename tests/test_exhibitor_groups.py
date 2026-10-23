@@ -37,7 +37,7 @@ def _filtered(event, **data):
 
 
 def _download(event):
-    request = RequestFactory().get("/", {"download": "yes"})
+    request = RequestFactory().get("/", {"download": "yes", "_format": "default"})
     request.event = event
     request.user = _User()
     view = ExhibitorListView(organization_type="exhibitor")
@@ -240,8 +240,8 @@ def test_the_export_lists_each_organizations_group(event):
 
         body = _download(event)
 
-    assert "Group" in body.splitlines()[0]
-    assert "Sponsor · Gold" in body
+    assert "Exhibitor group" in body.splitlines()[0]
+    assert "Gold" in body
     assert "Paid exhibitor" in body
     assert "No group" in body
 
