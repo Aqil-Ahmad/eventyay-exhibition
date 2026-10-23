@@ -26,6 +26,7 @@ from eventyay.base.forms.widgets import (
 from eventyay.base.models import Submission, SubmissionStates
 from eventyay.base.templatetags.money import money_filter
 from eventyay.base.templatetags.rich_text import compile_email_body
+from eventyay.cfp.forms.auth import RecoverForm
 from eventyay.common.forms.fields import I18nEmailBodyFormField
 from eventyay.common.forms.mixins import (
     EventLocalizedModelChoiceField,
@@ -2200,7 +2201,10 @@ class ExhibitionEmailQueueForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         self.event = kwargs.pop("event", None)
+        hide_recipient = kwargs.pop("hide_recipient", False)
         super().__init__(*args, **kwargs)
+        if hide_recipient:
+            del self.fields["to_email"]
         if self.event:
             self.fields["scheduled_at"].widget.attrs["data-event-timezone"] = self.event.timezone
 
@@ -2691,3 +2695,12 @@ class ExhibitionOrderForm(ExhibitionQuestionFieldsMixin, forms.Form):
 
     def new_exhibition_answer(self, owner, question):
         return ExhibitionOrderAnswer(order=owner, question=question)
+
+
+class ExhibitorInvitationPasswordForm(RecoverForm):
+    """The Talks set-password form, with both fields required."""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        for field in self.fields.values():
+            field.required = True
