@@ -221,19 +221,11 @@ def create_exhibitor_from_request(exhibition_request, requestor=None):
         exhibitor.sponsor_group = exhibition_request.sponsor_group if exhibition_request.is_sponsor else None
         exhibitor.booth_id = booth_id if exhibition_request.is_exhibitor else None
         exhibitor.booth_name = exhibition_request.booth_name if exhibition_request.is_exhibitor else ""
+        update_fields = ["active", "is_exhibitor", "is_sponsor", "sponsor_group", "booth_id", "booth_name"]
         if becomes_exhibitor and not exhibitor.exhibitor_group:
             exhibitor.exhibitor_group = ExhibitorGroup.NON_PAID
-        exhibitor.save(
-            update_fields=[
-                "active",
-                "is_exhibitor",
-                "is_sponsor",
-                "sponsor_group",
-                "booth_id",
-                "booth_name",
-                "exhibitor_group",
-            ]
-        )
+            update_fields.append("exhibitor_group")
+        exhibitor.save(update_fields=update_fields)
         exhibition_request.state = ExhibitionRequestState.ACCEPTED
         exhibition_request.submitted = exhibition_request.submitted or timezone.now()
         exhibition_request.profile_edited_at = None

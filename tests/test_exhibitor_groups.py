@@ -286,3 +286,20 @@ def test_reapproving_an_ungrouped_exhibitor_leaves_it_ungrouped(event):
 
         exhibitor.refresh_from_db()
         assert exhibitor.exhibitor_group == ""
+
+
+@pytest.mark.django_db
+def test_reapproval_does_not_write_back_a_group_changed_meanwhile(event):
+    with scopes_disabled():
+        user = User.objects.create_user(email="applicant@example.com", password="secret")
+        exhibitor = _organization(event, "Acme", exhibitor_group=ExhibitorGroup.NON_PAID)
+        exhibition_request = ExhibitionRequest.objects.create(
+            event=event, user=user, name="Acme", is_exhibitor=True, approved_exhibitor=exhibitor
+        )
+        assert exhibition_request.approved_exhibitor.exhibitor_group == ExhibitorGroup.NON_PAID
+        ExhibitorInfo.objects.filter(pk=exhibitor.pk).update(exhibitor_group=ExhibitorGroup.PAID)
+
+        create_exhibitor_from_request(exhibition_request)
+
+        exhibitor.refresh_from_db()
+        assert exhibitor.exhibitor_group == ExhibitorGroup.PAID
