@@ -2186,7 +2186,10 @@ class ExhibitionEmailQueueForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         self.event = kwargs.pop("event", None)
+        hide_recipient = kwargs.pop("hide_recipient", False)
         super().__init__(*args, **kwargs)
+        if hide_recipient:
+            del self.fields["to_email"]
         if self.event:
             self.fields["scheduled_at"].widget.attrs["data-event-timezone"] = self.event.timezone
 
