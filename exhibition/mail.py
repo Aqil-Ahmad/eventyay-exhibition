@@ -214,8 +214,32 @@ DEFAULT_TEMPLATE_SOURCES = {
     ),
 }
 
+_SINGLE_NEWLINE_RE = re.compile(r"(?<!\n)\n(?!\n)")
+
+
+def with_hard_line_breaks(text):
+    """Turn single newlines into Markdown hard breaks so the editor keeps them on separate lines."""
+    return _SINGLE_NEWLINE_RE.sub("  \n", text)
+
+
+class _HardLineBreakGettextProxy(LazyI18nString.LazyGettextProxy):
+    """Translate lazily like ``from_gettext`` and keep single newlines as line breaks."""
+
+    def __getitem__(self, item):
+        return with_hard_line_breaks(super().__getitem__(item))
+
+    def __str__(self):
+        return with_hard_line_breaks(super().__str__())
+
+
+def _default_body(msgid):
+    body = LazyI18nString({})
+    body.data = _HardLineBreakGettextProxy(msgid)
+    return body
+
+
 DEFAULT_TEMPLATES = {
-    role: (LazyI18nString.from_gettext(subject), LazyI18nString.from_gettext(body))
+    role: (LazyI18nString.from_gettext(subject), _default_body(body))
     for role, (subject, body) in DEFAULT_TEMPLATE_SOURCES.items()
 }
 
@@ -230,7 +254,7 @@ def default_template_initial(role, locales):
             with override(code):
                 translated = gettext(msgid)
             if translated != msgid or code.split("-")[0] == source_language:
-                values[code] = translated
+                values[code] = with_hard_line_breaks(translated)
         initials.append(LazyI18nString(values))
     return tuple(initials)
 
