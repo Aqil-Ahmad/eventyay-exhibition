@@ -161,8 +161,7 @@
                 return
             }
             var isExhibitor = !exhibitorCheckbox || exhibitorCheckbox.checked
-            var isSponsor = Boolean(sponsorCheckbox && sponsorCheckbox.checked)
-            exhibitorGroupWrapper.classList.toggle('hidden', !isExhibitor || isSponsor)
+            exhibitorGroupWrapper.classList.toggle('hidden', !isExhibitor)
         }
 
         toggleSponsorGroup()
@@ -171,7 +170,6 @@
 
         if (sponsorCheckbox) {
             sponsorCheckbox.addEventListener('change', toggleSponsorGroup)
-            sponsorCheckbox.addEventListener('change', toggleExhibitorGroup)
         }
 
         if (exhibitorCheckbox) {

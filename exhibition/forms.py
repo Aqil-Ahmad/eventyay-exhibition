@@ -442,7 +442,10 @@ class ExhibitorInfoForm(ExhibitionQuestionFieldsMixin, I18nModelForm):
         choices=ExhibitorGroup.choices,
         required=False,
         label=_("Exhibitor group"),
-        help_text=_("Decides how many vouchers the exhibitor gets. Sponsors get their sponsor group's number instead."),
+        help_text=_(
+            "Decides how many vouchers the exhibitor gets. While it is also a sponsor, its sponsor group's "
+            "number applies instead."
+        ),
         widget=forms.RadioSelect,
     )
     sessions = SessionChoiceField(
@@ -801,10 +804,10 @@ class ExhibitorInfoForm(ExhibitionQuestionFieldsMixin, I18nModelForm):
         return cleaned_data
 
     def _validate_exhibitor_group(self, cleaned_data):
-        """A new exhibitor needs a group, and one that has a group keeps one; sponsors are exempt."""
+        """A new exhibitor needs a group, and one that has a group keeps one, whether or not it also sponsors."""
         if "exhibitor_group" not in self.fields or cleaned_data.get("exhibitor_group"):
             return
-        if not getattr(self, "_resolved_is_exhibitor", False) or getattr(self, "_resolved_is_sponsor", False):
+        if not getattr(self, "_resolved_is_exhibitor", False):
             return
         if not self.instance.pk or self.instance.exhibitor_group:
             self.add_error("exhibitor_group", _("Please choose whether this is a paid or a non-paid exhibitor."))

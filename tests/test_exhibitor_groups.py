@@ -303,3 +303,15 @@ def test_reapproval_does_not_write_back_a_group_changed_meanwhile(event):
 
         exhibitor.refresh_from_db()
         assert exhibitor.exhibitor_group == ExhibitorGroup.PAID
+
+
+@pytest.mark.django_db
+def test_an_exhibitor_that_also_sponsors_needs_a_group(event, image_uploads):
+    with scopes_disabled():
+        data = {"name_0": "Acme", "is_exhibitor": "on", "is_sponsor": "on"}
+        form = ExhibitorInfoForm(data=data, files=image_uploads(), event=event)
+        assert not form.is_valid()
+        assert "exhibitor_group" in form.errors
+
+        form = ExhibitorInfoForm(data={**data, "exhibitor_group": "paid"}, files=image_uploads(), event=event)
+        assert form.is_valid(), form.errors
