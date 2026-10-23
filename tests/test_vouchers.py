@@ -1082,6 +1082,22 @@ def test_deleting_an_organization_discards_its_unsent_voucher_emails(voucher_eve
 
 
 @pytest.mark.django_db
+def test_a_voucher_email_discarded_with_its_organization_is_not_sent_later(voucher_event):
+    with scopes_disabled():
+        ExhibitorSettings.objects.create(event=voucher_event, voucher_pool_tag=POOL)
+        exhibitor = _mailed_exhibitor(voucher_event)
+        queued = mail_helpers.queue_voucher_email(voucher_event, exhibitor, _issue(exhibitor, count=2))
+
+        exhibitor.delete()
+        with patch("eventyay.base.services.mail.mail") as mocked_mail:
+            queued.send()
+
+        mocked_mail.assert_not_called()
+        assert not ExhibitionEmailQueue.objects.filter(pk=queued.pk).exists()
+        assert pool_remaining(voucher_event, POOL) == 2
+
+
+@pytest.mark.django_db
 def test_delete_page_says_what_happens_to_the_vouchers(voucher_event):
     with scopes_disabled():
         ExhibitorSettings.objects.create(event=voucher_event, voucher_pool_tag=POOL)
