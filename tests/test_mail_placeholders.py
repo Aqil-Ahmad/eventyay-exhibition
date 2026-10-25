@@ -7,8 +7,8 @@ from eventyay.base.models.auth import User
 
 from exhibition import mail as mail_helpers
 from exhibition.models import ExhibitionRequest, ExhibitionRequestState
+from exhibition.signals import exhibition_mail_placeholders
 
-EXHIBITION_ONLY = ("request_name", "applicant_name", "pending_request_count", "exhibitor_name")
 
 
 @pytest.fixture
@@ -32,11 +32,12 @@ def exhibition_request(mail_event):
     "parameters", [["event"], ["event", "exhibition_request"], ["event", "exhibitor"], ["event", "user", "team"]]
 )
 def test_exhibition_placeholders_stay_out_of_other_editors(mail_event, parameters):
+    exhibition_only = {placeholder.identifier for placeholder in exhibition_mail_placeholders(sender=mail_event)}
     with scopes_disabled():
         available = get_available_placeholders(mail_event, parameters)
 
-    for identifier in EXHIBITION_ONLY:
-        assert identifier not in available
+    assert "pending_request_count" in exhibition_only
+    assert not exhibition_only & set(available)
 
 
 @pytest.mark.django_db
