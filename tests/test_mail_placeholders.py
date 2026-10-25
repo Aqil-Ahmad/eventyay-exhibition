@@ -10,7 +10,6 @@ from exhibition.models import ExhibitionRequest, ExhibitionRequestState
 from exhibition.signals import exhibition_mail_placeholders
 
 
-
 @pytest.fixture
 def mail_event(event):
     event.plugins = "exhibition"
