@@ -1,0 +1,166 @@
+import base64
+
+import pytest
+from django.contrib.messages.storage.fallback import FallbackStorage
+from django.core.files.storage import default_storage
+from django.core.files.uploadedfile import SimpleUploadedFile
+from django.test import Client, RequestFactory
+from django.urls import reverse
+from django_scopes import scopes_disabled
+from eventyay.base.models import LogEntry
+
+from exhibition.forms import ExhibitionLayoutForm
+from exhibition.models import LOG_SETTINGS_CHANGED, ExhibitorSettings, exhibition_layout_path
+from exhibition.views import SettingsView
+
+_PNG_BYTES = base64.b64decode(
+    b"iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="
+)
+
+
+@pytest.fixture(autouse=True)
+def media_root(settings, tmp_path):
+    settings.MEDIA_ROOT = tmp_path
+
+
+def _layout(name="layout.png", content=_PNG_BYTES, content_type="image/png"):
+    return SimpleUploadedFile(name, content, content_type=content_type)
+
+
+def _settings_post(event, data):
+    request = RequestFactory().post("/", data=data)
+    request.event = event
+    request.user = None
+    request.session = {}
+    request._messages = FallbackStorage(request)
+    view = SettingsView()
+    view.request = request
+    view.kwargs = {}
+    return view.post(request)
+
+
+def _public_list_html(event):
+    url = reverse("plugins:exhibition:public_list", kwargs={"organizer": event.organizer.slug, "event": event.slug})
+    return Client().get(url).content.decode()
+
+
+def _enable_plugin(event):
+    event.plugins = "exhibition"
+    event.save(update_fields=["plugins"])
+
+
+@pytest.mark.django_db
+def test_organizer_uploads_a_layout_with_a_caption(event):
+    with scopes_disabled():
+        response = _settings_post(
+            event,
+            {
+                "action": "save_layout_settings",
+                "tab": "exhibitors",
+                "layout_image": _layout(),
+                "layout_caption_0": "Hall 1, ground floor",
+            },
+        )
+        settings = ExhibitorSettings.objects.get(event=event)
+        logged = LogEntry.objects.filter(action_type=LOG_SETTINGS_CHANGED).last()
+
+    assert response.status_code == 302
+    assert settings.layout_image.name == f"exhibitors/layouts/{event.pk}/layout.png"
+    assert str(settings.layout_caption) == "Hall 1, ground floor"
+    assert "layout_image" in logged.parsed_data["changed"]
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(
+    ("name", "content_type"),
+    [("layout.gif", "image/gif"), ("layout.pdf", "application/pdf")],
+)
+def test_layout_rejects_other_file_types(event, name, content_type):
+    with scopes_disabled():
+        settings = ExhibitorSettings.objects.get_or_create(event=event)[0]
+        form = ExhibitionLayoutForm(
+            data={},
+            files={"layout_image": _layout(name=name, content_type=content_type)},
+            instance=settings,
+            event=event,
+        )
+
+        assert not form.is_valid()
+    assert "layout_image" in form.errors
+
+
+@pytest.mark.django_db
+def test_layout_rejects_a_file_that_is_not_an_image(event):
+    with scopes_disabled():
+        settings = ExhibitorSettings.objects.get_or_create(event=event)[0]
+        form = ExhibitionLayoutForm(
+            data={},
+            files={"layout_image": _layout(content=b"not an image")},
+            instance=settings,
+            event=event,
+        )
+
+        assert not form.is_valid()
+    assert "layout_image" in form.errors
+
+
+@pytest.mark.django_db(transaction=True)
+def test_replacing_and_removing_the_layout_deletes_the_old_file(event):
+    with scopes_disabled():
+        settings = ExhibitorSettings.objects.get_or_create(event=event)[0]
+        first = ExhibitionLayoutForm(data={}, files={"layout_image": _layout()}, instance=settings, event=event)
+        assert first.is_valid(), first.errors
+        first_name = first.save().layout_image.name
+
+        second = ExhibitionLayoutForm(
+            data={}, files={"layout_image": _layout(name="hall.png")}, instance=settings, event=event
+        )
+        assert second.is_valid(), second.errors
+        second_name = second.save().layout_image.name
+
+        assert not default_storage.exists(first_name)
+        assert default_storage.exists(second_name)
+
+        cleared = ExhibitionLayoutForm(data={"layout_image-clear": "on"}, instance=settings, event=event)
+        assert cleared.is_valid(), cleared.errors
+        cleared.save()
+        settings.refresh_from_db()
+
+    assert not settings.layout_image
+    assert not default_storage.exists(second_name)
+
+
+@pytest.mark.django_db
+def test_public_exhibition_page_shows_the_layout(event):
+    with scopes_disabled():
+        _enable_plugin(event)
+        settings = ExhibitorSettings.objects.get_or_create(event=event)[0]
+        settings.layout_image = _layout()
+        settings.layout_caption = "Hall 1, ground floor"
+        settings.save()
+
+    html = _public_list_html(event)
+
+    assert 'id="exhibition-layout-heading"' in html
+    assert f'src="{settings.visible_layout_url}"' in html
+    assert f'href="{settings.visible_layout_url}"' in html
+    assert "<figcaption>Hall 1, ground floor</figcaption>" in html
+
+
+@pytest.mark.django_db
+def test_public_exhibition_page_hides_the_layout_section_without_a_layout(event):
+    with scopes_disabled():
+        _enable_plugin(event)
+        ExhibitorSettings.objects.get_or_create(event=event)
+
+    html = _public_list_html(event)
+
+    assert 'id="exhibition-layout-heading"' not in html
+
+
+@pytest.mark.django_db
+def test_layout_is_stored_under_the_event_folder(event):
+    with scopes_disabled():
+        settings = ExhibitorSettings.objects.get_or_create(event=event)[0]
+
+    assert exhibition_layout_path(settings, "plan.png") == f"exhibitors/layouts/{event.pk}/plan.png"
