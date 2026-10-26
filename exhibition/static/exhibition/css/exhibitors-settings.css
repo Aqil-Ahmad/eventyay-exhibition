@@ -95,12 +95,3 @@
 .custom-template-picker .control-label {
     margin: 0;
 }
-
-.exhibition-layout-preview {
-    display: block;
-    max-width: 100%;
-    max-height: 240px;
-    margin-bottom: 8px;
-    border: 1px solid #e5e5e5;
-    border-radius: 4px;
-}
