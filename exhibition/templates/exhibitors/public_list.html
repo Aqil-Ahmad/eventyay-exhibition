@@ -15,6 +15,19 @@
         <section class="front-page exhibition-public-page" aria-labelledby="exhibition-heading">
             {% include "exhibitors/_public_preview_notice.html" %}
             <h2 id="exhibition-heading">{% trans "Exhibition" %}</h2>
+            {% if layout_url %}
+                {% with caption=layout_caption|event_localize %}
+                    <section class="exhibition-public-layout" aria-labelledby="exhibition-layout-heading">
+                        <h3 id="exhibition-layout-heading">{% trans "Layout" %}</h3>
+                        <figure>
+                            <a href="{{ layout_url }}" target="_blank" rel="noopener" title="{% trans 'Open the layout at full size' %}">
+                                <img src="{{ layout_url }}" alt="{% if caption %}{{ caption }}{% else %}{% trans 'Exhibition layout' %}{% endif %}" loading="lazy">
+                            </a>
+                            {% if caption %}<figcaption>{{ caption }}</figcaption>{% endif %}
+                        </figure>
+                    </section>
+                {% endwith %}
+            {% endif %}
             <form method="get" action="" class="exhibition-public-filter" role="search">
                 {% if preview_unpublished %}<input type="hidden" name="preview" value="1">{% endif %}
                 <div class="exhibition-public-filter-field">

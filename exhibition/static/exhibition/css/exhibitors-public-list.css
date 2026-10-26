@@ -146,3 +146,30 @@
         grid-template-columns: 1fr;
     }
 }
+
+.exhibition-public-layout {
+    margin-bottom: 32px;
+}
+
+.exhibition-public-layout h3 {
+    margin-top: 0;
+    margin-bottom: 12px;
+}
+
+.exhibition-public-layout figure {
+    margin: 0;
+}
+
+.exhibition-public-layout img {
+    display: block;
+    max-width: 100%;
+    max-height: 640px;
+    height: auto;
+    border: 1px solid #e5e5e5;
+    border-radius: 4px;
+}
+
+.exhibition-public-layout figcaption {
+    margin-top: 8px;
+    color: #737373;
+}
