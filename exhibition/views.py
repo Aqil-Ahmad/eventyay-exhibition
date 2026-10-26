@@ -410,6 +410,8 @@ class SettingsView(EventPermissionRequiredMixin, ListView):
             instance=settings,
             event=self.request.event,
         )
+        allow_blob_image_previews(self.request)
+        add_external_image_csp_sources(self.request, [settings.visible_layout_url] if settings.layout_image else [])
         ctx["active_tab"] = self.get_active_tab()
 
         edit_group_forms = kwargs.get("edit_group_forms", {})

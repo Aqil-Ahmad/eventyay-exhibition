@@ -20,8 +20,6 @@
     <link rel="stylesheet" href="{% static 'pretixcontrol/css/order-form-toggles.css' %}">
     <link rel="stylesheet" href="{% static 'exhibition/css/exhibitors-add.css' %}">
     <link rel="stylesheet" href="{% static 'exhibition/css/exhibitors-settings.css' %}">
-    <script defer src="{% static 'exhibition/js/exhibitors-add.js' %}"></script>
-    <script defer src="{% static 'exhibition/js/image-preview-dialog.js' %}"></script>
     <script defer src="{% static 'exhibition/js/schedule-datetime.js' %}"></script>
 {% endblock %}
 
@@ -397,5 +395,7 @@
             </fieldset>
     {% endif %}
 {% include "exhibitors/_image_preview_dialog.html" %}
+<script type="text/javascript" src="{% static 'exhibition/js/exhibitors-add.js' %}"></script>
+<script type="text/javascript" src="{% static 'exhibition/js/image-preview-dialog.js' %}"></script>
 <script type="text/javascript" src="{% static 'exhibition/js/exhibitors-settings.js' %}"></script>
 {% endblock %}
