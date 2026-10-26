@@ -40,6 +40,7 @@ from .forms import (
     ExhibitionCustomEmailTemplateForm,
     ExhibitionDefaultFieldForm,
     ExhibitionEmailQueueForm,
+    ExhibitionLayoutForm,
     ExhibitionMailTemplatesForm,
     ExhibitionQuestionForm,
     ExhibitionQuestionOptionFormSet,
@@ -405,6 +406,10 @@ class SettingsView(EventPermissionRequiredMixin, ListView):
         ctx["device_defaults_form"] = kwargs.get("device_defaults_form") or ExhibitorDeviceDefaultsForm(
             instance=settings
         )
+        ctx["layout_form"] = kwargs.get("layout_form") or ExhibitionLayoutForm(
+            instance=settings,
+            event=self.request.event,
+        )
         ctx["active_tab"] = self.get_active_tab()
 
         edit_group_forms = kwargs.get("edit_group_forms", {})
@@ -496,6 +501,25 @@ class SettingsView(EventPermissionRequiredMixin, ListView):
             settings.log_action(
                 LOG_SETTINGS_CHANGED,
                 data={"allowed_fields": settings.allowed_fields},
+                user=request.user,
+            )
+            messages.success(self.request, _("Settings have been saved."))
+            return redirect(self.get_settings_url("exhibitors"))
+
+        if action == "save_layout_settings":
+            layout_form = ExhibitionLayoutForm(
+                request.POST,
+                request.FILES,
+                instance=settings,
+                event=self.request.event,
+            )
+            if not layout_form.is_valid():
+                messages.error(self.request, _("We could not save your changes. See below for details."))
+                return self.render_to_response(self.get_context_data(layout_form=layout_form))
+            layout_form.save()
+            settings.log_action(
+                LOG_SETTINGS_CHANGED,
+                data={"changed": layout_form.changed_data},
                 user=request.user,
             )
             messages.success(self.request, _("Settings have been saved."))
@@ -764,14 +788,20 @@ class PublicExhibitorListView(PublicExhibitorBrowsingMixin, ListView):
         context["preview_unpublished"] = self.preview_unpublished
         context["navigation_query"] = self.navigation_query()
         context["social_image"] = self.request.event.visible_header_image_url
+        layout_settings = ExhibitorSettings.objects.filter(event=self.request.event).first()
+        context["layout_url"] = layout_settings.visible_layout_url if layout_settings else ""
+        context["layout_caption"] = layout_settings.layout_caption if layout_settings else ""
         add_external_image_csp_sources(
             self.request,
             [
                 image_url
-                for exhibitor in context["exhibitors"]
                 for image_url in (
-                    exhibitor.visible_banner_url,
-                    exhibitor.visible_logo_url,
+                    context["layout_url"],
+                    *(
+                        exhibitor_image
+                        for exhibitor in context["exhibitors"]
+                        for exhibitor_image in (exhibitor.visible_banner_url, exhibitor.visible_logo_url)
+                    ),
                 )
                 if image_url
             ],
