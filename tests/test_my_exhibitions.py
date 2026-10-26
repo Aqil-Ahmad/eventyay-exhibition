@@ -452,7 +452,15 @@ def test_self_edit_form_leaves_out_organizer_only_fields(event):
 
         form = ExhibitorSelfEditForm(instance=exhibitor, event=event)
 
-        for name in ("email", "published", "is_sponsor", "is_exhibitor", "allow_voucher_access", "booth_number", "comment"):
+        for name in (
+            "email",
+            "published",
+            "is_sponsor",
+            "is_exhibitor",
+            "allow_voucher_access",
+            "booth_number",
+            "comment",
+        ):
             assert name not in form.fields
 
 
