@@ -1,5 +1,6 @@
 from django.conf import settings
 from django.db import transaction
+from django.db.models import F
 from django.utils import timezone
 from eventyay.api.serializers.i18n import I18nAwareModelSerializer
 from eventyay.base.models import OrderPosition
@@ -118,6 +119,7 @@ class ExhibitorAuthView(views.APIView):
                     "exhibitor_id": exhibitor.id,
                     "exhibitor_name": _localize_i18n_value(exhibitor.name, locale),
                     "booth_number": exhibitor.booth_number,
+                    "booth_id": exhibitor.booth_number,
                     "booth_name": _localize_i18n_value(exhibitor.booth_name, locale),
                 },
                 status=status.HTTP_200_OK,
@@ -171,9 +173,16 @@ class ExhibitorInfoSerializer(I18nAwareModelSerializer):
     def to_representation(self, instance):
         data = super().to_representation(instance)
         data["slides_url"] = instance.visible_slides_url
+        data["booth_id"] = instance.booth_number
         data["social_links"] = [{"network": link.network, "url": link.url} for link in instance.social_links.all()]
         data["extra_links"] = [{"label": link.label, "url": link.url} for link in instance.extra_links.all()]
         return data
+
+    def to_internal_value(self, data):
+        if "booth_id" in data and "booth_number" not in data:
+            data = data.copy()
+            data["booth_number"] = data["booth_id"]
+        return super().to_internal_value(data)
 
     def validate_social_links(self, value):
         normalized = []
@@ -485,6 +494,7 @@ class LeadRetrieveView(views.APIView):
             "booth_number",
             "booth_name",
             "attendee",
+            booth_id=F("booth_number"),
         )
 
         return Response({"success": True, "leads": list(leads)}, status=status.HTTP_200_OK)
