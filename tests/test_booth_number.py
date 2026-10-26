@@ -24,16 +24,16 @@ def _request(event, email, **kwargs):
 def test_new_exhibitors_start_without_a_booth(event):
     with scopes_disabled():
         first = ExhibitorInfo.objects.create(event=event, name="First", is_exhibitor=True)
-        second = ExhibitorInfo.objects.create(event=event, name="Second", is_exhibitor=True, booth_id="  ")
+        second = ExhibitorInfo.objects.create(event=event, name="Second", is_exhibitor=True, booth_number="  ")
 
-    assert first.booth_id is None
-    assert second.booth_id is None
+    assert first.booth_number is None
+    assert second.booth_number is None
 
 
 @pytest.mark.django_db
 def test_exhibitor_form_saves_the_booth_number_as_typed(event, image_uploads):
     form = ExhibitorInfoForm(
-        data={"name_0": "Acme", "booth_id": "Hall 1-04"},
+        data={"name_0": "Acme", "booth_number": "Hall 1-04"},
         files=image_uploads(),
         event=event,
         organization_type="exhibitor",
@@ -44,21 +44,21 @@ def test_exhibitor_form_saves_the_booth_number_as_typed(event, image_uploads):
         exhibitor.event = event
         exhibitor.save()
 
-    assert exhibitor.booth_id == "Hall 1-04"
-    assert form.fields["booth_id"].label == "Booth number"
+    assert exhibitor.booth_number == "Hall 1-04"
+    assert form.fields["booth_number"].label == "Booth number"
 
 
 @pytest.mark.django_db
 def test_exhibitor_form_leaves_a_blank_booth_unassigned(event, image_uploads):
     form = ExhibitorInfoForm(
-        data={"name_0": "Acme", "booth_id": ""},
+        data={"name_0": "Acme", "booth_number": ""},
         files=image_uploads(),
         event=event,
         organization_type="exhibitor",
     )
     assert form.is_valid(), form.errors
 
-    assert form.cleaned_data["booth_id"] is None
+    assert form.cleaned_data["booth_number"] is None
 
 
 @pytest.mark.django_db
@@ -67,16 +67,16 @@ def test_accepting_a_request_does_not_invent_a_booth(event):
         exhibition_request = _request(event, "a@example.com")
         exhibitor = create_exhibitor_from_request(exhibition_request)
 
-    assert exhibitor.booth_id is None
+    assert exhibitor.booth_number is None
 
 
 @pytest.mark.django_db
 def test_accepting_a_request_keeps_the_booth_set_during_review(event):
     with scopes_disabled():
-        exhibition_request = _request(event, "a@example.com", booth_id="B12")
+        exhibition_request = _request(event, "a@example.com", booth_number="B12")
         exhibitor = create_exhibitor_from_request(exhibition_request)
 
-    assert exhibitor.booth_id == "B12"
+    assert exhibitor.booth_number == "B12"
 
 
 @pytest.mark.django_db
@@ -84,14 +84,14 @@ def test_reapproval_keeps_the_booth_already_assigned_to_the_profile(event):
     with scopes_disabled():
         exhibition_request = _request(event, "a@example.com")
         exhibitor = create_exhibitor_from_request(exhibition_request)
-        exhibitor.booth_id = "B12"
-        exhibitor.save(update_fields=["booth_id"])
+        exhibitor.booth_number = "B12"
+        exhibitor.save(update_fields=["booth_number"])
         exhibition_request.refresh_from_db()
 
         reapproved = create_exhibitor_from_request(exhibition_request)
 
     assert reapproved.pk == exhibitor.pk
-    assert reapproved.booth_id == "B12"
+    assert reapproved.booth_number == "B12"
 
 
 @pytest.mark.django_db
@@ -105,9 +105,9 @@ def test_reapproval_keeps_the_booth_already_assigned_to_the_profile(event):
 def test_booth_sort_groups_unassigned_exhibitors_at_the_end(event, ordering, expected):
     with scopes_disabled():
         ExhibitorInfo.objects.create(event=event, name="Unassigned two", is_exhibitor=True)
-        ExhibitorInfo.objects.create(event=event, name="B12", is_exhibitor=True, booth_id="B12")
+        ExhibitorInfo.objects.create(event=event, name="B12", is_exhibitor=True, booth_number="B12")
         ExhibitorInfo.objects.create(event=event, name="Unassigned one", is_exhibitor=True)
-        ExhibitorInfo.objects.create(event=event, name="A1", is_exhibitor=True, booth_id="A1")
+        ExhibitorInfo.objects.create(event=event, name="A1", is_exhibitor=True, booth_number="A1")
         form = ExhibitorFilterForm(data={"ordering": ordering}, event=event, organization_type="exhibitor")
         assert form.is_valid(), form.errors
 
@@ -119,7 +119,7 @@ def test_booth_sort_groups_unassigned_exhibitors_at_the_end(event, ordering, exp
 @pytest.mark.django_db
 def test_booth_search_matches_the_booth_number(event):
     with scopes_disabled():
-        ExhibitorInfo.objects.create(event=event, name="Acme", is_exhibitor=True, booth_id="Hall 1-04")
+        ExhibitorInfo.objects.create(event=event, name="Acme", is_exhibitor=True, booth_number="Hall 1-04")
         ExhibitorInfo.objects.create(event=event, name="Other", is_exhibitor=True)
         form = ExhibitorFilterForm(data={"query": "hall 1"}, event=event, organization_type="exhibitor")
         assert form.is_valid(), form.errors
@@ -134,8 +134,8 @@ def test_booth_placeholder_reads_naturally_for_unassigned_exhibitors(event):
     event.plugins = "exhibition"
     event.save(update_fields=["plugins"])
     with scopes_disabled():
-        assigned = ExhibitorInfo.objects.create(event=event, name="Assigned", is_exhibitor=True, booth_id="B12")
+        assigned = ExhibitorInfo.objects.create(event=event, name="Assigned", is_exhibitor=True, booth_number="B12")
         unassigned = ExhibitorInfo.objects.create(event=event, name="Unassigned", is_exhibitor=True)
 
-        assert mail_helpers.build_exhibitor_context(event, assigned)["booth_id"] == "B12"
-        assert mail_helpers.build_exhibitor_context(event, unassigned)["booth_id"] == "not assigned yet"
+        assert mail_helpers.build_exhibitor_context(event, assigned)["booth_number"] == "B12"
+        assert mail_helpers.build_exhibitor_context(event, unassigned)["booth_number"] == "not assigned yet"

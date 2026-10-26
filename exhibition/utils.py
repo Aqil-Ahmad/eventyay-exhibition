@@ -204,10 +204,10 @@ def create_exhibitor_from_request(exhibition_request, requestor=None):
         ExhibitorExtraLink,
         ExhibitorInfo,
         ExhibitorSocialLink,
-        normalize_booth_id,
+        normalize_booth_number,
     )
 
-    booth_id = normalize_booth_id(exhibition_request.booth_id)
+    booth_number = normalize_booth_number(exhibition_request.booth_number)
 
     if exhibition_request.approved_exhibitor_id:
         exhibitor = exhibition_request.approved_exhibitor
@@ -215,10 +215,10 @@ def create_exhibitor_from_request(exhibition_request, requestor=None):
         exhibitor.is_exhibitor = exhibition_request.is_exhibitor
         exhibitor.is_sponsor = exhibition_request.is_sponsor
         exhibitor.sponsor_group = exhibition_request.sponsor_group if exhibition_request.is_sponsor else None
-        exhibitor.booth_id = (booth_id or exhibitor.booth_id) if exhibition_request.is_exhibitor else None
+        exhibitor.booth_number = (booth_number or exhibitor.booth_number) if exhibition_request.is_exhibitor else None
         exhibitor.booth_name = exhibition_request.booth_name if exhibition_request.is_exhibitor else ""
         exhibitor.save(
-            update_fields=["active", "is_exhibitor", "is_sponsor", "sponsor_group", "booth_id", "booth_name"]
+            update_fields=["active", "is_exhibitor", "is_sponsor", "sponsor_group", "booth_number", "booth_name"]
         )
         exhibition_request.state = ExhibitionRequestState.ACCEPTED
         exhibition_request.submitted = exhibition_request.submitted or timezone.now()
@@ -249,7 +249,7 @@ def create_exhibitor_from_request(exhibition_request, requestor=None):
         is_sponsor=exhibition_request.is_sponsor,
         sponsor_group=exhibition_request.sponsor_group if exhibition_request.is_sponsor else None,
         is_exhibitor=exhibition_request.is_exhibitor,
-        booth_id=booth_id if exhibition_request.is_exhibitor else None,
+        booth_number=booth_number if exhibition_request.is_exhibitor else None,
         booth_name=exhibition_request.booth_name if exhibition_request.is_exhibitor else "",
     )
     ExhibitorSocialLink.objects.bulk_create(
@@ -289,7 +289,7 @@ def create_exhibitor_from_request(exhibition_request, requestor=None):
     )
     exhibitor.log_action(
         LOG_ORGANIZATION_CREATED,
-        data={"exhibition_request": exhibition_request.code, "booth_id": exhibitor.booth_id},
+        data={"exhibition_request": exhibition_request.code, "booth_number": exhibitor.booth_number},
         user=requestor,
     )
     return exhibitor

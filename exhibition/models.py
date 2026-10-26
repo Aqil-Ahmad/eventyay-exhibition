@@ -38,7 +38,7 @@ def generate_request_code():
 generate_proposal_code = generate_request_code
 
 
-def normalize_booth_id(value):
+def normalize_booth_number(value):
     """Booth numbers are organizer-typed; a blank one means no booth yet and is stored as NULL."""
     return (value or "").strip() or None
 
@@ -418,7 +418,7 @@ class ExhibitorInfo(LoggedModel):
         verbose_name=_("Published"),
         help_text=_("Only published organizations appear on the public event website."),
     )
-    booth_id = models.CharField(
+    booth_number = models.CharField(
         max_length=100,
         null=True,
         blank=True,
@@ -445,9 +445,9 @@ class ExhibitorInfo(LoggedModel):
         ordering = ("name",)
         constraints = [
             models.UniqueConstraint(
-                fields=["event", "booth_id"],
-                condition=Q(booth_id__isnull=False),
-                name="exhibition_event_booth_id_uniq",
+                fields=["event", "booth_number"],
+                condition=Q(booth_number__isnull=False),
+                name="exhibition_event_booth_number_uniq",
             ),
         ]
 
@@ -455,7 +455,7 @@ class ExhibitorInfo(LoggedModel):
         return str(self.name)
 
     def save(self, *args, **kwargs):
-        self.booth_id = normalize_booth_id(self.booth_id)
+        self.booth_number = normalize_booth_number(self.booth_number)
         if self._state.adding:
             if self.is_exhibitor and not self.exhibitor_position:
                 self.exhibitor_position = get_next_exhibitor_position(self.event)
@@ -702,7 +702,7 @@ class ExhibitionRequest(LoggedModel):
         related_name="exhibition_requests",
     )
     is_exhibitor = models.BooleanField(default=True)
-    booth_id = models.CharField(
+    booth_number = models.CharField(
         max_length=100,
         null=True,
         blank=True,
@@ -1177,7 +1177,7 @@ class Lead(models.Model):
     scan_type = models.CharField(max_length=50)
     device_name = models.CharField(max_length=50)
     attendee = models.JSONField(null=True, blank=True)
-    booth_id = models.CharField(max_length=100, editable=True)
+    booth_number = models.CharField(max_length=100, editable=True)
     booth_name = models.CharField(
         max_length=100,
         verbose_name=_("Booth name"),

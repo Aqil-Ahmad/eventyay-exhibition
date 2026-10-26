@@ -117,7 +117,7 @@ class ExhibitorAuthView(views.APIView):
                     "success": True,
                     "exhibitor_id": exhibitor.id,
                     "exhibitor_name": _localize_i18n_value(exhibitor.name, locale),
-                    "booth_id": exhibitor.booth_id,
+                    "booth_number": exhibitor.booth_number,
                     "booth_name": _localize_i18n_value(exhibitor.booth_name, locale),
                 },
                 status=status.HTTP_200_OK,
@@ -157,7 +157,7 @@ class ExhibitorInfoSerializer(I18nAwareModelSerializer):
             "sponsor_group_name",
             "sponsor_group_level",
             "is_exhibitor",
-            "booth_id",
+            "booth_number",
             "booth_name",
             "lead_scanning_enabled",
             "allow_voucher_access",
@@ -264,7 +264,7 @@ class ExhibitorInfoSerializer(I18nAwareModelSerializer):
 
         if not instance.is_exhibitor:
             instance.booth_name = ""
-            instance.booth_id = None
+            instance.booth_number = None
             instance.lead_scanning_enabled = False
             instance.allow_voucher_access = False
             instance.allow_lead_access = False
@@ -448,7 +448,7 @@ class LeadCreateView(views.APIView):
             scanned=timezone.now(),
             scan_type=scan_type,
             device_name=device_name,
-            booth_id=exhibitor.booth_id or "",
+            booth_number=exhibitor.booth_number or "",
             booth_name=_localize_i18n_value(exhibitor.booth_name, locale),
             attendee=attendee_data,
         )
@@ -482,7 +482,7 @@ class LeadRetrieveView(views.APIView):
             "scanned",
             "scan_type",
             "device_name",
-            "booth_id",
+            "booth_number",
             "booth_name",
             "attendee",
         )

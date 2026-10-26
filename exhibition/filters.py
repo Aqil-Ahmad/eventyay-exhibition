@@ -124,7 +124,7 @@ class RequestFilterForm(ExhibitionFilterForm):
 class ExhibitorFilterForm(ExhibitionFilterForm):
     orders = {
         "name": "name",
-        "booth": "booth_id",
+        "booth": "booth_number",
         "active": "active",
         "published": "published",
         "vouchers": "voucher_rank",
@@ -134,7 +134,7 @@ class ExhibitorFilterForm(ExhibitionFilterForm):
         ordering = self.cleaned_data.get("ordering")
         if ordering not in ("booth", "-booth"):
             return super().apply_ordering(queryset)
-        booth = F("booth_id")
+        booth = F("booth_number")
         booth = booth.desc(nulls_last=True) if ordering == "-booth" else booth.asc(nulls_last=True)
         return queryset.order_by(booth, "name", "pk")
 
@@ -204,7 +204,7 @@ class ExhibitorFilterForm(ExhibitionFilterForm):
         if query:
             queryset = queryset.filter(
                 Q(name__icontains=query)
-                | Q(booth_id__icontains=query)
+                | Q(booth_number__icontains=query)
                 | Q(booth_name__icontains=query)
                 | Q(email__icontains=query)
             )

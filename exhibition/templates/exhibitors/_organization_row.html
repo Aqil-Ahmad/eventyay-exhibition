@@ -27,8 +27,8 @@
         <td>
             {% if not e.is_exhibitor %}
                 -
-            {% elif e.booth_id %}
-                {{ e.booth_id }}
+            {% elif e.booth_number %}
+                {{ e.booth_number }}
             {% else %}
                 <span class="text-muted">{% trans "Unassigned" %}</span>
             {% endif %}

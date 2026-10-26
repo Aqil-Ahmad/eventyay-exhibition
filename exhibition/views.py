@@ -2235,7 +2235,7 @@ class ExhibitorCreateView(ExhibitorLinkFormsetMixin, EventPermissionRequiredMixi
         self.save_link_formsets()
         self.object.log_action(
             LOG_ORGANIZATION_ADDED,
-            data={"name": localize_event_text(self.object.name), "booth_id": self.object.booth_id},
+            data={"name": localize_event_text(self.object.name), "booth_number": self.object.booth_number},
             user=self.request.user,
         )
         if access_newly_granted(form.instance):
@@ -2333,7 +2333,7 @@ class ExhibitorDeleteView(EventPermissionRequiredMixin, DeleteView):
     def form_valid(self, form):
         self.object.log_action(
             LOG_ORGANIZATION_DELETED,
-            data={"name": localize_event_text(self.object.name), "booth_id": self.object.booth_id},
+            data={"name": localize_event_text(self.object.name), "booth_number": self.object.booth_number},
             user=self.request.user,
         )
         return super().form_valid(form)
