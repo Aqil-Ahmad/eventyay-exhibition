@@ -496,17 +496,6 @@ class SettingsView(EventPermissionRequiredMixin, ListView):
         self.object_list = self.get_queryset()
 
         if action == "save_exhibitor_settings":
-            settings.allowed_fields = request.POST.getlist("exhibitors_access_voucher")
-            settings.save(update_fields=["allowed_fields"])
-            settings.log_action(
-                LOG_SETTINGS_CHANGED,
-                data={"allowed_fields": settings.allowed_fields},
-                user=request.user,
-            )
-            messages.success(self.request, _("Settings have been saved."))
-            return redirect(self.get_settings_url("exhibitors"))
-
-        if action == "save_layout_settings":
             layout_form = ExhibitionLayoutForm(
                 request.POST,
                 request.FILES,
@@ -516,10 +505,11 @@ class SettingsView(EventPermissionRequiredMixin, ListView):
             if not layout_form.is_valid():
                 messages.error(self.request, _("We could not save your changes. See below for details."))
                 return self.render_to_response(self.get_context_data(layout_form=layout_form))
+            layout_form.instance.allowed_fields = request.POST.getlist("exhibitors_access_voucher")
             layout_form.save()
             settings.log_action(
                 LOG_SETTINGS_CHANGED,
-                data={"changed": layout_form.changed_data},
+                data={"allowed_fields": settings.allowed_fields, "changed": layout_form.changed_data},
                 user=request.user,
             )
             messages.success(self.request, _("Settings have been saved."))
