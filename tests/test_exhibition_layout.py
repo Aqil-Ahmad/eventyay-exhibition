@@ -55,10 +55,11 @@ def test_organizer_uploads_a_layout_with_a_caption(event):
         response = _settings_post(
             event,
             {
-                "action": "save_layout_settings",
+                "action": "save_exhibitor_settings",
                 "tab": "exhibitors",
                 "layout_image": _layout(),
                 "layout_caption_0": "Hall 1, ground floor",
+                "exhibitors_access_voucher": ["attendee_name"],
             },
         )
         settings = ExhibitorSettings.objects.get(event=event)
@@ -67,6 +68,7 @@ def test_organizer_uploads_a_layout_with_a_caption(event):
     assert response.status_code == 302
     assert settings.layout_image.name == f"exhibitors/layouts/{event.pk}/layout.png"
     assert str(settings.layout_caption) == "Hall 1, ground floor"
+    assert settings.allowed_fields == ["attendee_name"]
     assert "layout_image" in logged.parsed_data["changed"]
 
 
