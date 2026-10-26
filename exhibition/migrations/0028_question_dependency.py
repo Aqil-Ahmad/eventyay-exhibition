@@ -6,7 +6,6 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
         ("exhibition", "0027_exhibitorinfo_sessions"),
     ]
@@ -28,8 +27,6 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name="exhibitionquestion",
             name="dependency_values",
-            field=eventyay.base.models.fields.MultiStringField(
-                default=list, verbose_name="Dependency values"
-            ),
+            field=eventyay.base.models.fields.MultiStringField(default=list, verbose_name="Dependency values"),
         ),
     ]

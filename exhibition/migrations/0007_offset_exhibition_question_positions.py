@@ -20,9 +20,8 @@ def noop(apps, schema_editor):
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('exhibition', '0006_exhibitorsettings_proposal_field_settings'),
+        ("exhibition", "0006_exhibitorsettings_proposal_field_settings"),
     ]
 
     operations = [

@@ -18,15 +18,14 @@ def add_name_email_to_existing(apps, schema_editor):
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('exhibition', '0010_exhibitorinfo_exhibitor_position_and_more'),
+        ("exhibition", "0010_exhibitorinfo_exhibitor_position_and_more"),
     ]
 
     operations = [
         migrations.AlterField(
-            model_name='exhibitorsettings',
-            name='allowed_fields',
+            model_name="exhibitorsettings",
+            name="allowed_fields",
             field=models.JSONField(default=exhibition.models.default_allowed_fields),
         ),
         migrations.RunPython(add_name_email_to_existing, migrations.RunPython.noop),

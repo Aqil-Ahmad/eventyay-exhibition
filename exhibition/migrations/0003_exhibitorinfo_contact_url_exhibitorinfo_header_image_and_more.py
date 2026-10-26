@@ -8,102 +8,156 @@ import exhibition.models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('base', '0024_remove_event_featured_sessions_text'),
-        ('exhibition', '0002_alter_exhibitorinfo_booth_id_and_more'),
+        ("base", "0024_remove_event_featured_sessions_text"),
+        ("exhibition", "0002_alter_exhibitorinfo_booth_id_and_more"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='exhibitorinfo',
-            name='contact_url',
-            field=models.URLField(blank=True, null=True, verbose_name='Contact URL'),
+            model_name="exhibitorinfo",
+            name="contact_url",
+            field=models.URLField(blank=True, null=True, verbose_name="Contact URL"),
         ),
         migrations.AddField(
-            model_name='exhibitorinfo',
-            name='header_image',
+            model_name="exhibitorinfo",
+            name="header_image",
             field=models.ImageField(blank=True, null=True, upload_to=exhibition.models.exhibitor_header_image_path),
         ),
         migrations.AddField(
-            model_name='exhibitorinfo',
-            name='header_image_url',
-            field=models.URLField(blank=True, null=True, verbose_name='Header Image URL'),
+            model_name="exhibitorinfo",
+            name="header_image_url",
+            field=models.URLField(blank=True, null=True, verbose_name="Header Image URL"),
         ),
         migrations.AddField(
-            model_name='exhibitorinfo',
-            name='is_exhibitor',
+            model_name="exhibitorinfo",
+            name="is_exhibitor",
             field=models.BooleanField(default=True),
         ),
         migrations.AddField(
-            model_name='exhibitorinfo',
-            name='is_sponsor',
+            model_name="exhibitorinfo",
+            name="is_sponsor",
             field=models.BooleanField(default=False),
         ),
         migrations.AddField(
-            model_name='exhibitorinfo',
-            name='logo_url',
-            field=models.URLField(blank=True, null=True, verbose_name='Logo URL'),
+            model_name="exhibitorinfo",
+            name="logo_url",
+            field=models.URLField(blank=True, null=True, verbose_name="Logo URL"),
         ),
         migrations.AddField(
-            model_name='exhibitorinfo',
-            name='slides',
-            field=models.FileField(blank=True, null=True, upload_to=exhibition.models.exhibitor_slides_path, verbose_name='Slides'),
+            model_name="exhibitorinfo",
+            name="slides",
+            field=models.FileField(
+                blank=True, null=True, upload_to=exhibition.models.exhibitor_slides_path, verbose_name="Slides"
+            ),
         ),
         migrations.AddField(
-            model_name='exhibitorinfo',
-            name='slides_url',
-            field=models.URLField(blank=True, null=True, verbose_name='Slides URL'),
+            model_name="exhibitorinfo",
+            name="slides_url",
+            field=models.URLField(blank=True, null=True, verbose_name="Slides URL"),
         ),
         migrations.AddField(
-            model_name='exhibitorinfo',
-            name='video_url',
-            field=models.URLField(blank=True, null=True, verbose_name='Video URL'),
+            model_name="exhibitorinfo",
+            name="video_url",
+            field=models.URLField(blank=True, null=True, verbose_name="Video URL"),
         ),
         migrations.AlterField(
-            model_name='exhibitorinfo',
-            name='booth_name',
-            field=i18nfield.fields.I18nCharField(blank=True, max_length=100, verbose_name='Booth Name'),
+            model_name="exhibitorinfo",
+            name="booth_name",
+            field=i18nfield.fields.I18nCharField(blank=True, max_length=100, verbose_name="Booth Name"),
         ),
         migrations.CreateModel(
-            name='ExhibitorExtraLink',
+            name="ExhibitorExtraLink",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('label', models.CharField(max_length=120, verbose_name='Label')),
-                ('url', models.URLField(verbose_name='URL')),
-                ('exhibitor', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='extra_links', to='exhibition.exhibitorinfo')),
+                ("id", models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name="ID")),
+                ("label", models.CharField(max_length=120, verbose_name="Label")),
+                ("url", models.URLField(verbose_name="URL")),
+                (
+                    "exhibitor",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="extra_links",
+                        to="exhibition.exhibitorinfo",
+                    ),
+                ),
             ],
             options={
-                'ordering': ('label', 'url'),
+                "ordering": ("label", "url"),
             },
         ),
         migrations.CreateModel(
-            name='ExhibitorSocialLink',
+            name="ExhibitorSocialLink",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('network', models.CharField(choices=[('facebook', 'Facebook'), ('flickr', 'Flickr'), ('github', 'GitHub'), ('gitlab', 'GitLab'), ('gitter', 'Gitter'), ('google_groups', 'Google Groups'), ('instagram', 'Instagram'), ('linkedin', 'LinkedIn'), ('mastodon', 'Mastodon'), ('patreon', 'Patreon'), ('telegram', 'Telegram'), ('vimeo', 'Vimeo'), ('vk', 'VK'), ('weibo', 'Weibo'), ('x', 'X'), ('xing', 'Xing'), ('youtube', 'YouTube'), ('youtube_privacy', 'YouTube Privacy')], max_length=32)),
-                ('url', models.URLField(verbose_name='URL')),
-                ('exhibitor', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='social_links', to='exhibition.exhibitorinfo')),
+                ("id", models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name="ID")),
+                (
+                    "network",
+                    models.CharField(
+                        choices=[
+                            ("facebook", "Facebook"),
+                            ("flickr", "Flickr"),
+                            ("github", "GitHub"),
+                            ("gitlab", "GitLab"),
+                            ("gitter", "Gitter"),
+                            ("google_groups", "Google Groups"),
+                            ("instagram", "Instagram"),
+                            ("linkedin", "LinkedIn"),
+                            ("mastodon", "Mastodon"),
+                            ("patreon", "Patreon"),
+                            ("telegram", "Telegram"),
+                            ("vimeo", "Vimeo"),
+                            ("vk", "VK"),
+                            ("weibo", "Weibo"),
+                            ("x", "X"),
+                            ("xing", "Xing"),
+                            ("youtube", "YouTube"),
+                            ("youtube_privacy", "YouTube Privacy"),
+                        ],
+                        max_length=32,
+                    ),
+                ),
+                ("url", models.URLField(verbose_name="URL")),
+                (
+                    "exhibitor",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="social_links",
+                        to="exhibition.exhibitorinfo",
+                    ),
+                ),
             ],
             options={
-                'ordering': ('network', 'url'),
+                "ordering": ("network", "url"),
             },
         ),
         migrations.CreateModel(
-            name='SponsorGroup',
+            name="SponsorGroup",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('name', i18nfield.fields.I18nCharField(max_length=120, verbose_name='Group Name')),
-                ('show_on_front_page', models.BooleanField(default=False, verbose_name='Show this sponsor group on the front page.')),
-                ('event', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='sponsor_groups', to='base.event')),
+                ("id", models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name="ID")),
+                ("name", i18nfield.fields.I18nCharField(max_length=120, verbose_name="Group Name")),
+                (
+                    "show_on_front_page",
+                    models.BooleanField(default=False, verbose_name="Show this sponsor group on the front page."),
+                ),
+                (
+                    "event",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE, related_name="sponsor_groups", to="base.event"
+                    ),
+                ),
             ],
             options={
-                'ordering': ('pk',),
+                "ordering": ("pk",),
             },
         ),
         migrations.AddField(
-            model_name='exhibitorinfo',
-            name='sponsor_group',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='partners', to='exhibition.sponsorgroup'),
+            model_name="exhibitorinfo",
+            name="sponsor_group",
+            field=models.ForeignKey(
+                blank=True,
+                null=True,
+                on_delete=django.db.models.deletion.SET_NULL,
+                related_name="partners",
+                to="exhibition.sponsorgroup",
+            ),
         ),
     ]

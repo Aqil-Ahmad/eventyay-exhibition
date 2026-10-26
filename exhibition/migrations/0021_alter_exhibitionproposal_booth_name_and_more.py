@@ -5,40 +5,39 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('exhibition', '0020_question_variants_and_answer_file'),
+        ("exhibition", "0020_question_variants_and_answer_file"),
     ]
 
     operations = [
         migrations.AlterField(
-            model_name='exhibitionproposal',
-            name='booth_name',
-            field=i18nfield.fields.I18nCharField(blank=True, max_length=100, verbose_name='Booth name'),
+            model_name="exhibitionproposal",
+            name="booth_name",
+            field=i18nfield.fields.I18nCharField(blank=True, max_length=100, verbose_name="Booth name"),
         ),
         migrations.AlterField(
-            model_name='exhibitionproposal',
-            name='header_image_url',
-            field=models.URLField(blank=True, null=True, verbose_name='Header image URL'),
+            model_name="exhibitionproposal",
+            name="header_image_url",
+            field=models.URLField(blank=True, null=True, verbose_name="Header image URL"),
         ),
         migrations.AlterField(
-            model_name='exhibitorinfo',
-            name='booth_name',
-            field=i18nfield.fields.I18nCharField(blank=True, max_length=100, verbose_name='Booth name'),
+            model_name="exhibitorinfo",
+            name="booth_name",
+            field=i18nfield.fields.I18nCharField(blank=True, max_length=100, verbose_name="Booth name"),
         ),
         migrations.AlterField(
-            model_name='exhibitorinfo',
-            name='header_image_url',
-            field=models.URLField(blank=True, null=True, verbose_name='Header image URL'),
+            model_name="exhibitorinfo",
+            name="header_image_url",
+            field=models.URLField(blank=True, null=True, verbose_name="Header image URL"),
         ),
         migrations.AlterField(
-            model_name='lead',
-            name='booth_name',
-            field=models.CharField(max_length=100, verbose_name='Booth name'),
+            model_name="lead",
+            name="booth_name",
+            field=models.CharField(max_length=100, verbose_name="Booth name"),
         ),
         migrations.AlterField(
-            model_name='sponsorgroup',
-            name='name',
-            field=i18nfield.fields.I18nCharField(max_length=120, verbose_name='Group name'),
+            model_name="sponsorgroup",
+            name="name",
+            field=i18nfield.fields.I18nCharField(max_length=120, verbose_name="Group name"),
         ),
     ]
