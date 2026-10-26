@@ -4,19 +4,21 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
+
     dependencies = [
-        ("exhibition", "0012_exhibitorsettings_call_private_and_more"),
+        ('exhibition', '0012_exhibitorsettings_call_private_and_more'),
     ]
 
     operations = [
         migrations.AddField(
-            model_name="exhibitionemailqueue",
-            name="scheduled_at",
+            model_name='exhibitionemailqueue',
+            name='scheduled_at',
             field=models.DateTimeField(blank=True, db_index=True, null=True),
         ),
         migrations.AddField(
-            model_name="exhibitionemailqueue",
-            name="batch",
+            model_name='exhibitionemailqueue',
+            name='batch',
             field=models.UUIDField(blank=True, db_index=True, null=True),
         ),
     ]
+
