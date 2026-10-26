@@ -1,11 +1,14 @@
 import pytest
+from django.utils import timezone
 from django_scopes import scopes_disabled
 from eventyay.base.models.auth import User
+from rest_framework.test import APIRequestFactory
 
 from exhibition import mail as mail_helpers
+from exhibition.api import ExhibitorAuthView, ExhibitorInfoSerializer, LeadRetrieveView
 from exhibition.filters import ExhibitorFilterForm
 from exhibition.forms import ExhibitorInfoForm
-from exhibition.models import ExhibitionRequest, ExhibitionRequestState, ExhibitorInfo
+from exhibition.models import ExhibitionRequest, ExhibitionRequestState, ExhibitorInfo, Lead
 from exhibition.utils import create_exhibitor_from_request
 
 
@@ -139,3 +142,57 @@ def test_booth_placeholder_reads_naturally_for_unassigned_exhibitors(event):
 
         assert mail_helpers.build_exhibitor_context(event, assigned)["booth_number"] == "B12"
         assert mail_helpers.build_exhibitor_context(event, unassigned)["booth_number"] == "not assigned yet"
+
+
+@pytest.mark.django_db
+def test_lead_scanning_api_keeps_booth_id_for_the_app(event):
+    with scopes_disabled():
+        exhibitor = ExhibitorInfo.objects.create(
+            event=event, name="Acme", is_exhibitor=True, booth_number="B12", allow_lead_access=True
+        )
+        Lead.objects.create(
+            exhibitor=exhibitor,
+            exhibitor_name="Acme",
+            pseudonymization_id="P1",
+            scanned=timezone.now(),
+            scan_type="lead",
+            device_name="Phone",
+            booth_number="B12",
+            booth_name="",
+        )
+        kwargs = {"organizer": event.organizer.slug, "event": event.slug}
+        factory = APIRequestFactory()
+        auth = ExhibitorAuthView.as_view()(factory.post("/", {"key": exhibitor.key}, format="json"), **kwargs)
+        leads = LeadRetrieveView.as_view()(factory.get("/", HTTP_EXHIBITOR=exhibitor.key), **kwargs)
+
+    assert auth.data["booth_number"] == auth.data["booth_id"] == "B12"
+    assert leads.data["leads"][0]["booth_number"] == leads.data["leads"][0]["booth_id"] == "B12"
+
+
+@pytest.mark.django_db
+def test_leads_record_for_exhibitors_without_a_booth_number(event):
+    with scopes_disabled():
+        exhibitor = ExhibitorInfo.objects.create(event=event, name="Acme", is_exhibitor=True)
+        lead = Lead.objects.create(
+            exhibitor=exhibitor,
+            exhibitor_name="Acme",
+            pseudonymization_id="P1",
+            scanned=timezone.now(),
+            scan_type="lead",
+            device_name="Phone",
+            booth_number=exhibitor.booth_number or "",
+            booth_name="",
+        )
+
+    assert lead.booth_number == ""
+
+
+@pytest.mark.django_db
+def test_exhibitor_api_accepts_and_returns_the_legacy_booth_id(event):
+    with scopes_disabled():
+        serializer = ExhibitorInfoSerializer(partial=True, context={"event": event})
+        assert serializer.to_internal_value({"booth_id": "B12"})["booth_number"] == "B12"
+        exhibitor = ExhibitorInfo.objects.create(event=event, name="Acme", is_exhibitor=True, booth_number="A1")
+        data = ExhibitorInfoSerializer(exhibitor, context={"event": event}).data
+
+    assert data["booth_number"] == data["booth_id"] == "A1"
