@@ -40,7 +40,7 @@ def test_exhibition_placeholders_stay_out_of_other_editors(mail_event, parameter
 
 
 @pytest.mark.django_db
-def test_editor_lists_shared_event_placeholders_and_hides_old_names(mail_event):
+def test_editor_lists_shared_event_placeholders_and_applicant_name(mail_event):
     with scopes_disabled():
         names = mail_helpers.placeholder_names(mail_event, mail_helpers.REQUEST_PLACEHOLDER_CONTEXT)
 
@@ -51,12 +51,20 @@ def test_editor_lists_shared_event_placeholders_and_hides_old_names(mail_event):
 
 
 @pytest.mark.django_db
-def test_request_emails_render_applicant_name_and_the_old_name(mail_event, exhibition_request):
+def test_request_emails_render_applicant_name(mail_event, exhibition_request):
     with scopes_disabled():
         context = mail_helpers.build_request_context(mail_event, exhibition_request)
 
     assert context["applicant_name"] == "Jane Applicant"
-    assert context["name"] == "Jane Applicant"
     assert str(context["event_name"]) == "Test Event"
     for placeholder in shared_event_placeholders():
         assert placeholder.identifier in context
+
+
+@pytest.mark.django_db
+def test_voucher_emails_offer_voucher_details_not_voucher_list(mail_event):
+    with scopes_disabled():
+        names = mail_helpers.role_placeholder_names(mail_event, mail_helpers.VOUCHERS)
+
+    assert "voucher_details" in names
+    assert "voucher_list" not in names

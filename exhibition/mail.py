@@ -189,7 +189,7 @@ DEFAULT_TEMPLATE_SOURCES = {
             "Dear {exhibitor_name},\n\n"
             "Thank you for participating in {event_name}. Please share the voucher codes below with "
             "your audience — anyone who uses one gets credited to you as a lead.\n\n"
-            "{voucher_list}\n\n"
+            "{voucher_details}\n\n"
             "They can redeem a code on the event ticket shop at checkout.\n\n"
             "You can see which codes have been redeemed, and download your vouchers, at any time in "
             "My Exhibitions: {my_exhibitions_url}\n\n"
@@ -496,9 +496,9 @@ def render_voucher_list(exhibitor):
 def _sample_redeem_url(event, code):
     if event is None:
         return f"{django_settings.SITE_URL.rstrip('/')}/redeem?voucher={code}"
-    from eventyay.multidomain.urlreverse import build_absolute_uri
+    from eventyay.base.email import voucher_redeem_url
 
-    return f"{build_absolute_uri(event, 'presale:event.redeem')}?voucher={code}"
+    return voucher_redeem_url(event, code)
 
 
 def my_exhibitions_url(exhibitor=None):
@@ -845,7 +845,7 @@ def queue_voucher_email(event, exhibitor, vouchers, *, send_now=False, requestor
 
     settings = ExhibitorSettings.objects.get_or_create(event=event)[0]
     attachment = store_voucher_csv(event, vouchers) if settings.voucher_attach_csv else None
-    context["voucher_list"] = format_voucher_list(
+    context["voucher_details"] = format_voucher_list(
         vouchers, event=event, limit=VOUCHER_LIST_INLINE_LIMIT if attachment else None
     )
 

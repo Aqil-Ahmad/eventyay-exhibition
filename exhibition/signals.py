@@ -334,13 +334,6 @@ def exhibition_mail_placeholders(sender, **kwargs):
             _("Jane Doe"),
         ),
         ExhibitionMailPlaceholder(
-            "name",
-            ["exhibition_request"],
-            applicant_name,
-            _("Jane Doe"),
-            is_visible=False,
-        ),
-        ExhibitionMailPlaceholder(
             "exhibitor_name",
             ["exhibitor"],
             lambda exhibitor: localize_event_text(exhibitor.name) or str(exhibitor.name),
@@ -383,7 +376,7 @@ def exhibition_mail_placeholders(sender, **kwargs):
             sample_device_tokens,
         ),
         ExhibitionMailPlaceholder(
-            "voucher_list",
+            "voucher_details",
             ["exhibitor"],
             render_voucher_list,
             sample_voucher_list,
