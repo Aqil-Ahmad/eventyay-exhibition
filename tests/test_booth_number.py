@@ -1,11 +1,15 @@
+from datetime import timedelta
+from decimal import Decimal
+
 import pytest
 from django.utils import timezone
 from django_scopes import scopes_disabled
+from eventyay.base.models import Order, OrderPosition, Product
 from eventyay.base.models.auth import User
 from rest_framework.test import APIRequestFactory
 
 from exhibition import mail as mail_helpers
-from exhibition.api import ExhibitorAuthView, ExhibitorInfoSerializer, LeadRetrieveView
+from exhibition.api import ExhibitorAuthView, ExhibitorInfoSerializer, LeadCreateView, LeadRetrieveView
 from exhibition.filters import ExhibitorFilterForm
 from exhibition.forms import ExhibitorInfoForm
 from exhibition.models import ExhibitionRequest, ExhibitionRequestState, ExhibitorInfo, Lead
@@ -162,8 +166,11 @@ def test_lead_scanning_api_keeps_booth_id_for_the_app(event):
         )
         kwargs = {"organizer": event.organizer.slug, "event": event.slug}
         factory = APIRequestFactory()
-        auth = ExhibitorAuthView.as_view()(factory.post("/", {"key": exhibitor.key}, format="json"), **kwargs)
-        leads = LeadRetrieveView.as_view()(factory.get("/", HTTP_EXHIBITOR=exhibitor.key), **kwargs)
+        open_access = {"authentication_classes": [], "permission_classes": []}
+        auth = ExhibitorAuthView.as_view(**open_access)(
+            factory.post("/", {"key": exhibitor.key}, format="json"), **kwargs
+        )
+        leads = LeadRetrieveView.as_view(**open_access)(factory.get("/", HTTP_EXHIBITOR=exhibitor.key), **kwargs)
 
     assert auth.data["booth_number"] == auth.data["booth_id"] == "B12"
     assert leads.data["leads"][0]["booth_number"] == leads.data["leads"][0]["booth_id"] == "B12"
@@ -172,18 +179,38 @@ def test_lead_scanning_api_keeps_booth_id_for_the_app(event):
 @pytest.mark.django_db
 def test_leads_record_for_exhibitors_without_a_booth_number(event):
     with scopes_disabled():
-        exhibitor = ExhibitorInfo.objects.create(event=event, name="Acme", is_exhibitor=True)
-        lead = Lead.objects.create(
-            exhibitor=exhibitor,
-            exhibitor_name="Acme",
-            pseudonymization_id="P1",
-            scanned=timezone.now(),
-            scan_type="lead",
-            device_name="Phone",
-            booth_number=exhibitor.booth_number or "",
-            booth_name="",
+        exhibitor = ExhibitorInfo.objects.create(
+            event=event, name="Acme", is_exhibitor=True, lead_scanning_enabled=True
         )
+        product = Product.objects.create(event=event, name="Ticket", default_price=10, active=True)
+        order = Order.objects.create(
+            code="LEAD1",
+            event=event,
+            email="attendee@example.com",
+            status=Order.STATUS_PAID,
+            datetime=timezone.now(),
+            expires=timezone.now() + timedelta(days=10),
+            total=Decimal("10.00"),
+            locale="en",
+        )
+        position = OrderPosition.objects.create(order=order, product=product, price=Decimal("10.00"))
+        request = APIRequestFactory().post(
+            "/",
+            {
+                "lead": position.pseudonymization_id,
+                "scanned": timezone.now().isoformat(),
+                "scan_type": "lead",
+                "device_name": "Phone",
+            },
+            format="json",
+            HTTP_EXHIBITOR=exhibitor.key,
+        )
+        response = LeadCreateView.as_view(authentication_classes=[], permission_classes=[])(
+            request, organizer=event.organizer.slug, event=event.slug
+        )
+        lead = Lead.objects.get(exhibitor=exhibitor)
 
+    assert response.status_code == 201
     assert lead.booth_number == ""
 
 
