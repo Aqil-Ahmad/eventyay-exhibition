@@ -38,6 +38,16 @@ def test_new_exhibitors_start_without_a_booth(event):
 
 
 @pytest.mark.django_db
+def test_blank_booth_numbers_written_in_bulk_do_not_clash(event):
+    with scopes_disabled():
+        first = ExhibitorInfo.objects.create(event=event, name="First", is_exhibitor=True)
+        second = ExhibitorInfo.objects.create(event=event, name="Second", is_exhibitor=True)
+        ExhibitorInfo.objects.filter(pk__in=[first.pk, second.pk]).update(booth_number="")
+
+        assert ExhibitorInfo.objects.filter(event=event, booth_number="").count() == 2
+
+
+@pytest.mark.django_db
 def test_exhibitor_form_saves_the_booth_number_as_typed(event, image_uploads):
     form = ExhibitorInfoForm(
         data={"name_0": "Acme", "booth_number": "Hall 1-04"},
