@@ -111,6 +111,7 @@ def exhibitor_slides_path(instance, filename):
 
 
 LAYOUT_IMAGE_EXTENSIONS = ("png", "jpg", "jpeg", "webp")
+LAYOUT_IMAGE_FORMATS = ("PNG", "JPEG", "WEBP")
 
 
 def exhibition_layout_path(instance, filename):
@@ -324,7 +325,7 @@ class ExhibitorSettings(VoucherDefaultsMixin, LoggedModel):
         validators=[FileExtensionValidator(LAYOUT_IMAGE_EXTENSIONS)],
         verbose_name=_("Exhibition layout"),
         help_text=_(
-            "A floor plan of the exhibition area, shown above the exhibitor list on the public Exhibition page. "
+            "A floor plan of the exhibition area, shown below the exhibitor list on the public Exhibition page. "
             "PNG, JPG or WebP."
         ),
     )
