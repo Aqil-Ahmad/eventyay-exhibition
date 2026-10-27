@@ -53,6 +53,7 @@ from . import mail as mail_helpers
 from .models import (
     DEPENDENCY_PARENT_VARIANTS,
     LAYOUT_IMAGE_EXTENSIONS,
+    LAYOUT_IMAGE_FORMATS,
     QUESTION_OPTION_VARIANTS,
     REQUEST_DEFAULT_FIELD_KEYS,
     REQUEST_FORMSET_FIELD_KEYS,
@@ -985,7 +986,11 @@ class ExhibitionLayoutForm(I18nModelForm):
 
     def clean_layout_image(self):
         layout_image = self.cleaned_data.get("layout_image")
-        flag_oversized_upload(self, "layout_image", layout_image)
+        if flag_oversized_upload(self, "layout_image", layout_image):
+            return layout_image
+        image = getattr(layout_image, "image", None)
+        if isinstance(layout_image, UploadedFile) and image is not None and image.format not in LAYOUT_IMAGE_FORMATS:
+            raise forms.ValidationError(_("Upload a PNG, JPG or WebP image."))
         return layout_image
 
     def save(self, commit=True):
