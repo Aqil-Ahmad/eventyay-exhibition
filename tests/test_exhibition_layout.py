@@ -106,6 +106,22 @@ def test_layout_rejects_a_file_that_is_not_an_image(event):
     assert "layout_image" in form.errors
 
 
+@pytest.mark.django_db
+def test_layout_rejects_a_gif_renamed_to_png(event):
+    gif_bytes = base64.b64decode(b"R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7")
+    with scopes_disabled():
+        settings = ExhibitorSettings.objects.get_or_create(event=event)[0]
+        form = ExhibitionLayoutForm(
+            data={},
+            files={"layout_image": _layout(content=gif_bytes)},
+            instance=settings,
+            event=event,
+        )
+
+        assert not form.is_valid()
+    assert "layout_image" in form.errors
+
+
 @pytest.mark.django_db(transaction=True)
 def test_replacing_and_removing_the_layout_deletes_the_old_file(event):
     with scopes_disabled():
