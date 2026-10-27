@@ -42,6 +42,12 @@ def rename_placeholder(apps, old, new):
                 row.save(update_fields=changed)
 
 
+def unassign_blank_booth_numbers(apps, schema_editor):
+    for model_name in ("ExhibitorInfo", "ExhibitionRequest"):
+        model = apps.get_model("exhibition", model_name)
+        model.objects.filter(booth_number__regex=r"^\s*$").update(booth_number=None)
+
+
 def forwards(apps, schema_editor):
     rename_placeholder(apps, "booth_id", "booth_number")
 
@@ -75,10 +81,11 @@ class Migration(migrations.Migration):
             old_name="booth_id",
             new_name="booth_number",
         ),
+        migrations.RunPython(unassign_blank_booth_numbers, reverse_code=migrations.RunPython.noop),
         migrations.AddConstraint(
             model_name="exhibitorinfo",
             constraint=models.UniqueConstraint(
-                condition=Q(booth_number__isnull=False),
+                condition=Q(booth_number__isnull=False) & ~Q(booth_number=""),
                 fields=("event", "booth_number"),
                 name="exhibition_event_booth_number_uniq",
             ),
