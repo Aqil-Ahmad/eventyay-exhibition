@@ -1,5 +1,6 @@
 from django import forms
-from django.db.models import F, Q
+from django.db.models import Q, Value
+from django.db.models.functions import NullIf, Trim
 from django.utils.translation import gettext_lazy as _
 from eventyay.control.forms.filter import FilterForm
 
@@ -134,7 +135,7 @@ class ExhibitorFilterForm(ExhibitionFilterForm):
         ordering = self.cleaned_data.get("ordering")
         if ordering not in ("booth", "-booth"):
             return super().apply_ordering(queryset)
-        booth = F("booth_number")
+        booth = NullIf(Trim("booth_number"), Value(""))
         booth = booth.desc(nulls_last=True) if ordering == "-booth" else booth.asc(nulls_last=True)
         return queryset.order_by(booth, "name", "pk")
 
