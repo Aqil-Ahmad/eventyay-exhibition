@@ -42,9 +42,9 @@ def test_blank_booth_numbers_written_in_bulk_do_not_clash(event):
     with scopes_disabled():
         first = ExhibitorInfo.objects.create(event=event, name="First", is_exhibitor=True)
         second = ExhibitorInfo.objects.create(event=event, name="Second", is_exhibitor=True)
-        ExhibitorInfo.objects.filter(pk__in=[first.pk, second.pk]).update(booth_number="")
+        ExhibitorInfo.objects.filter(pk__in=[first.pk, second.pk]).update(booth_number="  ")
 
-        assert ExhibitorInfo.objects.filter(event=event, booth_number="").count() == 2
+        assert ExhibitorInfo.objects.filter(event=event, booth_number="  ").count() == 2
 
 
 @pytest.mark.django_db
@@ -121,7 +121,8 @@ def test_reapproval_keeps_the_booth_already_assigned_to_the_profile(event):
 )
 def test_booth_sort_groups_unassigned_exhibitors_at_the_end(event, ordering, expected):
     with scopes_disabled():
-        ExhibitorInfo.objects.create(event=event, name="Unassigned two", is_exhibitor=True)
+        unassigned_two = ExhibitorInfo.objects.create(event=event, name="Unassigned two", is_exhibitor=True)
+        ExhibitorInfo.objects.filter(pk=unassigned_two.pk).update(booth_number=" ")
         ExhibitorInfo.objects.create(event=event, name="B12", is_exhibitor=True, booth_number="B12")
         ExhibitorInfo.objects.create(event=event, name="Unassigned one", is_exhibitor=True)
         ExhibitorInfo.objects.create(event=event, name="A1", is_exhibitor=True, booth_number="A1")
