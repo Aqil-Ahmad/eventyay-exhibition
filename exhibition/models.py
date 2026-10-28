@@ -446,7 +446,7 @@ class ExhibitorInfo(LoggedModel):
         constraints = [
             models.UniqueConstraint(
                 fields=["event", "booth_number"],
-                condition=Q(booth_number__isnull=False) & ~Q(booth_number=""),
+                condition=Q(booth_number__regex=r"\S"),
                 name="exhibition_event_booth_number_uniq",
             ),
         ]

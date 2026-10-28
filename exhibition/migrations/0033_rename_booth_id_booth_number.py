@@ -85,7 +85,7 @@ class Migration(migrations.Migration):
         migrations.AddConstraint(
             model_name="exhibitorinfo",
             constraint=models.UniqueConstraint(
-                condition=Q(booth_number__isnull=False) & ~Q(booth_number=""),
+                condition=Q(booth_number__regex=r"\S"),
                 fields=("event", "booth_number"),
                 name="exhibition_event_booth_number_uniq",
             ),
