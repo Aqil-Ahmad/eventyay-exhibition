@@ -122,26 +122,29 @@ def test_layout_rejects_a_gif_renamed_to_png(event):
     assert "layout_image" in form.errors
 
 
-@pytest.mark.django_db(transaction=True)
-def test_replacing_and_removing_the_layout_deletes_the_old_file(event):
+@pytest.mark.django_db
+def test_replacing_and_removing_the_layout_deletes_the_old_file(event, django_capture_on_commit_callbacks):
     with scopes_disabled():
         settings = ExhibitorSettings.objects.get_or_create(event=event)[0]
         first = ExhibitionLayoutForm(data={}, files={"layout_image": _layout()}, instance=settings, event=event)
         assert first.is_valid(), first.errors
-        first_name = first.save().layout_image.name
+        with django_capture_on_commit_callbacks(execute=True):
+            first_name = first.save().layout_image.name
 
         second = ExhibitionLayoutForm(
             data={}, files={"layout_image": _layout(name="hall.png")}, instance=settings, event=event
         )
         assert second.is_valid(), second.errors
-        second_name = second.save().layout_image.name
+        with django_capture_on_commit_callbacks(execute=True):
+            second_name = second.save().layout_image.name
 
         assert not default_storage.exists(first_name)
         assert default_storage.exists(second_name)
 
         cleared = ExhibitionLayoutForm(data={"layout_image-clear": "on"}, instance=settings, event=event)
         assert cleared.is_valid(), cleared.errors
-        cleared.save()
+        with django_capture_on_commit_callbacks(execute=True):
+            cleared.save()
         settings.refresh_from_db()
 
     assert not settings.layout_image
