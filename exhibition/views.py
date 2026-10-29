@@ -783,6 +783,10 @@ class PublicExhibitorListView(PublicExhibitorBrowsingMixin, ListView):
         layout_settings = ExhibitorSettings.objects.filter(event=self.request.event).first()
         context["layout_url"] = layout_settings.visible_layout_url if layout_settings else ""
         context["layout_caption"] = layout_settings.layout_caption if layout_settings else ""
+        context["show_layout"] = bool(context["layout_url"]) and self.request.GET.get("view") == "layout"
+        view_params = {"preview": "1"} if self.preview_unpublished else {}
+        context["layout_view_query"] = urlencode({**view_params, "view": "layout"})
+        context["list_view_query"] = urlencode(view_params)
         add_external_image_csp_sources(
             self.request,
             [
