@@ -1,5 +1,6 @@
 from django import forms
 from django.db.models import Case, F, IntegerField, Q, Value, When
+from django.db.models.functions import NullIf, Trim
 from django.utils.translation import gettext_lazy as _
 from eventyay.control.forms.filter import FilterForm
 
@@ -124,7 +125,7 @@ class RequestFilterForm(ExhibitionFilterForm):
 class ExhibitorFilterForm(ExhibitionFilterForm):
     orders = {
         "name": "name",
-        "booth": "booth_id",
+        "booth": "booth_number",
         "active": "active",
         "published": "published",
         "group": "group_rank",
@@ -221,8 +222,12 @@ class ExhibitorFilterForm(ExhibitionFilterForm):
         return queryset.filter(is_sponsor=False, exhibitor_group=value)
 
     def apply_ordering(self, queryset):
-        """Sorting by group lists sponsors by level, then paid, non-paid and ungrouped exhibitors."""
+        """Booths sort with blank numbers last; groups list sponsors by level, then paid, non-paid and ungrouped."""
         ordering = self.cleaned_data.get("ordering") or ""
+        if ordering in ("booth", "-booth"):
+            booth = NullIf(Trim("booth_number"), Value(""))
+            booth = booth.desc(nulls_last=True) if ordering == "-booth" else booth.asc(nulls_last=True)
+            return queryset.order_by(booth, "name", "pk")
         if ordering.lstrip("-") != "group":
             return super().apply_ordering(queryset)
         queryset = queryset.annotate(
@@ -245,7 +250,7 @@ class ExhibitorFilterForm(ExhibitionFilterForm):
         if query:
             queryset = queryset.filter(
                 Q(name__icontains=query)
-                | Q(booth_id__icontains=query)
+                | Q(booth_number__icontains=query)
                 | Q(booth_name__icontains=query)
                 | Q(email__icontains=query)
             )

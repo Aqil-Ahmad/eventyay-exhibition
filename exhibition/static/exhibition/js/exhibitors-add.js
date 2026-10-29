@@ -11,7 +11,7 @@
         var sponsorGroupWrapper = document.getElementById('sponsor-group-wrapper')
         var exhibitorCheckbox = document.getElementById('id_is_exhibitor')
         var boothNameWrapper = document.getElementById('booth-name-wrapper')
-        var boothIdWrapper = document.getElementById('booth-id-wrapper')
+        var boothNumberWrapper = document.getElementById('booth-number-wrapper')
         var exhibitorGroupWrapper = document.getElementById('exhibitor-group-wrapper')
         var leadScanningSection = document.getElementById('lead-scanning-section')
         var socialLinksFormset = document.getElementById('social-links-formset')
@@ -149,7 +149,7 @@
                 return
             }
             var hideExhibitorFields = !exhibitorCheckbox.checked
-            ;[boothNameWrapper, boothIdWrapper, leadScanningSection].forEach(function (element) {
+            ;[boothNameWrapper, boothNumberWrapper, leadScanningSection].forEach(function (element) {
                 if (element) {
                     element.classList.toggle('hidden', hideExhibitorFields)
                 }
