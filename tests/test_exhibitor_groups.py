@@ -315,3 +315,19 @@ def test_an_exhibitor_that_also_sponsors_needs_a_group(event, image_uploads):
 
         form = ExhibitorInfoForm(data={**data, "exhibitor_group": "paid"}, files=image_uploads(), event=event)
         assert form.is_valid(), form.errors
+
+
+@pytest.mark.django_db
+def test_reapproving_a_sponsor_with_a_leftover_paid_group_makes_it_non_paid(event):
+    with scopes_disabled():
+        user = User.objects.create_user(email="applicant@example.com", password="secret")
+        sponsor = _organization(event, "Acme", is_exhibitor=False, is_sponsor=True, exhibitor_group=ExhibitorGroup.PAID)
+        exhibition_request = ExhibitionRequest.objects.create(
+            event=event, user=user, name="Acme", is_exhibitor=True, approved_exhibitor=sponsor
+        )
+
+        create_exhibitor_from_request(exhibition_request)
+
+        sponsor.refresh_from_db()
+        assert sponsor.is_exhibitor
+        assert sponsor.exhibitor_group == ExhibitorGroup.NON_PAID

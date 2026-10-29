@@ -220,7 +220,7 @@ def create_exhibitor_from_request(exhibition_request, requestor=None):
         exhibitor.booth_number = (booth_number or exhibitor.booth_number) if exhibition_request.is_exhibitor else None
         exhibitor.booth_name = exhibition_request.booth_name if exhibition_request.is_exhibitor else ""
         update_fields = ["active", "is_exhibitor", "is_sponsor", "sponsor_group", "booth_number", "booth_name"]
-        if becomes_exhibitor and not exhibitor.exhibitor_group:
+        if becomes_exhibitor:
             exhibitor.exhibitor_group = ExhibitorGroup.NON_PAID
             update_fields.append("exhibitor_group")
         exhibitor.save(update_fields=update_fields)
