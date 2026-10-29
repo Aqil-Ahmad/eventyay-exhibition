@@ -5,10 +5,12 @@ from django.contrib.messages.storage.fallback import FallbackStorage
 from django.contrib.sessions.backends.db import SessionStore
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import RequestFactory
+from django.utils.datastructures import MultiValueDict
 from django_scopes import scopes_disabled
 from eventyay.base.models import CachedFile
 from eventyay.base.models.auth import User
 
+from exhibition.forms import ExhibitionRequestForm
 from exhibition.models import (
     ExhibitionAnswer,
     ExhibitionQuestion,
@@ -102,7 +104,7 @@ def test_failed_submit_keeps_the_chosen_files_and_saves_them_on_resubmit(event):
         assert isinstance(form.fields["logo"].widget, RetainedFileInput)
         assert kept_logo.session_key == session.session_key
         assert kept_answer.filename == "brochure.pdf"
-        assert "Kept from your last attempt" in form["logo"].as_widget()
+        assert f'name="logo{RETAINED_UPLOAD_SUFFIX}" value="{kept_logo.id}" checked' in form["logo"].as_widget()
 
         _view, response = _post(
             event,
@@ -180,3 +182,29 @@ def test_a_file_with_an_error_is_not_kept(event):
     assert "logo" in form.errors
     assert not isinstance(form.fields["logo"].widget, RetainedFileInput)
     assert not CachedFile.objects.exists()
+
+
+@pytest.mark.django_db
+def test_only_real_file_fields_are_restored(event):
+    with scopes_disabled():
+        _call_settings(event)
+        user = User.objects.create_user(email="applicant@example.com", password="pw")
+        session = _session()
+
+        view, response = _post(event, user, session, {"name": ""}, {"logo": _logo()})
+        kept_logo = response.context_data["form"].fields["logo"].widget.retained
+        form = ExhibitionRequestForm(
+            event=event,
+            data={
+                "name": "Acme",
+                f"logo{RETAINED_UPLOAD_SUFFIX}": str(kept_logo.id),
+                f"name{RETAINED_UPLOAD_SUFFIX}": str(kept_logo.id),
+                f"made-up{RETAINED_UPLOAD_SUFFIX}": str(kept_logo.id),
+            },
+            files=MultiValueDict(),
+            draft_save=True,
+        )
+        view.restore_retained_uploads(form)
+
+    assert list(form.files) == ["logo"]
+    assert form.files["logo"].retained_from == kept_logo
