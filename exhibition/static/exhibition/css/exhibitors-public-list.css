@@ -24,8 +24,7 @@
     width: 100%;
 }
 
-.exhibition-public-filter-submit,
-.exhibition-public-filter-reset {
+.exhibition-public-filter-submit {
     flex: 0 0 auto;
 }
 
