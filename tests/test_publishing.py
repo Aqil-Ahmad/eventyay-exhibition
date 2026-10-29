@@ -449,3 +449,20 @@ def test_public_page_has_only_the_search_box(event):
     assert old_link.status_code == 200
     assert _public_url(event, "public_detail", pk=grouped.pk) in old_html
     assert _public_url(event, "public_detail", pk=other.pk) in old_html
+
+
+@pytest.mark.django_db
+def test_search_results_come_back_in_the_block_the_page_swaps_in(event):
+    with scopes_disabled():
+        event.plugins = "exhibition"
+        event.save(update_fields=["plugins"])
+        match = _exhibitor(event, name="Acme", published=True)
+        other = _exhibitor(event, name="Globex", published=True)
+    list_url = _public_url(event, "public_list")
+
+    html = _client().get(list_url + "?query=Acme").content.decode()
+    results = html[html.index("<div data-exhibition-results>") :]
+
+    assert "public-exhibitor-search.js" in html
+    assert _public_url(event, "public_detail", pk=match.pk) in results
+    assert _public_url(event, "public_detail", pk=other.pk) not in results
