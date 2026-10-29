@@ -1,9 +1,18 @@
+import re
+
 from django.db import migrations
-from eventyay.helpers.placeholders import rename_placeholder
 from i18nfield.strings import LazyI18nString
 
 RENAMES = (("name", "applicant_name"), ("voucher_list", "voucher_details"))
 FIELDS = {"ExhibitionCustomEmailTemplate": ("subject", "body"), "ExhibitionEmailDraft": ("subject", "body")}
+
+
+def rename_placeholder(text, old, new):
+    """Rename ``{old}`` to ``{new}`` in a stored email text, including the editor's ``data-variable`` chips."""
+    if not text:
+        return text
+    text = text.replace(f"{{{old}}}", f"{{{new}}}")
+    return re.sub(rf'(data-variable=\\?["\']){re.escape(old)}(\\?["\'])', rf"\g<1>{new}\g<2>", text)
 
 
 def rename_all(text, renames):
@@ -13,12 +22,15 @@ def rename_all(text, renames):
 
 
 def renamed(value, renames):
+    """The value with the placeholders renamed, or ``None`` when its text does not change."""
     data = value.data if isinstance(value, LazyI18nString) else value
     if isinstance(data, dict):
-        return LazyI18nString({lang: rename_all(text, renames) for lang, text in data.items()})
-    if isinstance(data, str):
-        return LazyI18nString(rename_all(data, renames))
-    return value
+        new_data = {lang: rename_all(text, renames) for lang, text in data.items()}
+    elif isinstance(data, str):
+        new_data = rename_all(data, renames)
+    else:
+        return None
+    return LazyI18nString(new_data) if new_data != data else None
 
 
 def rename_placeholders(apps, renames):
@@ -35,10 +47,8 @@ def rename_placeholders(apps, renames):
             changed = []
             for field in fields:
                 value = getattr(row, field)
-                if value is None:
-                    continue
-                new_value = renamed(value, renames)
-                if new_value.data != (value.data if isinstance(value, LazyI18nString) else value):
+                new_value = renamed(value, renames) if value else None
+                if new_value is not None:
                     setattr(row, field, new_value)
                     changed.append(field)
             if changed:
@@ -55,7 +65,8 @@ def backwards(apps, schema_editor):
 
 class Migration(migrations.Migration):
     dependencies = [
-        ("exhibition", "0032_exhibitionemaildraft"),
+        ("exhibition", "0033_exhibitorvoucher_keep_after_delete"),
+        ("exhibition", "0033_rename_booth_id_booth_number"),
     ]
 
     operations = [
