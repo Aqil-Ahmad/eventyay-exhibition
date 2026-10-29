@@ -46,7 +46,7 @@ def test_a_paid_exhibition_product_makes_an_exhibitor_without_sponsorship(event)
 
         assert organization.is_exhibitor
         assert not organization.is_sponsor
-        assert organization.booth_id
+        assert organization.booth_number is None
 
 
 @pytest.mark.django_db
@@ -65,7 +65,7 @@ def test_a_paid_sponsorship_without_booth_makes_a_sponsor_without_booth(event):
 
         assert order.organization.is_sponsor
         assert not order.organization.is_exhibitor
-        assert order.organization.booth_id is None
+        assert order.organization.booth_number is None
 
 
 @pytest.mark.django_db
@@ -97,7 +97,6 @@ def test_one_organisation_buying_twice_keeps_one_profile(event):
         organization = ExhibitorInfo.objects.get(event=event)
         assert organization.is_sponsor
         assert organization.is_exhibitor
-        assert organization.booth_id
         assert organization.source_order == first
 
 

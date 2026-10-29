@@ -45,19 +45,9 @@ def generate_request_code():
 generate_proposal_code = generate_request_code
 
 
-def generate_booth_id(event=None):
-    import random
-    import string
-
-    # Generate a random booth_id if none exists
-    characters = string.ascii_letters + string.digits
-    while True:
-        booth_id = "".join(random.choices(characters, k=8))  # 8-character random string
-        queryset = ExhibitorInfo.objects.filter(booth_id=booth_id)
-        if event is not None:
-            queryset = queryset.filter(event=event)
-        if not queryset.exists():
-            return booth_id
+def normalize_booth_number(value):
+    """Booth numbers are organizer-typed; a blank one means no booth yet and is stored as NULL."""
+    return (value or "").strip() or None
 
 
 def get_next_sponsor_group_level(event):
@@ -503,7 +493,7 @@ class ExhibitorInfo(LoggedModel):
         verbose_name=_("Published"),
         help_text=_("Only published organizations appear on the public event website."),
     )
-    booth_id = models.CharField(
+    booth_number = models.CharField(
         max_length=100,
         null=True,
         blank=True,
@@ -538,9 +528,9 @@ class ExhibitorInfo(LoggedModel):
         ordering = ("name",)
         constraints = [
             models.UniqueConstraint(
-                fields=["event", "booth_id"],
-                condition=Q(booth_id__isnull=False),
-                name="exhibition_event_booth_id_uniq",
+                fields=["event", "booth_number"],
+                condition=Q(booth_number__regex=r"\S"),
+                name="exhibition_event_booth_number_uniq",
             ),
         ]
 
@@ -548,6 +538,7 @@ class ExhibitorInfo(LoggedModel):
         return str(self.name)
 
     def save(self, *args, **kwargs):
+        self.booth_number = normalize_booth_number(self.booth_number)
         if self._state.adding:
             if self.is_exhibitor and not self.exhibitor_position:
                 self.exhibitor_position = get_next_exhibitor_position(self.event)
@@ -814,7 +805,7 @@ class ExhibitionRequest(LoggedModel):
         related_name="exhibition_requests",
     )
     is_exhibitor = models.BooleanField(default=True)
-    booth_id = models.CharField(
+    booth_number = models.CharField(
         max_length=100,
         null=True,
         blank=True,
@@ -1303,7 +1294,7 @@ class Lead(models.Model):
     scan_type = models.CharField(max_length=50)
     device_name = models.CharField(max_length=50)
     attendee = models.JSONField(null=True, blank=True)
-    booth_id = models.CharField(max_length=100, editable=True)
+    booth_number = models.CharField(max_length=100, editable=True)
     booth_name = models.CharField(
         max_length=100,
         verbose_name=_("Booth name"),
@@ -1675,7 +1666,6 @@ class ExhibitionOrder(LoggedModel):
                 url=self.website or None,
                 is_sponsor=is_sponsor,
                 is_exhibitor=has_booth,
-                booth_id=generate_booth_id(event=self.event) if has_booth else None,
                 source_order=self,
             )
             created = True
@@ -1689,8 +1679,6 @@ class ExhibitionOrder(LoggedModel):
             if has_booth and not organization.is_exhibitor:
                 changed["is_exhibitor"] = True
                 changed["exhibitor_position"] = get_next_exhibitor_position(self.event)
-            if has_booth and not organization.booth_id:
-                changed["booth_id"] = generate_booth_id(event=self.event)
             for name, value in changed.items():
                 setattr(organization, name, value)
             if changed:
@@ -1978,7 +1966,11 @@ class ExhibitorTag(models.Model):
 
 
 class ExhibitorVoucher(models.Model):
-    exhibitor = models.ForeignKey(ExhibitorInfo, on_delete=models.CASCADE, related_name="vouchers")
+    """A pool code handed to an organization; kept without one after deletion if it was emailed or used."""
+
+    exhibitor = models.ForeignKey(
+        ExhibitorInfo, on_delete=models.SET_NULL, null=True, blank=True, related_name="vouchers"
+    )
     voucher = models.OneToOneField(Voucher, on_delete=models.CASCADE, related_name="exhibitor_link")
     created = models.DateTimeField(auto_now_add=True)
 
@@ -1986,7 +1978,8 @@ class ExhibitorVoucher(models.Model):
         ordering = ("-created",)
 
     def __str__(self):
-        return f"{self.voucher.code} ({self.exhibitor.name})"
+        holder = self.exhibitor.name if self.exhibitor_id else "deleted organization"
+        return f"{self.voucher.code} ({holder})"
 
 
 class OrganizationVoucherState(models.TextChoices):
@@ -2067,31 +2060,34 @@ class ExhibitionEmailQueue(LoggedModel):
         return f"{self.to_email} · {state} · {self.subject}"
 
     def send(self, requestor=None):
-        """Deliver the email via the core mail() service and mark it sent."""
+        """Deliver the email via core mail() and mark it sent, holding the row so a concurrent discard waits."""
         from eventyay.base.services.mail import mail
 
         if self.sent_at:
             return
 
-        mail(
-            email=self.to_email,
-            subject=self.subject,
-            template=LazyI18nString(self.body),
-            context={},
-            event=self.event,
-            locale=self.locale or None,
-            auto_email=False,
-            event_reply_to=self.reply_to or None,
-            attach_cached_files=[self.attachment_id] if self.attachment_id else None,
-        )
-        self.sent_at = timezone.now()
-        self.scheduled_at = None
-        self.save(update_fields=["sent_at", "scheduled_at", "updated"])
-        self.log_action(
-            LOG_EMAIL_SENT,
-            user=requestor,
-            data={"to": self.to_email, "subject": self.subject},
-        )
+        with transaction.atomic():
+            if not type(self).objects.select_for_update().filter(pk=self.pk, sent_at__isnull=True).exists():
+                return
+            mail(
+                email=self.to_email,
+                subject=self.subject,
+                template=LazyI18nString(self.body),
+                context={},
+                event=self.event,
+                locale=self.locale or None,
+                auto_email=False,
+                event_reply_to=self.reply_to or None,
+                attach_cached_files=[self.attachment_id] if self.attachment_id else None,
+            )
+            self.sent_at = timezone.now()
+            self.scheduled_at = None
+            self.save(update_fields=["sent_at", "scheduled_at", "updated"])
+            self.log_action(
+                LOG_EMAIL_SENT,
+                user=requestor,
+                data={"to": self.to_email, "subject": self.subject},
+            )
 
     send.alters_data = True
 
