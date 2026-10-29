@@ -49,6 +49,7 @@ class RetainedUploadsMixin:
         session = self.request.session
         if not getattr(session, "session_key", None) and hasattr(session, "save"):
             session.save()
+            session.modified = True
         return getattr(session, "session_key", None)
 
     def find_retained_upload(self, cached_file_id):
