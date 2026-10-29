@@ -39,9 +39,9 @@ def _settings_post(event, data):
     return view.post(request)
 
 
-def _public_list_html(event):
+def _public_list_html(event, query=""):
     url = reverse("plugins:exhibition:public_list", kwargs={"organizer": event.organizer.slug, "event": event.slug})
-    return Client().get(url).content.decode()
+    return Client().get(url + query).content.decode()
 
 
 def _enable_plugin(event):
@@ -151,21 +151,41 @@ def test_replacing_and_removing_the_layout_deletes_the_old_file(event, django_ca
     assert not default_storage.exists(second_name)
 
 
+def _event_with_layout(event):
+    _enable_plugin(event)
+    settings = ExhibitorSettings.objects.get_or_create(event=event)[0]
+    settings.layout_image = _layout()
+    settings.layout_caption = "Hall 1, ground floor"
+    settings.save()
+    return settings
+
+
 @pytest.mark.django_db
-def test_public_exhibition_page_shows_the_layout(event):
+def test_exhibitor_list_links_to_the_layout_without_showing_it(event):
     with scopes_disabled():
-        _enable_plugin(event)
-        settings = ExhibitorSettings.objects.get_or_create(event=event)[0]
-        settings.layout_image = _layout()
-        settings.layout_caption = "Hall 1, ground floor"
-        settings.save()
+        _event_with_layout(event)
 
     html = _public_list_html(event)
+
+    assert 'href="?view=layout"' in html
+    assert "View layout" in html
+    assert 'id="exhibition-layout-heading"' not in html
+    assert 'role="search"' in html
+
+
+@pytest.mark.django_db
+def test_layout_view_shows_only_the_layout_and_links_back(event):
+    with scopes_disabled():
+        settings = _event_with_layout(event)
+
+    html = _public_list_html(event, "?view=layout")
 
     assert 'id="exhibition-layout-heading"' in html
     assert f'src="{settings.visible_layout_url}"' in html
     assert f'href="{settings.visible_layout_url}"' in html
     assert "<figcaption>Hall 1, ground floor</figcaption>" in html
+    assert "View exhibitors" in html
+    assert 'role="search"' not in html
 
 
 @pytest.mark.django_db
@@ -174,9 +194,11 @@ def test_public_exhibition_page_hides_the_layout_section_without_a_layout(event)
         _enable_plugin(event)
         ExhibitorSettings.objects.get_or_create(event=event)
 
-    html = _public_list_html(event)
+    html = _public_list_html(event, "?view=layout")
 
     assert 'id="exhibition-layout-heading"' not in html
+    assert "View layout" not in html
+    assert 'role="search"' in html
 
 
 @pytest.mark.django_db
