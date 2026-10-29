@@ -2,7 +2,7 @@ from datetime import timedelta
 
 from django import forms
 from django.core.exceptions import ValidationError
-from django.core.files.uploadedfile import SimpleUploadedFile, UploadedFile
+from django.core.files.uploadedfile import UploadedFile
 from django.urls import reverse
 from django.utils.timezone import now
 from eventyay.base.models import CachedFile
@@ -35,11 +35,11 @@ class RetainedFileInput(forms.ClearableFileInput):
 class RetainedUploadsMixin:
     """Keep the files of a failed submit and put them back on the next one, as browsers cannot refill file inputs."""
 
-    def get_form_kwargs(self):
-        kwargs = super().get_form_kwargs()
-        if "files" in kwargs:
-            kwargs["files"] = self.restore_retained_uploads(kwargs["data"], kwargs["files"])
-        return kwargs
+    def get_form(self, form_class=None):
+        form = super().get_form(form_class)
+        if form.is_bound:
+            self.restore_retained_uploads(form)
+        return form
 
     def form_invalid(self, form):
         self.retain_uploads(form)
@@ -60,22 +60,27 @@ class RetainedUploadsMixin:
         except (ValueError, ValidationError):
             return None
 
-    def restore_retained_uploads(self, data, files):
-        files = files.copy()
-        for key in data:
-            if not key.endswith(RETAINED_UPLOAD_SUFFIX):
+    def restore_retained_uploads(self, form):
+        files = form.files.copy()
+        for name, field in form.fields.items():
+            if not isinstance(field, forms.FileField):
                 continue
-            name = key[: -len(RETAINED_UPLOAD_SUFFIX)]
-            if files.get(name) or data.get(f"{name}-clear"):
+            key = form.add_prefix(name)
+            cached_file_id = form.data.get(key + RETAINED_UPLOAD_SUFFIX)
+            if not cached_file_id or files.get(key) or form.data.get(f"{key}-clear"):
                 continue
-            cached_file = self.find_retained_upload(data.get(key))
+            cached_file = self.find_retained_upload(cached_file_id)
             if cached_file is None or not cached_file.file:
                 continue
-            with cached_file.file.open("rb") as stored:
-                upload = SimpleUploadedFile(cached_file.filename, stored.read(), content_type=cached_file.type)
+            upload = UploadedFile(
+                file=cached_file.file.storage.open(cached_file.file.name, "rb"),
+                name=cached_file.filename,
+                content_type=cached_file.type,
+                size=cached_file.file.size,
+            )
             upload.retained_from = cached_file
-            files[name] = upload
-        return files
+            files[key] = upload
+        form.files = files
 
     def cache_upload(self, upload):
         session_key = self.retained_upload_session_key()
