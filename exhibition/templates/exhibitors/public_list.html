@@ -15,7 +15,7 @@
         <section class="front-page exhibition-public-page" aria-labelledby="exhibition-heading">
             {% include "exhibitors/_public_preview_notice.html" %}
             <h2 id="exhibition-heading">{% trans "Exhibition" %}</h2>
-            <form method="get" action="" class="exhibition-public-filter" role="search">
+            <form method="get" action="" class="exhibition-public-filter" role="search" data-exhibition-search>
                 {% if preview_unpublished %}<input type="hidden" name="preview" value="1">{% endif %}
                 <div class="exhibition-public-filter-field">
                     {{ filter_form.query }}
@@ -25,29 +25,32 @@
                     {% trans "Search" %}
                 </button>
             </form>
-            {% if exhibitors %}
-                <div class="exhibition-public-grid">
-                    {% for exhibitor in exhibitors %}
-                        <a href="{% url 'plugins:exhibition:public_detail' organizer=request.event.organizer.slug event=request.event.slug pk=exhibitor.pk %}{% if navigation_query %}?{{ navigation_query }}{% endif %}" class="exhibition-public-card-link">
-                            <article class="exhibition-public-card">
-                                <div class="exhibition-public-card-image">
-                                    <img src="{{ exhibitor.visible_banner_url }}" alt="{{ exhibitor.name|event_localize }}" loading="lazy">
-                                </div>
-                                <div class="exhibition-public-card-body">
-                                    <span class="exhibition-public-card-logo-wrap">
-                                        <img class="exhibition-public-card-logo" src="{{ exhibitor.visible_logo_url }}" alt="{{ exhibitor.name|event_localize }} logo" loading="lazy">
-                                    </span>
-                                    <h3 class="exhibition-public-card-name">{{ exhibitor.name|event_localize }}</h3>
-                                </div>
-                            </article>
-                        </a>
-                    {% endfor %}
-                </div>
-            {% elif filter_form.query.value %}
-                <p>{% trans "No exhibitors match your search." %}</p>
-            {% else %}
-                <p>{% trans "No exhibitors are currently available." %}</p>
-            {% endif %}
+            <div data-exhibition-results>
+                {% if exhibitors %}
+                    <div class="exhibition-public-grid">
+                        {% for exhibitor in exhibitors %}
+                            <a href="{% url 'plugins:exhibition:public_detail' organizer=request.event.organizer.slug event=request.event.slug pk=exhibitor.pk %}{% if navigation_query %}?{{ navigation_query }}{% endif %}" class="exhibition-public-card-link">
+                                <article class="exhibition-public-card">
+                                    <div class="exhibition-public-card-image">
+                                        <img src="{{ exhibitor.visible_banner_url }}" alt="{{ exhibitor.name|event_localize }}" loading="lazy">
+                                    </div>
+                                    <div class="exhibition-public-card-body">
+                                        <span class="exhibition-public-card-logo-wrap">
+                                            <img class="exhibition-public-card-logo" src="{{ exhibitor.visible_logo_url }}" alt="{{ exhibitor.name|event_localize }} logo" loading="lazy">
+                                        </span>
+                                        <h3 class="exhibition-public-card-name">{{ exhibitor.name|event_localize }}</h3>
+                                    </div>
+                                </article>
+                            </a>
+                        {% endfor %}
+                    </div>
+                {% elif filter_form.query.value %}
+                    <p>{% trans "No exhibitors match your search." %}</p>
+                {% else %}
+                    <p>{% trans "No exhibitors are currently available." %}</p>
+                {% endif %}
+            </div>
         </section>
     </main>
+    <script type="module" src="{% static 'exhibition/js/public-exhibitor-search.js' %}"></script>
 {% endblock %}
