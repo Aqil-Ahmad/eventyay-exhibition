@@ -5,6 +5,7 @@ from django.core.exceptions import ValidationError
 from django.core.files.uploadedfile import UploadedFile
 from django.urls import reverse
 from django.utils.timezone import now
+from django.utils.translation import gettext_lazy as _
 from eventyay.base.models import CachedFile
 
 RETAINED_UPLOAD_SUFFIX = "-retained"
@@ -53,16 +54,18 @@ class RetainedUploadsMixin:
         return getattr(session, "session_key", None)
 
     def find_retained_upload(self, cached_file_id):
+        """The kept file of this session, whether or not it is still usable; other sessions' files are never found."""
         session_key = self.retained_upload_session_key()
         if not session_key:
             return None
         try:
-            return CachedFile.objects.filter(id=cached_file_id, session_key=session_key, expires__gt=now()).first()
+            return CachedFile.objects.filter(id=cached_file_id, session_key=session_key).first()
         except (ValueError, ValidationError):
             return None
 
     def restore_retained_uploads(self, form):
         files = form.files.copy()
+        unavailable = []
         for name, field in form.fields.items():
             if not isinstance(field, forms.FileField):
                 continue
@@ -71,7 +74,11 @@ class RetainedUploadsMixin:
             if not cached_file_id or files.get(key) or form.data.get(f"{key}-clear"):
                 continue
             cached_file = self.find_retained_upload(cached_file_id)
-            if cached_file is None or not cached_file.file:
+            if cached_file is None:
+                continue
+            expired = cached_file.expires is not None and cached_file.expires <= now()
+            if expired or not cached_file.file or not cached_file.file.storage.exists(cached_file.file.name):
+                unavailable.append(name)
                 continue
             upload = UploadedFile(
                 file=cached_file.file.storage.open(cached_file.file.name, "rb"),
@@ -82,6 +89,19 @@ class RetainedUploadsMixin:
             upload.retained_from = cached_file
             files[key] = upload
         form.files = files
+        if unavailable:
+            self.require_new_selection(form, unavailable)
+
+    def require_new_selection(self, form, names):
+        full_clean = form.full_clean
+
+        def full_clean_requiring_new_selection():
+            full_clean()
+            for name in names:
+                if name in form.fields and name not in form.errors:
+                    form.add_error(name, _("The file you chose before is no longer available. Please choose it again."))
+
+        form.full_clean = full_clean_requiring_new_selection
 
     def cache_upload(self, upload):
         session_key = self.retained_upload_session_key()
