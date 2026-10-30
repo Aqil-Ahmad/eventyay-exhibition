@@ -20,11 +20,10 @@
                 <div class="exhibition-public-filter-field">
                     {{ filter_form.query }}
                 </div>
-                <button type="submit" class="btn btn-primary exhibition-public-filter-submit">
-                    <i class="fa fa-search" aria-hidden="true"></i>
-                    {% trans "Search" %}
-                </button>
             </form>
+            <p class="text-danger exhibition-public-search-status" role="status" data-exhibition-search-status hidden>
+                {% trans "Search is not available right now. Press Enter to try again." %}
+            </p>
             <div data-exhibition-results>
                 {% if exhibitors %}
                     <div class="exhibition-public-grid">
