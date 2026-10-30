@@ -6,6 +6,7 @@ import logging
 import re
 import uuid
 from collections import defaultdict
+from contextlib import nullcontext
 from urllib.parse import urljoin
 from zoneinfo import ZoneInfo
 
@@ -336,7 +337,7 @@ def _render(text, context, locale):
     """Localise ``text`` and substitute ``{placeholder}`` values."""
     localized = str(LazyI18nString(text).localize(locale)) if locale else str(text)
     try:
-        with override(locale or None):
+        with override(locale) if locale else nullcontext():
             return localized.format_map(defaultdict(str, context))
     except (ValueError, IndexError):
         logger.warning("Could not render exhibition email template: %r", localized)
