@@ -36,6 +36,17 @@ class RetainedFileInput(forms.ClearableFileInput):
 class RetainedUploadsMixin:
     """Keep the files of a failed submit and put them back on the next one, as browsers cannot refill file inputs."""
 
+    def dispatch(self, request, *args, **kwargs):
+        try:
+            return super().dispatch(request, *args, **kwargs)
+        finally:
+            self.close_restored_uploads()
+
+    def close_restored_uploads(self):
+        for stream in getattr(self, "restored_upload_streams", ()):
+            stream.close()
+        self.restored_upload_streams = []
+
     def get_form(self, form_class=None):
         form = super().get_form(form_class)
         if form.is_bound:
@@ -80,8 +91,10 @@ class RetainedUploadsMixin:
             if expired or not cached_file.file or not cached_file.file.storage.exists(cached_file.file.name):
                 unavailable.append(name)
                 continue
+            stream = cached_file.file.storage.open(cached_file.file.name, "rb")
+            self.restored_upload_streams = [*getattr(self, "restored_upload_streams", ()), stream]
             upload = UploadedFile(
-                file=cached_file.file.storage.open(cached_file.file.name, "rb"),
+                file=stream,
                 name=cached_file.filename,
                 content_type=cached_file.type,
                 size=cached_file.file.size,
