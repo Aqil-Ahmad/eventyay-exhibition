@@ -336,7 +336,8 @@ def _render(text, context, locale):
     """Localise ``text`` and substitute ``{placeholder}`` values."""
     localized = str(LazyI18nString(text).localize(locale)) if locale else str(text)
     try:
-        return localized.format_map(defaultdict(str, context))
+        with override(locale or None):
+            return localized.format_map(defaultdict(str, context))
     except (ValueError, IndexError):
         logger.warning("Could not render exhibition email template: %r", localized)
         return localized
