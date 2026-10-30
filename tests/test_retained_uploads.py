@@ -1,4 +1,5 @@
 import base64
+from datetime import timedelta
 
 import pytest
 from django.contrib.messages.storage.fallback import FallbackStorage
@@ -6,6 +7,7 @@ from django.contrib.sessions.backends.db import SessionStore
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import RequestFactory
 from django.utils.datastructures import MultiValueDict
+from django.utils.timezone import now
 from django_scopes import scopes_disabled
 from eventyay.base.models import CachedFile
 from eventyay.base.models.auth import User
@@ -208,3 +210,23 @@ def test_only_real_file_fields_are_restored(event):
 
     assert list(form.files) == ["logo"]
     assert form.files["logo"].retained_from == kept_logo
+
+
+@pytest.mark.django_db
+def test_an_expired_kept_file_asks_to_choose_the_file_again(event):
+    with scopes_disabled():
+        _call_settings(event)
+        user = User.objects.create_user(email="applicant@example.com", password="pw")
+        session = _session()
+
+        _view, response = _post(event, user, session, {"name": ""}, {"logo": _logo()})
+        kept_logo = response.context_data["form"].fields["logo"].widget.retained
+        CachedFile.objects.filter(pk=kept_logo.pk).update(expires=now() - timedelta(minutes=1))
+
+        _view, response = _post(
+            event, user, session, {"name": "Acme", f"logo{RETAINED_UPLOAD_SUFFIX}": str(kept_logo.id)}
+        )
+
+    assert response.status_code == 200
+    assert "logo" in response.context_data["form"].errors
+    assert not ExhibitionRequest.objects.filter(event=event, user=user).exists()
