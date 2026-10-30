@@ -445,6 +445,7 @@ def test_public_page_has_only_the_search_box(event):
     assert 'name="query"' in html
     assert 'name="sponsor_group"' not in html
     assert 'name="clear"' not in html
+    assert "exhibition-public-filter-submit" not in html
     assert 'name="preview"' not in html
     assert old_link.status_code == 200
     assert _public_url(event, "public_detail", pk=grouped.pk) in old_html
