@@ -3120,6 +3120,9 @@ class ApplicantEmailVisibilityMixin:
         return context
 
 
+COMPOSE_GROUP_LABELS = {mail_helpers.VOUCHERS_NOT_ALL_USED: _("Vouchers not all used")}
+
+
 def group_email_entries(emails):
     """Collapse rows that share a compose batch into one entry per message."""
     entries = []
@@ -3149,6 +3152,7 @@ def group_email_entries(emails):
                 "sent_at": email.sent_at,
                 "scheduled_at": email.scheduled_at,
                 "is_batch": True,
+                "group_label": COMPOSE_GROUP_LABELS.get(email.role, ""),
             }
             by_batch[key] = entry
             entries.append(entry)
@@ -3284,6 +3288,8 @@ class EmailDraftListView(EventPermissionRequiredMixin, PaginationMixin, ListView
             if selection not in counts:
                 counts[selection] = draft.recipient_count()
             draft.recipient_total = counts[selection]
+            picked = draft.exhibition_request_id or draft.organizations
+            draft.group_label = "" if picked else COMPOSE_GROUP_LABELS.get(draft.state, "")
         return context
 
 
