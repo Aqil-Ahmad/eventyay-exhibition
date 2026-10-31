@@ -7,7 +7,7 @@ import exhibition.models
 
 class Migration(migrations.Migration):
     dependencies = [
-        ("exhibition", "0032_exhibitionemaildraft"),
+        ("exhibition", "0034_exhibitorvoucher_keep_after_delete"),
     ]
 
     operations = [
