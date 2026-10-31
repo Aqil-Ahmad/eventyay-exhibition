@@ -3024,10 +3024,17 @@ class EmailComposeView(EventPermissionRequiredMixin, FormView):
                 scheduled_at=scheduled_at,
                 send_now=send_now,
                 requestor=self.request.user,
+                role=self.compose_role(form),
             )
             if created and draft is not None:
                 draft.delete()
         return created
+
+    def compose_role(self, form):
+        """Tag emails for a group that is checked again at send time; picked organizations are not re-checked."""
+        if self.single_request is not None or form.cleaned_data.get("organizations"):
+            return ""
+        return mail_helpers.compose_role(form.cleaned_data.get("state"))
 
     def form_valid(self, form):
         from .tasks import send_scheduled_email
